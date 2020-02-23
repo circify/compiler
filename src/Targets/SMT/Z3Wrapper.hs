@@ -104,12 +104,12 @@ getBVSortSize opName ast = do
 
 -- | Perform the given binary operation op in a type safe way
 typeSafeBinary :: MonadZ3 z3 => String -> AST -> AST -> z3 ()
-typeSafeBinary op ast1 ast2 = do
-  s1 <- getBVSort op ast1
-  s2 <- getBVSort op ast2
-  size1 <- Z.getBvSortSize s1
-  size2 <- Z.getBvSortSize s2
-  unless (size1 == size2) $ error $ unwords [op, ": bit-widths must match"]
+typeSafeBinary op ast1 ast2 = return ()
+  -- s1 <- getBVSort op ast1
+  -- s2 <- getBVSort op ast2
+  -- size1 <- Z.getBvSortSize s1
+  -- size2 <- Z.getBvSortSize s2
+  -- unless (size1 == size2) $ error $ unwords [op, ": bit-widths must match"]
 
 mkTypeSafeBinary :: MonadZ3 z3
                  => (AST -> AST -> z3 AST)

@@ -220,6 +220,7 @@ data Stmt = Decl Var
           | VoidCall FunctionName [Expr]
           | Return Expr
           | VoidReturn
+            deriving (Eq, Ord, Show)
 
 ---
 --- Functions and programs

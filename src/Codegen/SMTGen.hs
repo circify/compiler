@@ -124,6 +124,7 @@ genCallSMT name args = do
   function <- getFunction name
   returnValName <- getReturnValName name
   returnVal <- liftIR $ newVar (fTy function) returnValName
+  -- Push function onto the callstack, push return value onto the return value stack
   pushFunction name returnVal
   -- Get the formal arguments and set them equal to the arguments
   let formalArgs = fArgs function

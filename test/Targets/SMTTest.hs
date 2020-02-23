@@ -1,14 +1,29 @@
 module Targets.SMTTest where
 import           BenchUtils
 import qualified Data.Map    as M
+import           Prelude     hiding (not)
 import           Targets.SMT
 import           Utils
 
 smtTests :: BenchTest
-smtTests = benchTestGroup "SMT tests" [ solverTest
+smtTests = benchTestGroup "SMT tests" [ arrayEqTest
+                                      , solverTest
                                       , getBitsTest
                                       , setBitsTest
                                       ]
+
+arrayEqTest :: BenchTest
+arrayEqTest = benchTestCase "arrays" $ do
+
+  r <- evalSMT Nothing $ do
+   baseSort <- bvSort 8
+   arrSort <- arraySort baseSort baseSort
+   arr1 <- newVar "arr1" arrSort
+   arr2 <- newVar "arr2" arrSort
+   eq arr1 arr2 >>= not >>= assert
+   runSolver
+
+  satTest r
 
 solverTest :: BenchTest
 solverTest = benchTestCase "solver" $ do

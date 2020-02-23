@@ -10,8 +10,8 @@ cParserTests = benchTestGroup "C parser" [testAdd]
 
 testParse :: String -> BenchTest
 testParse name = benchTestCase name $ do
-  wasm <- parseC name
-  unless (isRight wasm) $ error "Parse failure"
+  c <- parseC name
+  unless (isRight c) $ error "Parse failure"
 
 testAdd :: BenchTest
 testAdd = testParse "test/Code/C/add.c"
