@@ -61,6 +61,9 @@ data AnyReg     = AnyReg
 data AllocValue = AllocValue
 data LAlloc = LAlloc
 
+data Address = Address
+
+--data Call =
 
 
 -- | Memory operations in LIR
