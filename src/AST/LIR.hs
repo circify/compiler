@@ -19,12 +19,37 @@ https://searchfox.org/mozilla-central/source/js/src/jit/CodeGenerator.cpp#6427
 -- Basic types
 --
 
+data Ty = Undefined
+        -- | Null
+        -- | Boolean
+        -- | Int32
+        -- | Int64
+        -- | Double
+        -- | Float32
+        -- | String
+        -- | Symbol
+        -- | BigInt
+        -- | Object
+        -- | MagicOptimizedArguments
+        -- | MagicOptimizedOut
+        -- | MagicHole
+        -- | MagicIsConstructing
+        -- | MagicUninializedLexical
+        -- | Value
+        -- | ObjectOrNull
+        -- | None
+        -- | SlotsTy
+        -- | ElementsTy
+        -- | PointerTy
+
 -- | Figure out what these actually look like in the serialized LIR
 -- before and after register allocation
 -- https://searchfox.org/mozilla-central/source/js/src/jit/Registers.h#32
 data Register = Register
+
 -- | https://searchfox.org/mozilla-central/source/js/src/jit/MIR.h#8292
 type Slot   = Word
+
 -- | https://searchfox.org/mozilla-central/source/js/src/jit/RegisterSets.h#115
 data Value  = Value { valueType    :: Register
                     , valuePayload :: Register
@@ -34,46 +59,56 @@ data Value  = Value { valueType    :: Register
 -- Typedefs. These are reflected in the source
 --
 
--- | Results are also values:
--- https://searchfox.org/mozilla-central/source/js/src/jit/CodeGenerator.cpp#10903
--- We get results from their instructions here:
--- https://searchfox.org/mozilla-central/source/js/src/jit/shared/CodeGenerator-shared-inl.h#162
-type Result = Value
-
--- | 'Object' is an example of a register:
--- https://searchfox.org/mozilla-central/source/js/src/jit/CodeGenerator.cpp#10952
-type Object = Register
-
--- | https://searchfox.org/mozilla-central/source/js/src/jit/MIR.h#8297
-type NeedsBarrier = Bool
-
--- | https://searchfox.org/mozilla-central/source/js/src/jit/MIR.h#7675
-type NeedsHoleCheck = Bool
+-- | HAVE NOT FIGURED OUT YET
+data AnyReg     = AnyReg
+data AllocValue = AllocValue
 
 -- | Memory operations in LIR
-data Mem = StoreFixedSlotV Object Value Slot NeedsBarrier
+data Mem = StoreFixedSlotV { object       :: Register
+                           , value        :: Value
+                           , slot         :: Slot
+                           , needsBarrier :: Bool
+                           }
          -- ^ https://searchfox.org/mozilla-central/source/js/src/jit/CodeGenerator.cpp#10951
          -- Object: const Register obj = ToRegister(ins->getOperand(0))
          -- Value: const ValueOperand value = ToValue(ins, LStoreFixedSlotV::Value)
          -- Slot: size_t slot = ins->mir()->slot()
          -- NeedsBarrier: if (ins->mir()->needsBarrier())
-         | LoadFixedSlotV Object Slot Result
+         | LoadFixedSlotV { object :: Register
+                          , slot   :: Slot
+                          , result :: Value
+                          }
          -- ^ https://searchfox.org/mozilla-central/source/js/src/jit/CodeGenerator.cpp#10900
          -- Object: const Register obj = ToRegister(ins->getOperand(0))
          -- Slot: size_t slot = ins->mir()->slot()
          -- Result: ValueOperand result = ToOutValue(ins)
-         | StoreFixedSlotT Object           Slot NeedsBarrier
+         | StoreFixedSlotT { object       :: Register
+                           , avalue       :: AllocValue
+                           , slot         :: Slot
+                           , needsBarrier :: Bool
+                           }
          -- ^ https://searchfox.org/mozilla-central/source/js/src/jit/CodeGenerator.cpp#10965
          -- Object: const Register obj = ToRegister(ins->getOperand(0))
-         --
+         -- ALLOC VALUE UNCLEAR
          -- Slot: size_t slot = ins->mir()->slot()
          -- NeedsBarrier: if (ins->mir()->needsBarrier())
-         | LoadFixedSlotT Object Slot
-         -- ^ https://searchfox.org/mozilla-central/source/js/src/jit/CodeGenerator.cpp#10908
+
+
+
+
+         --  LoadFixedSlotT Object Slot AnyReg Ty
+         -- -- ^ https://searchfox.org/mozilla-central/source/js/src/jit/CodeGenerator.cpp#10908
+         -- -- Object: const Register obj = ToRegister(ins->getOperand(0))
+         -- -- Slot: size_t slot = ins->mir()->slot()
+         -- -- Result: ?????????
+         -- -- Ty: MIRType type = ins->mir()->type()
+         -- | LoadFixedSlotAndUnbox
+         -- ^ https://searchfox.org/mozilla-central/source/js/src/jit/CodeGenerator.cpp#10918
          --
 
---          | StoreFixedSlotT Object TypedValue Slot NeedsBarrier
---          | LoadFixedSlotT Object Slot TypedResult
+--          XX | StoreFixedSlotT Object TypedValue Slot NeedsBarrier
+--          XX | LoadFixedSlotT Object Slot TypedResult
+
 --          | LoadFixedSlotAndUnbox Input Slot TypedResult
 --          | StoreSlotV Base Value Slot NeedsBarrier
 --          | StoreSlotT Base TypedValue Slot NeedsBarrier
