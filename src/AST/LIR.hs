@@ -92,31 +92,107 @@ data Mem = StoreFixedSlotV { object       :: Register
          -- ALLOC VALUE UNCLEAR
          -- Slot: size_t slot = ins->mir()->slot()
          -- NeedsBarrier: if (ins->mir()->needsBarrier())
-
-
-
-
-         --  LoadFixedSlotT Object Slot AnyReg Ty
-         -- -- ^ https://searchfox.org/mozilla-central/source/js/src/jit/CodeGenerator.cpp#10908
-         -- -- Object: const Register obj = ToRegister(ins->getOperand(0))
-         -- -- Slot: size_t slot = ins->mir()->slot()
-         -- -- Result: ?????????
-         -- -- Ty: MIRType type = ins->mir()->type()
-         -- | LoadFixedSlotAndUnbox
+         | LoadFixedSlotT { object  :: Register
+                          , slot    :: Slot
+                          , aresult :: AnyReg
+                          , ty      :: Ty
+                          }
+         -- ^ https://searchfox.org/mozilla-central/source/js/src/jit/CodeGenerator.cpp#10908
+         -- Object: const Register obj = ToRegister(ins->getOperand(0))
+         -- Slot: size_t slot = ins->mir()->slot()
+         -- Result: ?????????
+         -- Ty: MIRType type = ins->mir()->type()
+         | LoadFixedSlotAndUnbox { input    :: Register
+                                 , slot     :: Slot
+                                 , aresult  :: AnyReg
+                                 , ty       :: Ty
+                                 , fallible :: Bool
+                                 }
          -- ^ https://searchfox.org/mozilla-central/source/js/src/jit/CodeGenerator.cpp#10918
-         --
+         -- Input: const Register input = ToRegister(ins->getOperand(0)
+         -- Slot: slot = mir->slot()
+         -- Result: AnyRegister result = ToAnyRegister(ins->output())
+         -- Type: MIRType type = mir->type()
+         -- Falliable: if (mir->fallible())
+         | StoreSlotV { base         :: Register
+                      , slot         :: Slot
+                      , value        :: Value
+                      , needsBarrier :: Bool
+                      }
+         -- ^ https://searchfox.org/mozilla-central/source/js/src/jit/CodeGenerator.cpp#4020
+         -- Base: Register base = ToRegister(lir->slots())
+         -- Slot: lir->mir()->slot()
+         -- Value: const ValueOperand value = ToValue(lir, LStoreSlotV::Value)
+         -- NeedsBarrier: if (lir->mir()->needsBarrier())
+         | LoadSlotV { dest :: Value
+                     , base :: Register
+                     , slot :: Slot
+                     }
+         -- ^ https://searchfox.org/mozilla-central/source/js/src/jit/CodeGenerator.cpp#3985
+         -- Dest: ValueOperand dest = ToOutValue(lir)
+         -- Base: Register base = ToRegister(lir->input())
+         -- Slot: lir->mir()->slot()
+         | StoreSlotT { base         :: Register
+                      , avalue       :: AllocValue
+                      , slot         :: Slot
+                      , ty           :: Ty
+                      , needsBarrier :: Bool
+                      }
+         -- ^ https://searchfox.org/mozilla-central/source/js/src/jit/CodeGenerator.cpp#3993
+         -- Base: Register base = ToRegister(lir->slots())
+         -- Value: lir->value()
+         -- Slot: lir->mir()->slot()
+         -- Ty: MIRType valueType = lir->mir()->value()->type()
+         -- NeedsBarrier: (lir->mir()->needsBarrier())
+         | LoadSlotT { base    :: Register
+                     , slot    :: Slot
+                     , aresult :: AnyReg
+                     , ty      :: Ty
+                     }
+         -- ^ https://searchfox.org/mozilla-central/source/js/src/jit/CodeGenerator.cpp#3977
+         -- Base: Register base = ToRegister(lir->slots())
+         -- Slot: lir->mir()->slot()
+         -- Output: AnyRegister result = ToAnyRegister(lir->output())
+         -- Type: lir->mir()->type()
+         | StoreElementV { value          :: Value
+                         , elements       :: Register
+                         , index          :: AllocValue
+                         , offsetAdj      :: Int
+                         , needsBarrier   :: Bool
+                         , needsHoleCheck :: Bool
+                         }
+         -- ^ https://searchfox.org/mozilla-central/source/js/src/jit/CodeGenerator.cpp#9505
+         -- Value: const ValueOperand value = ToValue(lir, LStoreElementV::Value)
+         -- Elements: Register elements = ToRegister(lir->elements())
+         -- Index: const LAllocation* index = lir->index()
+         -- OffsetAdjustement: lir->mir()->offsetAdjustment()
+         -- NeedsBarrier: lir->mir()->needsBarrier()
+         -- NeedsHoleCheck: lir->mir()->needsHoleCheck()
+         | LoadElementV { elements       :: Register
+                        , out            :: Value
+                        , index          :: AllocValue
+                        , offsetAdj      :: Int
+                        , needsHoleCheck :: Bool
+                        }
+         -- ^ https://searchfox.org/mozilla-central/source/js/src/jit/CodeGenerator.cpp#11506
+         -- Elements: Register elements = ToRegister(load->elements())
+         -- Out: const ValueOperand out = ToOutValue(load)
+         -- Index: load->index()
+         -- OffsetAdjustment: load->mir()->offsetAdjustment()
+         -- NeedsHolecheck: load->mir()->needsHoleCheck()
+         | StoreElementT { avalue         :: AllocValue
+                         , ty             :: Ty
+                         , elements       :: Register
+                         , elemTy         :: Ty
+                         , index          :: AllocValue
+                         , offsetAdj      :: Int
+                         , needsBarrier   :: Bool
+                         , needsHoleCheck :: Bool
+                         }
+         -- ^ https://searchfox.org/mozilla-central/source/js/src/jit/CodeGenerator.cpp#9487
 
---          XX | StoreFixedSlotT Object TypedValue Slot NeedsBarrier
---          XX | LoadFixedSlotT Object Slot TypedResult
 
---          | LoadFixedSlotAndUnbox Input Slot TypedResult
---          | StoreSlotV Base Value Slot NeedsBarrier
---          | StoreSlotT Base TypedValue Slot NeedsBarrier
---          | LoadSlotV Base Slot Result
---          | LoadSlotT Base Slot TypedResult
---          | StoreElementV Value Elements Index NeedsBarrier NeedsHoleCheck
 --          | StoreElementT TypedValue Elements Index NeedsBarrier NeedsHoleCheck
---          | LoadElementV Elements Index Result NeedsHoleCheck
 --          | LoadElementT Elements Index TypedResult NeedsHoleCheck
 --          | StoreElementHoleV Value Elements Index SpectreTemp NeedsBarrier
 --          | StoreElementHoleT TypedValue Elements Index SpectreTemp NeedsBarrier
