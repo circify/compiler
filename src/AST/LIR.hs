@@ -55,13 +55,13 @@ data Value  = Value { valueType    :: Register
                     , valuePayload :: Register
                     }
 
---
--- Typedefs. These are reflected in the source
---
 
 -- | HAVE NOT FIGURED OUT YET
 data AnyReg     = AnyReg
 data AllocValue = AllocValue
+data LAlloc = LAlloc
+
+
 
 -- | Memory operations in LIR
 data Mem = StoreFixedSlotV { object       :: Register
@@ -190,10 +190,26 @@ data Mem = StoreFixedSlotV { object       :: Register
                          , needsHoleCheck :: Bool
                          }
          -- ^ https://searchfox.org/mozilla-central/source/js/src/jit/CodeGenerator.cpp#9487
+         -- Value: store->value()
+         -- Type: store->mir()->value()->type()
+         -- Elements: Register elements = ToRegister(store->elements())
+         -- Element Type: store->mir()->elementType()
+         -- Index: const LAllocation* index = store->index()
+         -- OffsetAdjustment: store->mir()->offsetAdjustment()
+         -- NeedsBarrier: store->mir()->needsBarrier()
+         -- NeedsHoleCheck: store->mir()->needsHoleCheck()
+         | StoreElementHoleV { elements       :: Register
+--                             , index          :: Register
+                             , value          :: Value
+                             , spectreTemp    :: Register
+                             , needsBarrier   :: Bool
+                             , needsHoleCheck :: Bool
+                             , strict         :: Bool
+                             }
+         -- ^ https://searchfox.org/mozilla-central/source/js/src/jit/CodeGenerator.cpp#9576
+         --
+         | StoreElementHoleT
 
-
---          | StoreElementT TypedValue Elements Index NeedsBarrier NeedsHoleCheck
---          | LoadElementT Elements Index TypedResult NeedsHoleCheck
 --          | StoreElementHoleV Value Elements Index SpectreTemp NeedsBarrier
 --          | StoreElementHoleT TypedValue Elements Index SpectreTemp NeedsBarrier
 --          | LoadElementHole Elements Index InitLength Result NeedsHoleCheck
