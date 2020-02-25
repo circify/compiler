@@ -31,7 +31,8 @@ library:
   - data-binary-ieee754
   - split >= 0.2.3.3
   - bytestring >= 0.10.8.2
-  - aeson >= 1.4.6.0 
+  - aeson >= 1.4.6.0
+  - text >= 1.2.3.1
   
 executables:
   compiler-exe:

@@ -1,0 +1,3 @@
+[ { "beforeRegisterAllocation": [{ "blockNumber" : 0, "instructions" : ["",""] }], "afterRegisterAllocation": [] }
+  ,{ "beforeRegisterAllocation": [], "afterRegisterAllocation": [] }
+]
