@@ -20,55 +20,47 @@ https://searchfox.org/mozilla-central/source/js/src/jit/CodeGenerator.cpp#6427
 --
 
 data Ty = Undefined
-        -- | Null
-        -- | Boolean
-        -- | Int32
-        -- | Int64
-        -- | Double
-        -- | Float32
-        -- | String
-        -- | Symbol
-        -- | BigInt
-        -- | Object
-        -- | MagicOptimizedArguments
-        -- | MagicOptimizedOut
-        -- | MagicHole
-        -- | MagicIsConstructing
-        -- | MagicUninializedLexical
-        -- | Value
-        -- | ObjectOrNull
-        -- | None
-        -- | SlotsTy
-        -- | ElementsTy
-        -- | PointerTy
 
--- | Figure out what these actually look like in the serialized LIR
--- before and after register allocation
--- https://searchfox.org/mozilla-central/source/js/src/jit/Registers.h#32
-data Register = Register
-
--- | https://searchfox.org/mozilla-central/source/js/src/jit/MIR.h#8292
 type Slot   = Word
-
--- | https://searchfox.org/mozilla-central/source/js/src/jit/RegisterSets.h#115
-data Value  = Value { valueType    :: Register
-                    , valuePayload :: Register
-                    }
-
-
--- | HAVE NOT FIGURED OUT YET
-data AnyReg     = AnyReg
-data AllocValue = AllocValue
-data LAlloc = LAlloc
-
-data Address = Address
-
 data MDefintion = MDefinition
 data LDefinition = LDefinition
 data LAllocation = LAllocation
 
---data Call =
+data Variable = Variable
 
+data Op = Op [Variable]
+
+data Return = ReturnFromCtor { retValue  :: LAllocation -- not sure
+                             , retObj    :: LAllocation
+                             , retOutput :: LAllocation
+                             }
+            -- ^ https://searchfox.org/mozilla-central/source/js/src/jit/CodeGenerator.cpp#7130
+            | OsrReturnValue { retFrame :: LAllocation
+                             , retOut   :: (LAllocation, LAllocation)
+                             }
+            -- ^ https://searchfox.org/mozilla-central/source/js/src/jit/CodeGenerator.cpp#3833
+            | Return
+            -- ^ https://searchfox.org/mozilla-central/source/js/src/jit/CodeGenerator.cpp#3758
+
+data Call = CallKnown { calleeReg :: LAllocation
+                      , objReg    :: LDefinition
+                      , argSlot   :: Int
+--                      , target :: Wrapped function
+                      } -- main
+          | CallNative -- main
+          | CallGetIntrinsicValue
+          | CallBindVar
+          | CallGetProperty
+          | CallGetElement
+          | CallSetElement
+          | CallInitElementArray
+          | CallSetProperty
+          | CallDeleteProperty
+          | CallDeleteElement
+          | NewCallObject
+          | CallGeneric
+          | CallDOMNative
+          | CallDirectEval
 
 -- | Memory operations in LIR
 --
