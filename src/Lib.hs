@@ -4,4 +4,4 @@ module Lib
 import           Parser.LIR
 
 someFunc :: IO ()
-someFunc = printAST
+someFunc = printRegAlloc
