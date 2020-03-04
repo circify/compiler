@@ -1,13 +1,14 @@
 {-# LANGUAGE DeriveGeneric #-}
 module Parser.LIR where
+import           AST.LIR
 import           AST.Regalloc
 import           Data.Aeson
 import           Data.Text
 
-parseRegAlloc :: FilePath -> IO (Maybe AllComparisons)
+parseRegAlloc :: FilePath -> IO (Maybe LAllocation)
 parseRegAlloc name = decodeFileStrict name
 
 printRegAlloc :: IO ()
 printRegAlloc = do
-  r <- parseRegAlloc "examples/test.json"
+  r <- parseRegAlloc "examples/test3.json"
   print r
