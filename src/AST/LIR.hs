@@ -25,12 +25,7 @@ https://searchfox.org/mozilla-central/source/js/src/jit/CodeGenerator.cpp#6427
 
 -}
 
-data LOperand = LOperand
-              deriving (Show, Generic)
-
-instance ToJSON LOperand where
-instance FromJSON LOperand where
-
+type LOperand = Text
 type LBlockId = Word32
 type LNodeId = Word32
 type VirtualRegister = Word32
@@ -38,7 +33,7 @@ type RegisterCode = Word32
 type ConstantIndex = Word32
 type StackSlot = Word32
 type ArgumentIndex = Word32
-type RegisterName = Word32
+type RegisterName = Text
 
 data LIR = LIR { blocks :: [LBlock] }
          deriving (Show, Generic)
@@ -72,9 +67,36 @@ data LDefinition = LDefinition { virtualRegister :: VirtualRegister
                                , policy          :: LDefinitionPolicy
                                , output          :: Maybe LAllocation
                                }
-                 deriving (Generic, Show)
+                 deriving (Show)
 
 instance FromJSON LDefinition where
+    parseJSON = withObject "definition" $ \o -> do
+      vr <- o .: ("virtualRegister" :: Text)
+      ty <- o .: ("type" :: Text)
+      -- generics are broken....?
+      let ty' = case ty of
+                  "general"      -> General
+                  "int32"        -> Int32
+                  "object"       -> Object
+                  "slots"        -> Slots
+                  "float32"      -> Float32
+                  "double"       -> Double
+                  "simd32int"    -> SIMD32Int
+                  "simd128float" -> SIMD128Float
+                  "type"         -> Type
+                  "payload"      -> Payload
+                  "box"          -> Box
+                  _              -> error ty
+      pol <- o .: ("policy" :: Text)
+      -- you're probably sick of hearing this by now, but generics are broken
+      let pol' = case pol of
+               "fixed"          -> DefFixed
+               "register"       -> DefRegister
+               "mustReuseInput" -> MustReuseInput
+               _                -> error pol
+      op <- o .: ("output" :: Text)
+      return $ LDefinition vr ty' pol' op
+
 
 data LDefinitionType = General
                      | Int32
@@ -87,34 +109,12 @@ data LDefinitionType = General
                      | Type
                      | Payload
                      | Box
-                       deriving (Generic)
-
-instance Show LDefinitionType where
-  show General      = "general"
-  show Int32        = "int32"
-  show Object       = "object"
-  show Slots        = "slots"
-  show Float32      = "float32"
-  show Double       = "double"
-  show SIMD32Int    = "simd32int"
-  show SIMD128Float = "simd128float"
-  show Type         = "type"
-  show Payload      = "payload"
-  show Box          = "box"
-
-instance FromJSON LDefinitionType where
+                       deriving (Show)
 
 data LDefinitionPolicy = DefFixed
                        | DefRegister
                        | MustReuseInput
-                         deriving (Generic)
-
-instance Show LDefinitionPolicy where
-  show DefFixed       = "fixed"
-  show DefRegister    = "register"
-  show MustReuseInput = "mustReuseInput"
-
-instance FromJSON LDefinitionPolicy where
+                         deriving (Show)
 
 data LAllocation = {- kind = "constantValue" -} LConstantValueAllocation
                  | {- kind = "constantIndex" -} LConstantIndexAllocation { cindex :: ConstantIndex}
