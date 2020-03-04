@@ -9,10 +9,12 @@ import           AST.Typed
 import           Control.Monad.State.Strict (unless, when)
 import           Data.Aeson                 hiding (Object)
 import qualified Data.HashMap.Strict        as HM
+import qualified Data.Map                   as M
 import           Data.Maybe                 (fromJust, isJust)
-import           Data.Text                  hiding (map)
+import           Data.Text                  hiding (concatMap, map)
 import           Data.Word
 import           GHC.Generics
+import           Prelude                    hiding (id)
 
 {-|
 
@@ -40,12 +42,28 @@ data LIR = LIR { blocks :: [LBlock] }
 
 instance FromJSON LIR where
 
-data LBlock = LBlock { id    :: LBlockId
-                     , nodes :: [LNode]
+makeBlockMap :: LIR -> M.Map LBlockId [LBlockId]
+makeBlockMap lir = M.fromList $ map (\block ->
+                                      (blockId block, concatMap successors $ nodes block)
+                                    ) $ blocks lir
+
+-- makeParentBlockMap :: LIR -> M.Map LBlockId [LBlockId]
+-- makeParentBlockMap lir =
+
+  -- node:
+  --  for successors:
+  --    insert (successor, node)
+
+data LBlock = LBlock { blockId :: LBlockId
+                     , nodes   :: [LNode]
                      }
             deriving (Show, Generic)
 
 instance FromJSON LBlock where
+    parseJSON = withObject "lblock" $ \o -> do
+      blockId <- o .: ("id" :: Text)
+      nodes <- o .: ("nodes" :: Text)
+      return $ LBlock blockId nodes
 
 data LNode = LNode { id                :: LNodeId
                    , opName            :: LOperand

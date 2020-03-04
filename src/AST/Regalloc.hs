@@ -3,7 +3,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module AST.Regalloc where
 import           AST.LIR
-import           Control.Monad.State.Strict (unless)
+import           Control.Monad.State.Strict (liftIO, unless)
 import           Data.Aeson
 import           Data.Text                  hiding (unwords)
 import           GHC.Generics
@@ -15,9 +15,9 @@ data Comparison = Comparison {
 
 instance FromJSON Comparison where
     parseJSON = withObject "comparison" $ \o -> do
-      (_ :: Text) <- o .: ("name" :: Text)
+      (s1 :: Text) <- o .: ("name" :: Text)
       before <- o .: ("lir" :: Text)
       after <- o .: ("lir" :: Text)
-      (_ :: Text) <- o .: ("name" :: Text)
+      (s2 :: Text) <- o .: ("name" :: Text)
       return $ Comparison before after
 
