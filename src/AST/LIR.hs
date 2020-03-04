@@ -97,10 +97,7 @@ data LAllocation = {- kind = "constantValue" -} LConstantValueAllocation
                  | {- kind = "fpu" -} LFloatRegAllocation { freg :: RegisterName }
                  | {- kind = "stackSlot" -} LStackSlotAllocation { slot :: StackSlot }
                  | {- kind = "argumentSlot" -} LArgumentAllocation { lindex :: ArgumentIndex }
-                   deriving (Generic)
-
-instance Show LAllocation where
-    show LConstantValueAllocation = "constantValue"
+                   deriving (Generic, Show)
 
 instance FromJSON LAllocation where
     parseJSON = withObject "allocation" $ \o -> do
@@ -111,11 +108,20 @@ instance FromJSON LAllocation where
           idx <- o .: ("index" :: Text)
           return $ LConstantIndexAllocation idx
         "use" -> do
-          policy <- o .: ("policy" :: Text)
+          -- we have to do this shit because the generic
+          -- for LUse is busted for some reason
+          p <- o .: ("policy" :: Text)
+          let policy = case (p :: Text) of
+                         "any"            -> Any
+                         "useRegister"    -> UseRegister
+                         "useFixed"       -> UseFixed
+                         "keepAlive"      -> KeepAlive
+                         "recoveredInput" -> RecoveredInput
+                         _                -> error "Unexpected policy type"
           vr <- o .: ("virtualRegister" :: Text)
           rc <- o .: ("registerCode" :: Text)
           uas <- o .: ("usedAtStart" :: Text)
-          return $ LUseAllocation policy vr rc uas
+          return $ LUseAllocation Any vr rc uas
         "gpr" -> do
           reg <- o .: ("reg" :: Text)
           return $ LGeneralRegAllocation reg
@@ -135,19 +141,5 @@ data LUsePolicy = Any
                 | UseFixed
                 | KeepAlive
                 | RecoveredInput
-                  deriving (Generic)
-
-instance ToJSON LUsePolicy where
-instance FromJSON LUsePolicy where
-
-instance Show LUsePolicy where
-  show Any            = "any"
-  show UseRegister    = "register"
-  show UseFixed       = "fixed"
-  show KeepAlive      = "keepAlive"
-  show RecoveredInput = "recoveredInput"
-
-
-
-
+                  deriving (Show)
 
