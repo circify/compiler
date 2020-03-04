@@ -7,7 +7,7 @@ module AST.LIR ( module AST.LIR
                ) where
 import           AST.Typed
 import           Control.Monad.State.Strict (unless, when)
-import           Data.Aeson
+import           Data.Aeson                 hiding (Object)
 import qualified Data.HashMap.Strict        as HM
 import           Data.Maybe                 (fromJust, isJust)
 import           Data.Text                  hiding (map)
@@ -40,51 +40,81 @@ type StackSlot = Word32
 type ArgumentIndex = Word32
 type RegisterName = Word32
 
--- data LIR = LIR { blocks :: [LBlock] }
---          deriving (Show, Generic)
+data LIR = LIR { blocks :: [LBlock] }
+         deriving (Show, Generic)
 
--- data LBlock = LBlock { id    :: LBlockId
---                      , nodes :: [LNode]
---                      }
+instance FromJSON LIR where
 
--- data LNode = LNode { id                :: LNodeId
---                    , opName            :: LOperand
---                    , extraName         :: Maybe Text
---                    , isCall            :: Bool
---                    , recoversInput     :: Bool
---                    , callPreservesRegs :: [RegisterName] -- empty for all but some WASM stuff
---                    , operands          :: [LAllocation]
---                    , defs              :: [LDefinition]
---                    , temps             :: [LDefinition]
---                    , successors        :: [LBlockId]
---                    }
+data LBlock = LBlock { id    :: LBlockId
+                     , nodes :: [LNode]
+                     }
+            deriving (Show, Generic)
 
--- data LDefinition = LDefinition { virtualRegister :: VirtualRegister
---                                , ty              :: LDefinitionType
---                                , policy          :: LDefinitionPolicy
---                                , output          :: Maybe LAllocation
---                                }
+instance FromJSON LBlock where
 
--- data LDefinitionType = General
---                      | Int32
---                      | Object
---                      | Slots
---                      | Float32
---                      | Double
---                      | SIMD32Int
---                      | SIMD128Float
---                      | Type
---                      | Payload
---                      | Box
+data LNode = LNode { id                :: LNodeId
+                   , opName            :: LOperand
+                   , extraName         :: Maybe Text
+                   , isCall            :: Bool
+                   , recoversInput     :: Bool
+                   , callPreservesRegs :: [RegisterName] -- empty for all but some WASM stuff
+                   , operands          :: [LAllocation]
+                   , defs              :: [LDefinition]
+                   , temps             :: [LDefinition]
+                   , successors        :: [LBlockId]
+                   }
+           deriving (Generic, Show)
 
--- data LDefinitionPolicy = DefFixed
---                        | DefRegister
---                        | MustReuseInput
+instance FromJSON LNode where
 
--- instance Show LDefinitionPolicy where
---   show DefFixed       = "fixed"
---   show DefRegister    = "register"
---   show MustReuseInput = "mustReuseInput"x
+data LDefinition = LDefinition { virtualRegister :: VirtualRegister
+                               , ty              :: LDefinitionType
+                               , policy          :: LDefinitionPolicy
+                               , output          :: Maybe LAllocation
+                               }
+                 deriving (Generic, Show)
+
+instance FromJSON LDefinition where
+
+data LDefinitionType = General
+                     | Int32
+                     | Object
+                     | Slots
+                     | Float32
+                     | Double
+                     | SIMD32Int
+                     | SIMD128Float
+                     | Type
+                     | Payload
+                     | Box
+                       deriving (Generic)
+
+instance Show LDefinitionType where
+  show General      = "general"
+  show Int32        = "int32"
+  show Object       = "object"
+  show Slots        = "slots"
+  show Float32      = "float32"
+  show Double       = "double"
+  show SIMD32Int    = "simd32int"
+  show SIMD128Float = "simd128float"
+  show Type         = "type"
+  show Payload      = "payload"
+  show Box          = "box"
+
+instance FromJSON LDefinitionType where
+
+data LDefinitionPolicy = DefFixed
+                       | DefRegister
+                       | MustReuseInput
+                         deriving (Generic)
+
+instance Show LDefinitionPolicy where
+  show DefFixed       = "fixed"
+  show DefRegister    = "register"
+  show MustReuseInput = "mustReuseInput"
+
+instance FromJSON LDefinitionPolicy where
 
 data LAllocation = {- kind = "constantValue" -} LConstantValueAllocation
                  | {- kind = "constantIndex" -} LConstantIndexAllocation { cindex :: ConstantIndex}
