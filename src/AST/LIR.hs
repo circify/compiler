@@ -191,3 +191,114 @@ data LUsePolicy = Any
                 | RecoveredInput
                   deriving (Show)
 
+-- Functions for interacting with the AST
+
+isLoad :: LNode -> Bool
+isLoad node = opName node `elem` loadList
+
+loadList :: [LOperand]
+loadList = [ "LoadElementV"
+           , "LoadElementHole"
+           , "LoadElementT"
+           , "LoadElementFromStateV"
+           , "LoadUnboxedScalar"
+           , "LoadTypedArrayElementHole"
+           , "LoadFixedSlotV"
+           , "LoadFixedSlotT"
+           , "LoadFixedSlotAndUnbox"
+           , "LoadSlotV"
+           , "LoadSlotT"
+           , "WasmLoadTls"
+           , "WasmLoad"
+           , "WasmLoadI64"
+           , "AsmJSLoadHeap"
+           , "WasmLoadSlot"
+           , "WasmLoadSlotI64"
+           ]
+
+isStore :: LNode -> Bool
+isStore node = opName node `elem` storeList
+
+storeList :: [LOperand]
+storeList = [ "StoreElementV"
+            , "StoreElementT"
+            , "StoreElementHoleV"
+            , "StoreElementHoleT"
+            , "FallibleStoreElementV"
+            , "FallibleStoreElementT"
+            , "StoreUnboxedScalar"
+            , "StoreTypedArrayElementHole"
+            , "StoreFixedSlotV"
+            , "StoreFixedSlotT"
+            , "StoreSlotV"
+            , "StoreSlotT"
+            , "WasmStore"
+            , "WasmStoreI64"
+            , "AsmJSStoreHeap"
+            , "WasmStoreSlot"
+            , "WasmStoreSlotI64"
+            , "WasmStoreRef"
+            ]
+
+isFnCall :: LNode -> Bool
+isFnCall node = opName node `elem` callList
+
+callList :: [LOperand]
+callList = [ "CallGeneric"
+           , "CallKnown"
+           , "CallNative"
+           , "CallDOMNative"
+           , "CallDirectEval"
+           , "CallGetIntrinsicValue"
+           , "CallBindVar"
+           , "CallGetProperty"
+           , "CallGetElement"
+           , "CallSetElement"
+           , "CallInitElementArray"
+           , "CallSetProperty"
+           , "CallDeleteProperty"
+           , "CallDeleteElement"
+           , "WasmCall"
+           , "IonToWasmCall"
+           , "IonToWasmCallV"
+           ]
+
+isCond :: LNode -> Bool
+isCond node = opName node `elem` condList
+
+condList :: [LOperand]
+condList = [ "TestIAndBranch"
+           , "TestI64AndBranch"
+           , "TestDAndBranch"
+           , "TestFAndBranch"
+           , "TestOAndBranch"
+           , "TestVAndBranch"
+           , "CompareI64AndBranch"
+           , "CompareAndBranch"
+           , "CompareDAndBranch"
+           , "CompareFAndBranch"
+           , "CompareBAndBranch"
+           , "CompareBitwiseAndBranch"
+           , "BitAndAndBranch"
+           , "IsNullOrLikeUndefinedAndBranchV"
+           , "IsNullOrLikeUndefinedAndBranchT"
+           , "IsNoIterAndBranch"
+           , "IsObjectAndBranch"
+           , "IsNullOrUndefinedAndBranch"
+           ]
+
+isReturn :: LNode -> Bool
+isReturn node = opName node `elem` returnList
+
+returnList :: [LOperand]
+returnList = [ "ReturnFromCtor"
+             , "Return"
+             , "OsrReturnValue"
+             , "WasmReturn"
+             , "WasmReturnI64"
+             , "WasmReturnVoid"
+             , "CheckReturn"
+             ]
+
+
+
