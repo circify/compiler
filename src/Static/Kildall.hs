@@ -47,8 +47,10 @@ updateStore node item (Store store) = Store $ M.insert (workNode node) item stor
 
 -- | We have to be able to combine two peices of analysis information
 -- in order to check the program using Kilall's algorithm
+-- We also need a transfer function that "propagates information thru an expression"
 class Checkable a where
     meet :: a -> a -> a
+    transfer :: WorkNode a -> WorkNode a
 
 -- | http://www.ccs.neu.edu/home/types/resources/notes/kildall/kildall.pdf
 -- Kildall's algorithm for computing program information to a fixed point
@@ -65,5 +67,5 @@ kildall (elem:rest) store succs =
   in if newState == currentState
      then kildall rest store succs
      else let newStore = updateStore elem newState store
-              newElems = map (\e -> WorkNode e newState) $ getSuccessors elem succs
+              newElems = map (\e -> transfer $ WorkNode e newState) $ getSuccessors elem succs
           in kildall (rest++newElems) newStore succs

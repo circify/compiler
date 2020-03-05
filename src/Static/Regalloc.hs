@@ -23,4 +23,11 @@ transfer :: LNode -- ^ Before node
          -> Locs -- ^ Location information before transfer
          -> Locs -- ^ Location information after transfer
 transfer _ _ Broken        = Broken
-transfer before after info = error ""
+transfer before after info
+  | isLoad after   = undefined
+  | isStore after  = undefined
+  | isFnCall after = undefined
+  | isCond after   = undefined
+  | isReturn after = undefined
+  | otherwise      = undefined
+
