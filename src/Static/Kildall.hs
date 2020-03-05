@@ -1,4 +1,4 @@
-module Static.RegallocTV where
+module Static.Kildall where
 import           AST.LIR
 import           AST.Regalloc
 import qualified Data.Map     as M
