@@ -23,13 +23,31 @@ data WorkNode a = WorkNode { workNode  :: NodeId
 -- | A store of information about the analysis state of nodes in the program
 data Store a = Store (M.Map NodeId a)
 
+-- Turn this into all program information
 -- | Information of node relationships
 type Successors = M.Map NodeId [NodeId]
 
 -- Functions for interacting with successors
 
-getSuccessors :: WorkNode a -> Successors -> [NodeId]
-getSuccessors node succs = M.findWithDefault [] (workNode node) succs
+getSuccessors :: WorkNode a -> [LIR] -> [NodeId]
+getSuccessors _ [] = error "Cannot examine empty program"
+getSuccessors node (program:_) =
+  let block = blocks program !! (fromIntegral $ fst wn)
+      nodes' = nodes block
+      node' = nodes' !! (fromIntegral $ snd wn)
+  in case successors node' of
+       -- If there are no other block successors, the next node
+       -- is either (1) nothing or (2) the next node in the block
+       [] -> if length nodes' == (fromIntegral $ snd wn)
+             -- No blocks afterwards if we're the last node in a
+             -- block with no successors
+             then []
+             -- Next node
+             else [(fst wn, snd wn + 1)]
+       -- If there are successors in other blocks, they are
+       -- the first nodes of those blocks
+       block -> map (\b -> (b, 0)) block
+  where wn = workNode node
 
 -- Functions for interacting with the store
 
@@ -50,22 +68,24 @@ updateStore node item (Store store) = Store $ M.insert (workNode node) item stor
 -- We also need a transfer function that "propagates information thru an expression"
 class Checkable a where
     meet :: a -> a -> a
-    transfer :: WorkNode a -> WorkNode a
+    transfer :: [LIR] -> WorkNode a -> WorkNode a
 
 -- | http://www.ccs.neu.edu/home/types/resources/notes/kildall/kildall.pdf
 -- Kildall's algorithm for computing program information to a fixed point
 kildall :: (Checkable a, Eq a)
         => [WorkNode a] -- ^ Worklist
         -> Store a -- ^ Store of analysis information
-        -> Successors
+        -> [LIR]
         -> Store a
 kildall [] store _ = store
-kildall (elem:rest) store succs =
+kildall (elem:rest) store lir =
   let incomingState = nodeState elem
       currentState = infoAt elem store
       newState = incomingState `meet` currentState
   in if newState == currentState
-     then kildall rest store succs
+     then kildall rest store lir
      else let newStore = updateStore elem newState store
-              newElems = map (\e -> transfer $ WorkNode e newState) $ getSuccessors elem succs
-          in kildall (rest++newElems) newStore succs
+              newElems = map (\e ->
+                               transfer lir $ WorkNode e newState
+                             ) $ getSuccessors elem lir
+          in kildall (rest++newElems) newStore lir

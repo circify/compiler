@@ -37,22 +37,11 @@ type StackSlot = Word32
 type ArgumentIndex = Word32
 type RegisterName = Text
 
+-- ^ Raw Firefox LIR
 data LIR = LIR { blocks :: [LBlock] }
          deriving (Show, Generic)
 
 instance FromJSON LIR where
-
-makeBlockMap :: LIR -> M.Map LBlockId [LBlockId]
-makeBlockMap lir = M.fromList $ map (\block ->
-                                      (blockId block, concatMap successors $ nodes block)
-                                    ) $ blocks lir
-
--- makeParentBlockMap :: LIR -> M.Map LBlockId [LBlockId]
--- makeParentBlockMap lir =
-
-  -- node:
-  --  for successors:
-  --    insert (successor, node)
 
 data LBlock = LBlock { blockId :: LBlockId
                      , nodes   :: [LNode]
