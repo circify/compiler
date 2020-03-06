@@ -1,0 +1,11 @@
+
+                {
+                  "virtualRegister": 1,
+                  "type": "box",
+                  "policy": "fixed",
+                  "output": {
+                    "kind": "argumentSlot",
+                    "index": 0
+                  }
+                }
+

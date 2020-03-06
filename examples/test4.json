@@ -1,0 +1,22 @@
+            {
+              "id": 1,
+              "opName": "Parameter",
+              "extraName": null,
+              "isCall": false,
+              "recoversInput": false,
+              "callPreservesRegs": [],
+              "operands": [],
+              "defs": [
+                {
+                  "virtualRegister": 1,
+                  "type": "box",
+                  "policy": "fixed",
+                  "output": {
+                    "kind": "argumentSlot",
+                    "index": 0
+                  }
+                }
+              ],
+              "temps": [],
+              "successors": []
+            }
