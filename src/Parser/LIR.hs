@@ -6,12 +6,12 @@ import           Control.Monad (forM_)
 import           Data.Aeson
 import           Data.Text     hiding (length)
 
-parseRegAlloc :: FilePath -> IO (Maybe [Comparison])
+parseRegAlloc :: FilePath -> IO (Maybe [Graph])
 parseRegAlloc name = decodeFileStrict name
 
 printRegAlloc :: IO ()
 printRegAlloc = do
-  r <- parseRegAlloc "examples/ion-26744.json"
+  r <- parseRegAlloc "examples/graphIds1.json"
   case r of
-    Just comps -> forM_ comps $ \comp -> print comp
-    Nothing    -> print "Failed"
+    Just graphs -> print $ makeRegallocMap graphs
+    Nothing     -> print "Failed"
