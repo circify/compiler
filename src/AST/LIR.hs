@@ -6,11 +6,11 @@ module AST.LIR ( module AST.LIR
                , module AST.Typed
                ) where
 import           AST.Typed
-import           Control.Monad.State.Strict (unless, when)
+import           Control.Monad.State.Strict (join, unless, when)
 import           Data.Aeson                 hiding (Object)
 import qualified Data.HashMap.Strict        as HM
 import qualified Data.Map                   as M
-import           Data.Maybe                 (fromJust, isJust)
+import           Data.Maybe                 (catMaybes, fromJust, isJust)
 import           Data.Text                  hiding (concatMap, map, unwords)
 import           Data.Word
 import           GHC.Generics
@@ -74,6 +74,43 @@ data LNode = LNode { id                :: LNodeId
                    }
            deriving (Generic, Show)
 
+getVirtualTemps :: LNode -> [VirtualRegister]
+getVirtualTemps = map virtualReg . temps
+
+getRealTemps :: LNode -> [RegisterName]
+getRealTemps = catMaybes . map getRealLDefs . temps
+
+getVirtualDefs :: LNode -> [VirtualRegister]
+getVirtualDefs = map virtualReg . defs
+
+getRealDefs :: LNode -> [RegisterName]
+getRealDefs = catMaybes . map getRealLDefs . defs
+
+getVirtualOperands :: LNode -> [VirtualRegister]
+getVirtualOperands = catMaybes . map getVirtualAllocation . operands
+
+getRealOperands :: LNode -> [RegisterName]
+getRealOperands = catMaybes . map getRealAllocation . operands
+
+-- Helpers: get virtual and real from LAllocations and LDefinitions
+
+getVirtualLDefs :: LDefinition -> VirtualRegister
+getVirtualLDefs = virtualReg
+
+getRealLDefs :: LDefinition -> Maybe RegisterName
+getRealLDefs = join . fmap getRealAllocation . output
+
+getVirtualAllocation :: LAllocation -> Maybe VirtualRegister
+getVirtualAllocation alloc = case alloc of
+  LUseAllocation{} -> Just $ virtualRegister alloc
+  _                -> Nothing
+
+getRealAllocation :: LAllocation -> Maybe RegisterName
+getRealAllocation alloc = case alloc of
+  LGeneralRegAllocation{} -> Just $ greg alloc
+  LFloatRegAllocation{}   -> Just $ freg alloc
+  _                       -> Nothing
+
 instance FromJSON LNode where
     -- parseJSON = withObject "node" $ \o -> do
     --   id <- o .: ("id" :: Text)
@@ -116,10 +153,10 @@ instance FromJSON LMove where
       ty <- o .: ("type" :: Text)
       return $ LMove from to (makeType ty)
 
-data LDefinition = LDefinition { virtualRegister :: VirtualRegister
-                               , ty              :: LDefinitionType
-                               , policy          :: LDefinitionPolicy
-                               , output          :: Maybe LAllocation
+data LDefinition = LDefinition { virtualReg :: VirtualRegister
+                               , ty         :: LDefinitionType
+                               , policy     :: LDefinitionPolicy
+                               , output     :: Maybe LAllocation
                                }
                  deriving (Show, Generic)
 

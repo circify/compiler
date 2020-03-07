@@ -30,8 +30,13 @@ printRegAlloc = do
         forM_ (zip lirBefore lirAfter) $ \(beforeBlock, afterBlock) -> do
           let beforeNodes = nodes beforeBlock
               afterNodes  = nodes afterBlock
-          when (length beforeNodes /= length afterNodes) $ do
-            putStrLn "---------------------------------------------------"
-            print $ length beforeNodes
-            print $ length afterNodes
+          when (length beforeNodes == length afterNodes) $ do
+            putStrLn "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+            forM_ beforeNodes $ print . getVirtualOperands
+            forM_ beforeNodes $ print . getVirtualDefs
+            forM_ beforeNodes $ print . getVirtualTemps
+            putStrLn "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+            forM_ beforeNodes $ print . getRealOperands
+            forM_ beforeNodes $ print . getRealDefs
+            forM_ beforeNodes $ print . getRealTemps
     Nothing     -> print "Failed"
