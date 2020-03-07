@@ -11,7 +11,7 @@ import           Data.Aeson                 hiding (Object)
 import qualified Data.HashMap.Strict        as HM
 import qualified Data.Map                   as M
 import           Data.Maybe                 (fromJust, isJust)
-import           Data.Text                  hiding (concatMap, map)
+import           Data.Text                  hiding (concatMap, map, unwords)
 import           Data.Word
 import           GHC.Generics
 import           Prelude                    hiding (id)
@@ -43,20 +43,24 @@ data LIR = LIR { blocks :: [LBlock] }
 
 instance FromJSON LIR where
 
-data LBlock = LBlock { blockId :: LBlockId
-                     , nodes   :: [LNode]
+data LBlock = LBlock { blockId    :: LBlockId
+                     , entryMoves :: Maybe Word32
+                     , exitMoves  :: Maybe Word32
+                     , nodes      :: [LNode]
                      }
             deriving (Show, Generic)
 
 instance FromJSON LBlock where
     parseJSON = withObject "lblock" $ \o -> do
       blockId <- o .: ("id" :: Text)
+      entries <- o .: ("entryMoves" :: Text)
+      exits <- o .: ("exitMoves" :: Text)
       nodes <- o .: ("nodes" :: Text)
-      return $ LBlock blockId nodes
+      return $ LBlock blockId entries exits nodes
 
 data LNode = LNode { id                :: LNodeId
-                   , opName            :: LOperand
-                   , extraName         :: Maybe Text
+                   , operation         :: LOperation
+--                   , extraName         :: Maybe Text
                    , isCall            :: Bool
                    , recoversInput     :: Bool
                    , callPreservesRegs :: [RegisterName] -- empty for all but some WASM stuff
@@ -64,46 +68,71 @@ data LNode = LNode { id                :: LNodeId
                    , defs              :: [LDefinition]
                    , temps             :: [LDefinition]
                    , successors        :: [LBlockId]
+                   , inputMoves        :: Maybe Word32
+                   , fixReuseMoves     :: Maybe Word32
+                   , movesAfter        :: Maybe Word32
                    }
            deriving (Generic, Show)
 
 instance FromJSON LNode where
+    parseJSON = withObject "node" $ \o -> do
+      id <- o .: ("id" :: Text)
+      op <- o .: ("operation" :: Text)
+      iscall <- o .: ("isCall" :: Text)
+      reci <- o .: ("recoversInput" :: Text)
+      cpr <- o .: ("callPreservesRegs" :: Text)
+      ops <- o .: ("operands" :: Text)
+      defs <- o .: ("defs" :: Text)
+      temps <- o .: ("temps" :: Text)
+      succs <- o .: ("successors" :: Text)
+      im <- o .: ("inputMoves" :: Text)
+      frm <- o .: ("fixReuseMoves" :: Text)
+      ma <- o .: ("movesAfter" :: Text)
+      return $ LNode id op iscall reci cpr ops defs temps succs im frm ma
+
+data LOperation = LMoveGroupOp { moves :: [LMove] }
+                | LOp { code :: Text }
+                deriving (Show, Generic)
+
+instance FromJSON LOperation where
+    parseJSON = withObject "operation" $ \o -> do
+      code <- o .: ("code" :: Text)
+      if code == "MoveGroup"
+      then do
+        moves <- o .: ("moves" :: Text)
+        return $ LMoveGroupOp moves
+        -- move group
+      else return $ LOp code
+
+data LMove = LMove { from :: LAllocation
+                   , to   :: LAllocation
+                   , ty   :: LDefinitionType
+                   } deriving (Show, Generic)
+
+instance FromJSON LMove where
+    parseJSON = withObject "def" $ \o -> do
+      from <- o .: ("from" :: Text)
+      to <- o .: ("to" :: Text)
+      ty <- o .: ("type" :: Text)
+      return $ LMove from to (makeType ty)
 
 data LDefinition = LDefinition { virtualRegister :: VirtualRegister
                                , ty              :: LDefinitionType
                                , policy          :: LDefinitionPolicy
                                , output          :: Maybe LAllocation
                                }
-                 deriving (Show)
+                 deriving (Show, Generic)
+
+makeDefLabels :: String -> String
+makeDefLabels inStr = if inStr == "type" then "ty" else inStr
 
 instance FromJSON LDefinition where
-    parseJSON = withObject "definition" $ \o -> do
+    parseJSON = withObject "def" $ \o -> do
       vr <- o .: ("virtualRegister" :: Text)
       ty <- o .: ("type" :: Text)
-      -- generics are broken....?
-      let ty' = case ty of
-                  "general"      -> General
-                  "int32"        -> Int32
-                  "object"       -> Object
-                  "slots"        -> Slots
-                  "float32"      -> Float32
-                  "double"       -> Double
-                  "simd32int"    -> SIMD32Int
-                  "simd128float" -> SIMD128Float
-                  "type"         -> Type
-                  "payload"      -> Payload
-                  "box"          -> Box
-                  _              -> error ty
       pol <- o .: ("policy" :: Text)
-      -- you're probably sick of hearing this by now, but generics are broken
-      let pol' = case pol of
-               "fixed"          -> DefFixed
-               "register"       -> DefRegister
-               "mustReuseInput" -> MustReuseInput
-               _                -> error pol
-      op <- o .: ("output" :: Text)
-      return $ LDefinition vr ty' pol' op
-
+      out <- o .: ("output" :: Text)
+      return $ LDefinition vr (makeType ty) (makePolicy pol) out
 
 data LDefinitionType = General
                      | Int32
@@ -118,10 +147,30 @@ data LDefinitionType = General
                      | Box
                        deriving (Show)
 
+makeType ty = case ty of
+        "general"      -> General
+        "int32"        -> Int32
+        "object"       -> Object
+        "slots"        -> Slots
+        "float32"      -> Float32
+        "double"       -> Double
+        "simd32int"    -> SIMD32Int
+        "simd128float" -> SIMD128Float
+        "type"         -> Type
+        "payload"      -> Payload
+        "box"          -> Box
+        _              -> error $ unwords ["Unexpected LDefinitionType", ty]
+
 data LDefinitionPolicy = DefFixed
                        | DefRegister
                        | MustReuseInput
                          deriving (Show)
+
+makePolicy pol = case pol of
+  "fixed"          -> DefFixed
+  "register"       -> DefRegister
+  "mustReuseInput" -> MustReuseInput
+  _                -> error $ unwords ["Unexpected definition policy", pol]
 
 data LAllocation = {- kind = "constantValue" -} LConstantValueAllocation
                  | {- kind = "constantIndex" -} LConstantIndexAllocation { cindex :: ConstantIndex}
@@ -183,7 +232,7 @@ data LUsePolicy = Any
 -- Functions for interacting with the AST
 
 isLoad :: LNode -> Bool
-isLoad node = opName node `elem` loadList
+isLoad node = undefined --opName node `elem` loadList
 
 loadList :: [LOperand]
 loadList = [ "LoadElementV"
@@ -206,7 +255,7 @@ loadList = [ "LoadElementV"
            ]
 
 isStore :: LNode -> Bool
-isStore node = opName node `elem` storeList
+isStore node = undefined --opName node `elem` storeList
 
 storeList :: [LOperand]
 storeList = [ "StoreElementV"
@@ -230,7 +279,7 @@ storeList = [ "StoreElementV"
             ]
 
 isFnCall :: LNode -> Bool
-isFnCall node = opName node `elem` callList
+isFnCall node = undefined --opName node `elem` callList
 
 callList :: [LOperand]
 callList = [ "CallGeneric"
@@ -253,7 +302,7 @@ callList = [ "CallGeneric"
            ]
 
 isCond :: LNode -> Bool
-isCond node = opName node `elem` condList
+isCond node = undefined --opName node `elem` condList
 
 condList :: [LOperand]
 condList = [ "TestIAndBranch"
@@ -277,7 +326,7 @@ condList = [ "TestIAndBranch"
            ]
 
 isReturn :: LNode -> Bool
-isReturn node = opName node `elem` returnList
+isReturn node = undefined -- opName node `elem` returnList
 
 returnList :: [LOperand]
 returnList = [ "ReturnFromCtor"

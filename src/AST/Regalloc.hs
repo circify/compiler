@@ -35,7 +35,7 @@ data When = BeforeRegalloc | AfterRegalloc
 instance FromJSON Graph where
     parseJSON = withObject "comparison" $ \o -> do
       gid <- o .: ("graphId" :: Text)
-      (when :: Text) <- o .: ("name" :: Text)
+      (when :: Text) <- o .: ("pass" :: Text)
       let when' = case when of
                     "beforeRegisterAllocation" -> BeforeRegalloc
                     "afterRegisterAllocation"  -> AfterRegalloc

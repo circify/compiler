@@ -12,7 +12,7 @@ parseRegAlloc name = decodeFileStrict name
 
 printRegAlloc :: IO ()
 printRegAlloc = do
-  r <- parseRegAlloc "examples/graphIds1.json"
+  r <- parseRegAlloc "examples/moveGroup.json"
   case r of
     Just graphs -> do
       let regs = makeRegallocMap graphs
@@ -20,4 +20,5 @@ printRegAlloc = do
           afterSize  = M.size $ afterRegalloc regs
       unless (beforeSize == afterSize) $
         error "Different number of blocks before and after regalloc"
+      print regs
     Nothing     -> print "Failed"
