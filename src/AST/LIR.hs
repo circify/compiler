@@ -75,20 +75,20 @@ data LNode = LNode { id                :: LNodeId
            deriving (Generic, Show)
 
 instance FromJSON LNode where
-    parseJSON = withObject "node" $ \o -> do
-      id <- o .: ("id" :: Text)
-      op <- o .: ("operation" :: Text)
-      iscall <- o .: ("isCall" :: Text)
-      reci <- o .: ("recoversInput" :: Text)
-      cpr <- o .: ("callPreservesRegs" :: Text)
-      ops <- o .: ("operands" :: Text)
-      defs <- o .: ("defs" :: Text)
-      temps <- o .: ("temps" :: Text)
-      succs <- o .: ("successors" :: Text)
-      im <- o .: ("inputMoves" :: Text)
-      frm <- o .: ("fixReuseMoves" :: Text)
-      ma <- o .: ("movesAfter" :: Text)
-      return $ LNode id op iscall reci cpr ops defs temps succs im frm ma
+    -- parseJSON = withObject "node" $ \o -> do
+    --   id <- o .: ("id" :: Text)
+    --   op <- o .: ("operation" :: Text)
+    --   iscall <- o .: ("isCall" :: Text)
+    --   reci <- o .: ("recoversInput" :: Text)
+    --   cpr <- o .: ("callPreservesRegs" :: Text)
+    --   ops <- o .: ("operands" :: Text)
+    --   defs <- o .: ("defs" :: Text)
+    --   temps <- o .: ("temps" :: Text)
+    --   succs <- o .: ("successors" :: Text)
+    --   im <- o .: ("inputMoves" :: Text)
+    --   frm <- o .: ("fixReuseMoves" :: Text)
+    --   ma <- o .: ("movesAfter" :: Text)
+    --   return $ LNode id op iscall reci cpr ops defs temps succs im frm ma
 
 data LOperation = LMoveGroupOp { moves :: [LMove] }
                 | LOp { code :: Text }
