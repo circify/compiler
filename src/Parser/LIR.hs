@@ -32,11 +32,13 @@ printRegAlloc = do
               afterNodes  = nodes afterBlock
           when (length beforeNodes == length afterNodes) $ do
             putStrLn "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-            forM_ beforeNodes $ print . getVirtualOperands
-            forM_ beforeNodes $ print . getVirtualDefs
-            forM_ beforeNodes $ print . getVirtualTemps
+            forM_ beforeNodes $ \n -> do
+              print $ getVirtualOperands n
+              print $ getVirtualDefs n
+              print $ getVirtualTemps n
             putStrLn "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-            forM_ beforeNodes $ print . getRealOperands
-            forM_ beforeNodes $ print . getRealDefs
-            forM_ beforeNodes $ print . getRealTemps
+            forM_ afterNodes $ \n -> do
+              print $ getRealOperands n
+              print $ getRealDefs n
+              print $ getRealTemps n
     Nothing     -> print "Failed"
