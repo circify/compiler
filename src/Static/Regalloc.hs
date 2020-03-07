@@ -1,6 +1,7 @@
 module Static.Regalloc where
 import           AST.LIR
 import           AST.Regalloc
+import qualified Data.Map       as M
 import qualified Data.Set       as S
 import           Static.Kildall
 
@@ -10,6 +11,15 @@ Register allocation translation validation as presented in:
 https://xavierleroy.org/publi/validation-regalloc.pdf
 
 -}
+
+addAssignment :: VirtualRegister
+              -> RegisterName
+              -> M.Map RegisterName VirtualRegister
+              -> M.Map RegisterName VirtualRegister
+addAssignment vr rr regs = case M.lookup rr regs of
+                             Just vr' | vr == vr' -> regs
+                             Just{}   -> error "Already assigned virutal reg"
+                             Nothing  -> M.insert rr vr regs
 
 -- | Per program point association between virtual registers and real registers
 -- (page 8 of the paper)

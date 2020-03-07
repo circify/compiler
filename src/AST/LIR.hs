@@ -60,7 +60,6 @@ instance FromJSON LBlock where
 
 data LNode = LNode { id                :: LNodeId
                    , operation         :: LOperation
---                   , extraName         :: Maybe Text
                    , isCall            :: Bool
                    , recoversInput     :: Bool
                    , callPreservesRegs :: [RegisterName] -- empty for all but some WASM stuff
