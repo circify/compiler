@@ -11,7 +11,8 @@ import           Data.Aeson                 hiding (Object)
 import qualified Data.HashMap.Strict        as HM
 import qualified Data.Map                   as M
 import           Data.Maybe                 (catMaybes, fromJust, isJust)
-import           Data.Text                  hiding (concatMap, map, unwords)
+import           Data.Text                  hiding (concatMap, foldl, map,
+                                             unwords)
 import           Data.Word
 import           GHC.Generics
 import           Prelude                    hiding (id)
@@ -49,6 +50,10 @@ data LBlock = LBlock { blockId    :: LBlockId
                      , nodes      :: [LNode]
                      }
             deriving (Show, Generic)
+
+makeNodeMap :: [LNode] -> M.Map LNodeId LNode
+makeNodeMap = foldl insertNode M.empty
+  where insertNode m n = M.insert (id n) n m
 
 instance FromJSON LBlock where
     parseJSON = withObject "lblock" $ \o -> do
@@ -109,6 +114,18 @@ getRealAllocation alloc = case alloc of
   LGeneralRegAllocation{} -> Just $ greg alloc
   LFloatRegAllocation{}   -> Just $ freg alloc
   _                       -> Nothing
+
+-- playing around
+
+getPhi :: LNode -> Maybe (VirtualRegister, [VirtualRegister])
+getPhi alloc = case operation alloc of
+                 LOp "Phi" -> let inRegs = map getVirtualAllocation $ operands alloc
+                                           -- crash if just?
+                              in case defs alloc of
+                                   [def] -> Just (getVirtualLDefs def, catMaybes inRegs)
+                                   _     -> error "No out register"
+                 _         -> Nothing
+
 
 instance FromJSON LNode where
     -- parseJSON = withObject "node" $ \o -> do
