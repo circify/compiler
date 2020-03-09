@@ -4,6 +4,7 @@ import           AST.Regalloc
 import qualified Data.Map       as M
 import           Data.Maybe     (catMaybes, fromJust, isJust, isNothing)
 import qualified Data.Set       as S
+import           Prelude        hiding (id)
 import           Static.Kildall
 
 {-|
@@ -21,7 +22,14 @@ data Loc = Reg RegisterName
 data RegisterState = RegMap { regmap :: (M.Map Loc VirtualRegister) }
                    | Error String
                    | EmptyMap
-                   deriving (Eq, Ord, Show)
+                   deriving (Ord, Show)
+
+instance Eq RegisterState where
+    (RegMap m) == (RegMap n) = m == n
+    EmptyMap == _ = False
+    Error{} == _ = False
+    _ == EmptyMap = False
+    _ == Error{} = False
 
 isError :: RegisterState -> Bool
 isError Error{} = True
@@ -84,11 +92,14 @@ getNodeMoveInfo node =
     LMoveGroupOp{} -> map getLocsFromMove $ moves op
     _              -> error "Cannot get move info from non-move node"
 
-getNodeDefInfo :: LNode -> RegisterState
-getNodeDefInfo node =
-  case getDefInfo $ defs node of
-    Nothing       -> EmptyMap
-    Just (vr, rr) -> RegMap $ M.fromList [(rr, vr)]
+getNodeInfo :: LNode -> LNode -> RegisterState
+getNodeInfo nodeBefore nodeAfter =
+  let useInfo = getNodeUseInfo nodeBefore nodeAfter
+  in case getDefInfo $ defs nodeAfter of
+    Nothing       -> useInfo
+    Just (vr, rr) -> case useInfo of
+                       RegMap m -> RegMap $ M.insert rr vr m
+                       _        -> useInfo
 
 getNodeUseInfo :: LNode -> LNode -> RegisterState
 getNodeUseInfo nodeBefore nodeAfter =
@@ -116,14 +127,26 @@ getNodeUseInfo nodeBefore nodeAfter =
                  else RegMap $ M.insert k v m
            ) EmptyMap $ tempsMap ++ operandMap
 
+
+
 ---
 --- The transfer function
 ---
 
-meet :: RegisterState
-     -> RegisterState
-     -> RegisterState
-meet r1 r2
+initList :: [LIR] -> [WorkNode RegisterState]
+initList [_,a] =
+  concatMap (\b -> map (\n -> WorkNode (blockId b, id n) EmptyMap) $ nodes b) $ blocks a
+initList _     = error "Unexpected number of IRs"
+
+initState :: [LIR] -> Store RegisterState
+initState lirs =
+  let nodes = map workNode $ initList lirs
+  in Store $ foldl (\m n -> M.insert n EmptyMap m) M.empty nodes
+
+meet' :: RegisterState
+      -> RegisterState
+      -> RegisterState
+meet' r1 r2
   | isError r1 = r1
   | isError r2 = r2
   | isEmpty r1 = r2
@@ -145,3 +168,37 @@ meet r1 r2
                    else RegMap $ M.union r1' r2'
       where r1' = regmap r1
             r2' = regmap r2
+
+lookupNode :: LIR
+           -> WorkNode a
+           -> LNode
+lookupNode lir (WorkNode (bid, nid) _)=
+  let bs     = blocks lir
+      block  = bs !! fromIntegral bid
+      ns     = nodes block
+  in ns !! fromIntegral nid
+
+transfer' :: [LIR] -> WorkNode RegisterState -> WorkNode RegisterState
+transfer' [b, a] node =
+  let afterNode  = lookupNode a node
+      beforeNode = lookupNode b node
+      newMap = case operation afterNode of
+        LMoveGroupOp{} ->
+          let curState = nodeState node
+          in foldl (\m (from, to) ->
+                     case m of
+                       EmptyMap -> EmptyMap
+                       Error{}  -> m
+                       RegMap m -> case M.lookup from m of
+                                     Nothing -> RegMap m
+                                     Just v -> let newM = M.delete from m
+                                               in RegMap $ M.insert to v m
+                   ) curState $ getNodeMoveInfo afterNode
+        _ -> meet (nodeState node) $ getNodeInfo beforeNode afterNode
+  in WorkNode (workNode node) newMap
+transfer' _ _         = error "Unexpected number of LIRs"
+
+instance Checkable RegisterState where
+    meet = meet'
+    transfer = transfer'
+

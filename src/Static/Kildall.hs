@@ -22,6 +22,7 @@ data WorkNode a = WorkNode { workNode  :: NodeId
 
 -- | A store of information about the analysis state of nodes in the program
 data Store a = Store (M.Map NodeId a)
+             deriving (Show)
 
 -- Turn this into all program information
 -- | Information of node relationships
@@ -31,7 +32,7 @@ type Successors = M.Map NodeId [NodeId]
 
 getSuccessors :: WorkNode a -> [LIR] -> [NodeId]
 getSuccessors _ [] = error "Cannot examine empty program"
-getSuccessors node (program:_) =
+getSuccessors node (_:program:_) =
   let block = blocks program !! (fromIntegral $ fst wn)
       nodes' = nodes block
       node' = nodes' !! (fromIntegral $ snd wn)
@@ -46,16 +47,19 @@ getSuccessors node (program:_) =
              else [(fst wn, snd wn + 1)]
        -- If there are successors in other blocks, they are
        -- the first nodes of those blocks
-       block -> map (\b -> (b, 0)) block
+       block -> map (\b -> (b, 1)) block
   where wn = workNode node
 
 -- Functions for interacting with the store
 
-infoAt :: WorkNode a -> Store a -> a
+infoAt :: (Show a) => WorkNode a -> Store a -> a
 infoAt node (Store store) = case M.lookup (workNode node) store of
                       Just item -> item
                       Nothing -> error $ unwords [ "Could not find store info for"
                                                  , show $ workNode node
+                                                 , "in"
+                                                 , "\n"
+                                                 , show store
                                                  ]
 
 updateStore :: WorkNode a -> a -> Store a -> Store a
@@ -72,7 +76,7 @@ class Checkable a where
 
 -- | http://www.ccs.neu.edu/home/types/resources/notes/kildall/kildall.pdf
 -- Kildall's algorithm for computing program information to a fixed point
-kildall :: (Checkable a, Eq a)
+kildall :: (Checkable a, Eq a, Show a)
         => [WorkNode a] -- ^ Worklist
         -> Store a -- ^ Store of analysis information
         -> [LIR]
