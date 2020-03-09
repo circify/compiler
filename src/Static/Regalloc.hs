@@ -2,6 +2,7 @@ module Static.Regalloc where
 import           AST.LIR
 import           AST.Regalloc
 import qualified Data.Map       as M
+import           Data.Maybe     (catMaybes, fromJust, isJust, isNothing)
 import qualified Data.Set       as S
 import           Static.Kildall
 
@@ -12,43 +13,135 @@ https://xavierleroy.org/publi/validation-regalloc.pdf
 
 -}
 
-addAssignment :: VirtualRegister
-              -> RegisterName
-              -> M.Map RegisterName VirtualRegister
-              -> M.Map RegisterName VirtualRegister
-addAssignment vr rr regs = case M.lookup rr regs of
-                             Just vr' | vr == vr' -> regs
-                             Just{}   -> error "Already assigned virutal reg"
-                             Nothing  -> M.insert rr vr regs
+data Loc = Reg RegisterName
+         | SSlot StackSlot
+         | ASlot ArgumentIndex
+         deriving (Eq, Ord, Show)
 
--- | Per program point association between virtual registers and real registers
--- (page 8 of the paper)
-data Locs = Locs (S.Set (VirtualRegister, RegisterName)) -- No bug, just locations
-          | Broken -- Found a bug
-          | Star -- The start state for the whole store
+data RegisterState = RegMap { regmap :: (M.Map Loc VirtualRegister) }
+                   | Error String
+                   | EmptyMap
+                   deriving (Eq, Ord, Show)
 
-instance Checkable Locs where
-    meet (Locs locs1) (Locs locs2) = Locs $ S.union locs1 locs2
-    meet Broken _                  = Broken
-    meet _ Broken                  = Broken
-    meet locs1 Star                = locs1
-    meet Star locs2                = locs2
+isError :: RegisterState -> Bool
+isError Error{} = True
+isError _       = False
 
-    transfer = transferFn
+isEmpty :: RegisterState -> Bool
+isEmpty EmptyMap = True
+isEmpty _        = False
 
+getVirtFromAllocation :: LAllocation -> Maybe VirtualRegister
+getVirtFromAllocation alloc =
+  case alloc of
+    LUseAllocation{} -> Just $ virtualRegister alloc
+    _                -> Nothing
 
-transferFn :: [LIR] -- ^ Before regalloc
-           -> WorkNode Locs
-           -> WorkNode Locs
-transferFn [before,after] locs = undefined
+getLocFromAllocation :: LAllocation -> Maybe Loc
+getLocFromAllocation alloc =
+  case alloc of
+    LGeneralRegAllocation{} -> Just $ Reg $ greg alloc
+    LFloatRegAllocation{}   -> Just $ Reg $ freg alloc
+    LStackSlotAllocation{}  -> Just $ SSlot $ slot alloc
+    LArgumentAllocation{}   -> Just $ ASlot $ lindex alloc
+    _                       -> Nothing
 
--- transfer :: WorkNode Locs
---          -> WorkNode Locs
--- transfer before after info
---   | isLoad after   = undefined
---   | isStore after  = undefined
---   | isFnCall after = undefined
---   | isCond after   = undefined
---   | isReturn after = undefined
---   | otherwise      = undefined
+getVirtFromDefinition :: LDefinition -> VirtualRegister
+getVirtFromDefinition = virtualReg
 
+getLocFromDefinition :: LDefinition -> Maybe Loc
+getLocFromDefinition def =
+  case output def of
+    Nothing    -> Nothing
+    Just alloc -> getLocFromAllocation alloc
+
+getLocsFromMove :: LMove -> (Loc, Loc)
+getLocsFromMove move =
+  let fromLoc = getLocFromAllocation $ from move
+      toLoc   = getLocFromAllocation $ to move
+  in if isNothing fromLoc || isNothing toLoc
+  then error $ unwords ["Move from unknown location", show move]
+  else (fromJust fromLoc, fromJust toLoc)
+
+-- Get map information for a node
+
+getDefInfo :: [LDefinition] -> Maybe (VirtualRegister, Loc)
+getDefInfo def = case def of
+  []    -> Nothing
+  [def] -> case getLocFromDefinition def of
+             Nothing -> Nothing
+             Just rr -> Just (getVirtFromDefinition def, rr)
+  _     -> error "Unexpected number of definitions in node"
+
+--
+-- Helpers for the transfer function
+--
+
+getNodeMoveInfo :: LNode -> [(Loc, Loc)]
+getNodeMoveInfo node =
+  let op = operation node
+  in case op of
+    LMoveGroupOp{} -> map getLocsFromMove $ moves op
+    _              -> error "Cannot get move info from non-move node"
+
+getNodeDefInfo :: LNode -> RegisterState
+getNodeDefInfo node =
+  case getDefInfo $ defs node of
+    Nothing       -> EmptyMap
+    Just (vr, rr) -> RegMap $ M.fromList [(rr, vr)]
+
+getNodeUseInfo :: LNode -> LNode -> RegisterState
+getNodeUseInfo nodeBefore nodeAfter =
+  let operandsBefore = map getVirtFromAllocation $ operands nodeBefore
+      operandsAfter  = map getLocFromAllocation $ operands nodeAfter
+      operandMap     = catMaybes $ map (\(b, a) -> if isJust b && isJust a
+                                       then Just (fromJust a, fromJust b)
+                                       else Nothing
+                                       ) $ zip operandsBefore operandsAfter
+      tempsBefore    = map getVirtFromDefinition $ temps nodeBefore
+      tempsAfter     = map getLocFromDefinition $ temps nodeAfter
+      tempsMap       = catMaybes $ map (\(b, a) -> if isJust a
+                                       then Just (fromJust a, b)
+                                       else Nothing
+                                       ) $ zip tempsBefore tempsAfter
+  in foldl (\m (k, v) ->
+             case m of
+               EmptyMap -> RegMap $ M.fromList [(k, v)]
+               Error{}  -> m
+               RegMap m ->
+                 if M.member k m
+                 then case m M.! k of
+                        v' | v == v' -> RegMap m
+                        e  -> Error $ unwords $ [show k, "cannot be", show v, "and", show e]
+                 else RegMap $ M.insert k v m
+           ) EmptyMap $ tempsMap ++ operandMap
+
+---
+--- The transfer function
+---
+
+meet :: RegisterState
+     -> RegisterState
+     -> RegisterState
+meet r1 r2
+  | isError r1 = r1
+  | isError r2 = r2
+  | isEmpty r1 = r2
+  | isEmpty r2 = r1
+  | otherwise = let keys = S.union (S.fromList $ M.keys r1') (S.fromList $ M.keys r2')
+                    r'    = foldl (\m' k ->
+                      if (r1' M.! k) == (r2' M.! k)
+                      then m'
+                      else Error $ unwords $ ["Conflicting virtual regs for phys reg"
+                                             , show k
+                                             , ":"
+                                             , show $ r1' M.! k
+                                             , ","
+                                             , show $ r2' M.! k
+                                             ]
+                               ) EmptyMap keys
+                in if isError r'
+                   then r'
+                   else RegMap $ M.union r1' r2'
+      where r1' = regmap r1
+            r2' = regmap r2
