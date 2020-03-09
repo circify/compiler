@@ -28,10 +28,6 @@ data WorkNode a = WorkNode { workNode  :: NodeId
 data Store a = Store { storeMap :: (M.Map NodeId a) }
              deriving (Show)
 
--- Turn this into all program information
--- | Information of node relationships
-type Successors = M.Map NodeId [NodeId]
-
 -- Functions for interacting with successors
 
 getSuccessors :: (Show a) => WorkNode a -> [LIR] -> IO [NodeId]

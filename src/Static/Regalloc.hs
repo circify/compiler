@@ -87,7 +87,7 @@ getDefInfo def = case def of
   []    -> Nothing
   [def] -> case getLocFromDefinition def of
              Nothing -> Nothing
-             Just rr -> Just (getVirtFromDefinition def, rr)
+             Just rr -> trace (show def) Just (getVirtFromDefinition def, rr)
   _     -> error "Unexpected number of definitions in node"
 
 --
@@ -108,7 +108,7 @@ getNodeInfo nodeBefore nodeAfter =
     Nothing       -> useInfo
     Just (vr, rr) -> case useInfo of
                        RegMap m -> RegMap $ M.insert rr vr m
-                       _        -> useInfo
+                       _        -> RegMap $ M.fromList [(rr, vr)]
 
 getNodeUseInfo :: LNode -> LNode -> RegisterState
 getNodeUseInfo nodeBefore nodeAfter =
