@@ -29,7 +29,8 @@ printRegAlloc = do
             lirAfter  = afters M.! k
             worklist  = initList [lirBefore, lirAfter]
             state     = initState [lirBefore, lirAfter]
-        print $ kildall worklist state [lirBefore, lirAfter]
+        s <- kildall worklist state [lirBefore, lirAfter]
+        print s
         -- forM_ (zip lirBefore lirAfter) $ \(bblock, ablock) -> do
         --   print "BLOCK BOUNDARY"
         --   let beforeNodes = makeNodeMap $ nodes bblock

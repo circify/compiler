@@ -1,7 +1,8 @@
 module Static.Kildall where
 import           AST.LIR
 import           AST.Regalloc
-import qualified Data.Map     as M
+import           Control.Monad (unless)
+import qualified Data.Map      as M
 
 {-|
 
@@ -30,16 +31,32 @@ type Successors = M.Map NodeId [NodeId]
 
 -- Functions for interacting with successors
 
-getSuccessors :: WorkNode a -> [LIR] -> [NodeId]
+getSuccessors :: (Show a) => WorkNode a -> [LIR] -> IO [NodeId]
 getSuccessors _ [] = error "Cannot examine empty program"
-getSuccessors node (_:program:_) =
-  let block = blocks program !! (fromIntegral $ fst wn)
-      nodes' = nodes block
-      node' = nodes' !! (fromIntegral $ snd wn)
-  in case successors node' of
+getSuccessors node (_:program:_) = do
+  print node
+  let blockid = fst wn
+      blocks' = makeBlockMap $ blocks program
+  unless (M.member blockid blocks') $
+    error $ unwords ["Block id"
+                    , show blockid
+                    , "outside of range"
+                    , show blocks'
+                    ]
+  let block  = blocks' M.! blockid
+      nodes' = makeNodeMap $ nodes block
+      nodeid = snd wn
+  unless (M.member nodeid nodes') $
+    error $ unwords ["Node id"
+                    , show nodeid
+                    , "outside of range"
+                    , show nodes'
+                    ]
+  let node' = nodes' M.! nodeid
+  case successors node' of
        -- If there are no other block successors, the next node
        -- is either (1) nothing or (2) the next node in the block
-       [] -> if length nodes' == (fromIntegral $ snd wn)
+       [] -> return $ if M.size nodes' == (fromIntegral $ snd wn)
              -- No blocks afterwards if we're the last node in a
              -- block with no successors
              then []
@@ -47,7 +64,7 @@ getSuccessors node (_:program:_) =
              else [(fst wn, snd wn + 1)]
        -- If there are successors in other blocks, they are
        -- the first nodes of those blocks
-       block -> map (\b -> (b, 1)) block
+       bs -> return $ map (\b -> (b, 1)) bs
   where wn = workNode node
 
 -- Functions for interacting with the store
@@ -80,16 +97,19 @@ kildall :: (Checkable a, Eq a, Show a)
         => [WorkNode a] -- ^ Worklist
         -> Store a -- ^ Store of analysis information
         -> [LIR]
-        -> Store a
-kildall [] store _ = store
-kildall (elem:rest) store lir =
+        -> IO (Store a)
+kildall [] store _ = return store
+kildall (elem:rest) store lir = do
+  print elem
   let incomingState = nodeState elem
       currentState = infoAt elem store
       newState = incomingState `meet` currentState
-  in if newState == currentState
-     then kildall rest store lir
-     else let newStore = updateStore elem newState store
-              newElems = map (\e ->
-                               transfer lir $ WorkNode e newState
-                             ) $ getSuccessors elem lir
-          in kildall (rest++newElems) newStore lir
+  if newState == currentState
+  then kildall rest store lir
+  else do
+    succs <- getSuccessors elem lir
+    let newStore = updateStore elem newState store
+        newElems = map (\e ->
+                            transfer lir $ WorkNode e newState
+                       ) succs
+    kildall (rest++newElems) newStore lir

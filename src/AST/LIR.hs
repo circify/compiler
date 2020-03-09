@@ -51,6 +51,9 @@ data LBlock = LBlock { blockId    :: LBlockId
                      }
             deriving (Show, Generic)
 
+makeBlockMap :: [LBlock] -> M.Map LBlockId LBlock
+makeBlockMap = foldl (\m b -> M.insert (blockId b) b m) M.empty
+
 makeNodeMap :: [LNode] -> M.Map LNodeId LNode
 makeNodeMap = foldl insertNode M.empty
   where insertNode m n = M.insert (id n) n m
