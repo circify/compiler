@@ -1,7 +1,7 @@
 module Static.Kildall where
 import           AST.LIR
 import           AST.Regalloc
-import           Control.Monad (unless)
+import           Control.Monad (forM, forM_, unless)
 import           Data.List     (elemIndex)
 import qualified Data.Map      as M
 import           Data.Maybe    (fromJust)
@@ -62,9 +62,7 @@ getSuccessors node (_:program:_) = do
              else do
                let ns  = map id $ nodes block
                    idx = fromJust $ elemIndex nodeid ns
-               -- since nodes are 1-indexed, the next node is actually
-               -- at the node index of the current node
-               return [(fst wn, ns !! idx)]
+               return [(fst wn, ns !! idx + 1)]
        -- If there are successors in other blocks, they are
        -- the first nodes of those blocks
        bs -> do
@@ -99,7 +97,7 @@ updateStore node item (Store store) = Store $ M.insert (workNode node) item stor
 -- We also need a transfer function that "propagates information thru an expression"
 class Checkable a where
     meet :: a -> a -> a
-    transfer :: [LIR] -> WorkNode a -> WorkNode a
+    transfer :: [LIR] -> WorkNode a -> IO (WorkNode a)
 
 -- | http://www.ccs.neu.edu/home/types/resources/notes/kildall/kildall.pdf
 -- Kildall's algorithm for computing program information to a fixed point
@@ -110,7 +108,7 @@ kildall :: (Checkable a, Eq a, Show a)
         -> IO (Store a)
 kildall [] store _ = return store
 kildall (elem:rest) store lir = do
-  print elem
+--  print elem
   let incomingState = nodeState elem
       currentState = infoAt elem store
       newState = incomingState `meet` currentState
@@ -119,7 +117,11 @@ kildall (elem:rest) store lir = do
   else do
     succs <- getSuccessors elem lir
     let newStore = updateStore elem newState store
-        newElems = map (\e ->
-                            transfer lir $ WorkNode e newState
-                       ) succs
-    kildall (rest++newElems) newStore lir
+    next <- forM succs $ \e -> do
+      nextNodeInfo <- transfer lir $ WorkNode (workNode elem) newState
+      return $ WorkNode e (nodeState nextNodeInfo)
+    putStrLn "------------------------------------"
+    print $ workNode elem
+    print succs
+    print next
+    kildall (rest++next) newStore lir

@@ -87,7 +87,7 @@ getDefInfo def = case def of
   []    -> Nothing
   [def] -> case getLocFromDefinition def of
              Nothing -> Nothing
-             Just rr -> trace (show def) Just (getVirtFromDefinition def, rr)
+             Just rr -> Just (getVirtFromDefinition def, rr)
   _     -> error "Unexpected number of definitions in node"
 
 --
@@ -194,9 +194,8 @@ lookupNode lir (WorkNode (bid, nid) _) =
           then error $ unwords [show nid, "not in", show ns]
           else ns M.! nid
 
-
-transfer' :: [LIR] -> WorkNode RegisterState -> WorkNode RegisterState
-transfer' [b, a] node =
+transfer' :: [LIR] -> WorkNode RegisterState -> IO (WorkNode RegisterState)
+transfer' [b, a] node = do
   let afterNode  = lookupNode a node
       beforeNode = lookupNode b node
       newMap = case operation afterNode of
@@ -213,7 +212,7 @@ transfer' [b, a] node =
                                                in RegMap $ M.insert to v m
                    ) curState $ getNodeMoveInfo afterNode
         _ -> meet (nodeState node) $ getNodeInfo beforeNode afterNode
-  in WorkNode (workNode node) newMap
+  return $ WorkNode (workNode node) newMap
 transfer' _ _         = error "Unexpected number of LIRs"
 
 instance Checkable RegisterState where
