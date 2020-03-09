@@ -23,14 +23,22 @@ data Loc = Reg RegisterName
 data RegisterState = RegMap { regmap :: (M.Map Loc VirtualRegister) }
                    | Error String
                    | EmptyMap
+                   | Start
                    deriving (Ord, Show)
 
 instance Eq RegisterState where
     (RegMap m) == (RegMap n) = m == n
-    EmptyMap == _ = False
-    Error{} == _  = True
-    _ == EmptyMap = False
-    _ == Error{}  = True
+    Error{}    == _          = True
+    _          == Error{}    = True
+    EmptyMap   == EmptyMap   = True
+    EmptyMap   == _          = False
+    _          == EmptyMap   = False
+    Start      == _          = False
+    _          == Start      = False
+
+isStart :: RegisterState -> Bool
+isStart Start = True
+isStart _     = False
 
 isError :: RegisterState -> Bool
 isError Error{} = True
@@ -136,13 +144,13 @@ getNodeUseInfo nodeBefore nodeAfter =
 
 initList :: [LIR] -> [WorkNode RegisterState]
 initList [_,a] =
-  concatMap (\b -> map (\n -> WorkNode (blockId b, id n) EmptyMap) $ nodes b) $ blocks a
+  concatMap (\b -> map (\n -> WorkNode (blockId b, id n) Start) $ nodes b) $ blocks a
 initList _     = error "Unexpected number of IRs"
 
 initState :: [LIR] -> Store RegisterState
 initState lirs =
   let nodes = map workNode $ initList lirs
-  in Store $ foldl (\m n -> M.insert n EmptyMap m) M.empty nodes
+  in Store $ foldl (\m n -> M.insert n Start m) M.empty nodes
 
 meet' :: RegisterState
       -> RegisterState
@@ -152,6 +160,9 @@ meet' r1 r2
   | isError r2 = r2
   | isEmpty r1 = r2
   | isEmpty r2 = r1
+  | isStart r1 && isStart r2 = EmptyMap
+  | isStart r1 = r2
+  | isStart r2 = r1
   | otherwise = let keys = S.union (S.fromList $ M.keys r1') (S.fromList $ M.keys r2')
                     r'    = foldl (\m' k ->
                       if (r1' M.! k) == (r2' M.! k)
@@ -193,6 +204,7 @@ transfer' [b, a] node =
           let curState = nodeState node
           in foldl (\m (from, to) ->
                      case m of
+                       Start    -> EmptyMap
                        EmptyMap -> EmptyMap
                        Error{}  -> m
                        RegMap m -> case M.lookup from m of
