@@ -4,6 +4,7 @@ import           AST.Regalloc
 import qualified Data.Map       as M
 import           Data.Maybe     (catMaybes, fromJust, isJust, isNothing)
 import qualified Data.Set       as S
+import           Debug.Trace
 import           Prelude        hiding (id)
 import           Static.Kildall
 
@@ -27,9 +28,9 @@ data RegisterState = RegMap { regmap :: (M.Map Loc VirtualRegister) }
 instance Eq RegisterState where
     (RegMap m) == (RegMap n) = m == n
     EmptyMap == _ = False
-    Error{} == _ = False
+    Error{} == _  = True
     _ == EmptyMap = False
-    _ == Error{} = False
+    _ == Error{}  = True
 
 isError :: RegisterState -> Bool
 isError Error{} = True
@@ -172,11 +173,16 @@ meet' r1 r2
 lookupNode :: LIR
            -> WorkNode a
            -> LNode
-lookupNode lir (WorkNode (bid, nid) _)=
-  let bs     = blocks lir
-      block  = bs !! fromIntegral bid
-      ns     = nodes block
-  in ns !! fromIntegral nid
+lookupNode lir (WorkNode (bid, nid) _) =
+  let bs     = makeBlockMap $ blocks lir
+      block  = bs M.! bid
+      ns     = makeNodeMap $ nodes block
+  in if not $ M.member bid bs
+     then error $ unwords [show bid, "not in", show bs]
+     else if not $ M.member nid ns
+          then error $ unwords [show nid, "not in", show ns]
+          else ns M.! nid
+
 
 transfer' :: [LIR] -> WorkNode RegisterState -> WorkNode RegisterState
 transfer' [b, a] node =
