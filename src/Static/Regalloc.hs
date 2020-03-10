@@ -84,13 +84,11 @@ getLocsFromMove move =
 
 -- Get map information for a node
 
-getDefInfo :: [LDefinition] -> Maybe (VirtualRegister, Loc)
-getDefInfo def = case def of
-  []    -> Nothing
-  [def] -> case getLocFromDefinition def of
-             Nothing -> Nothing
-             Just rr -> Just (getVirtFromDefinition def, rr)
-  _     -> error "Unexpected number of definitions in node"
+getDefInfo :: [LDefinition] -> [(VirtualRegister, Loc)]
+getDefInfo def = catMaybes $ map getLocInfo def
+  where getLocInfo d = case getLocFromDefinition d of
+                         Nothing -> Nothing
+                         Just rr -> Just (getVirtFromDefinition d, rr)
 
 --
 -- Helpers for the transfer function
@@ -105,15 +103,6 @@ getNodeMoveInfo node =
 
 getNodeInfo :: LNode -> LNode -> RegisterState
 getNodeInfo nodeBefore nodeAfter =
-  let useInfo = getNodeUseInfo nodeBefore nodeAfter
-  in case getDefInfo $ defs nodeAfter of
-    Nothing       -> useInfo
-    Just (vr, rr) -> case useInfo of
-                       RegMap m -> RegMap $ M.insert rr vr m
-                       _        -> RegMap $ M.fromList [(rr, vr)]
-
-getNodeUseInfo :: LNode -> LNode -> RegisterState
-getNodeUseInfo nodeBefore nodeAfter =
   let operandsBefore = map getVirtFromAllocation $ operands nodeBefore
       operandsAfter  = map getLocFromAllocation $ operands nodeAfter
       operandMap     = M.fromList $
@@ -122,20 +111,15 @@ getNodeUseInfo nodeBefore nodeAfter =
                                        else Nothing
                                        ) $ zip operandsBefore operandsAfter
       operandState   = if null operandMap then EmptyMap else RegMap operandMap
-      tempsBefore    = map getVirtFromDefinition $ temps nodeBefore
-      tempsAfter     = map getLocFromDefinition $ temps nodeAfter
-      tempsMap       = catMaybes $ map (\(b, a) -> if isJust a
-                                       then Just (fromJust a, b)
-                                       else Nothing
-                                       ) $ zip tempsBefore tempsAfter
-  in foldl (\m (k, v) ->
+      ts             = getDefInfo $ temps nodeAfter
+      ds             = getDefInfo $ defs nodeAfter
+  in foldl (\m (v,k) ->
              case m of
-               EmptyMap -> RegMap $ M.fromList [(k, v)]
-               Error{}  -> m
-               RegMap m -> RegMap $ M.insert k v m
-           ) operandState tempsMap
-
-
+               EmptyMap  -> RegMap $ M.fromList [(k, v)]
+               Error{}   -> m
+               Start     -> RegMap $ M.fromList [(k, v)]
+               RegMap m' -> RegMap $ M.insert k v m'
+           ) operandState $ ts ++ ds
 
 ---
 --- The transfer function
@@ -153,8 +137,10 @@ initState lirs =
 
 meet' :: RegisterState
       -> RegisterState
+      -> [LIR]
+      -> WorkNode a
       -> IO RegisterState
-meet' r1 r2
+meet' r1 r2 [b,a] node
   | isError r1 = return r1
   | isError r2 = return r2
   | isEmpty r1 = return r2
@@ -163,25 +149,53 @@ meet' r1 r2
   | isStart r1 = return r2
   | isStart r2 = return r1
   | otherwise = do
-      let keys = S.intersection (S.fromList $ M.keys r1') (S.fromList $ M.keys r2')
+      let r1ks    = S.fromList $ M.keys r1'
+          r2ks    = S.fromList $ M.keys r2'
+          allKeys = S.union r1ks r2ks
+      node' <- lookupNode a node
       r' <- foldM (\m' k -> do
-        let v1' = r1' M.! k
-            v2' = r2' M.! k
-        if v1' == v2'
-        then return m'
-        else return $ Error $ unwords $ ["Conflicting virtual regs for phys reg"
+        if S.member k r1ks && S.member k r2ks
+        -- We have a conflict.
+        -- Is it an ok conflict (introduced by a new def?)
+        -- Or a bad conflict (use => different allocation for some register)
+        then do
+          putStrLn $ unwords ["Conflict at", show k]
+          let v1 = r1' M.! k
+              v2 = r2' M.! k
+              ds = getDefInfo (defs node') ++ getDefInfo (temps node')
+          case ds of
+            -- The conflict is just the same value. Fine!
+            _  | v1 == v2 -> do
+               print "Is ok"
+               return $ addToMap k v1 m'
+            -- There are no definitions that could excuse the conflict
+            [] -> do
+               return $ Error $ unwords [ "Conflict at register"
                                         , show k
-                                        , ":"
-                                        , show v1'
-                                        , ","
-                                        , show v2'
                                         ]
-                  ) EmptyMap keys
-      return $ if isError r'
-               then r'
-               else RegMap $ M.union r1' r2'
+            -- There is a definition. Does it excuse the conflict
+            defs -> do
+              let ds = filter (\(vr, rr) -> rr == k) defs
+              print defs
+              print ds
+              print node'
+              return $ case ds of
+                [(vr, rr)] -> addToMap rr vr m'
+                _ -> Error $ unwords [ "Conflict at register"
+                                      , show k
+                                      ]
+          else return $ if S.member k r1ks
+               then addToMap k (r1' M.! k) m'
+               else addToMap k (r2' M.! k) m'
+                  ) EmptyMap allKeys
+      return $ r'
       where r1' = regmap r1
             r2' = regmap r2
+            addToMap k v m = case m of
+                               Start     -> RegMap $ M.fromList [(k,v)]
+                               Error{}   -> m
+                               EmptyMap  -> RegMap $ M.fromList [(k,v)]
+                               RegMap m' -> RegMap $ M.insert k v m'
 
 lookupNode :: LIR
            -> WorkNode a
@@ -220,7 +234,7 @@ transfer' [b, a] node = do
         return $ WorkNode (workNode node) newMap
     _ -> do
       beforeNode <- lookupNode b node
-      newMap <- meet (nodeState node) $ getNodeInfo beforeNode afterNode
+      newMap <- meet (nodeState node) (getNodeInfo beforeNode afterNode) [b,a] node
       return $ WorkNode (workNode node) newMap
 transfer' _ _         = error "Unexpected number of LIRs"
 

@@ -96,7 +96,7 @@ updateStore node item (Store store) = Store $ M.insert (workNode node) item stor
 -- in order to check the program using Kilall's algorithm
 -- We also need a transfer function that "propagates information thru an expression"
 class Checkable a where
-    meet :: a -> a -> IO a
+    meet :: a -> a -> [LIR] -> WorkNode a -> IO a
     transfer :: [LIR] -> WorkNode a -> IO (WorkNode a)
 
 -- | http://www.ccs.neu.edu/home/types/resources/notes/kildall/kildall.pdf
@@ -111,7 +111,7 @@ kildall (elem:rest) store lir = do
   putStrLn $ unwords $ ["Starting to analyze", show $ workNode elem]
   let incomingState = nodeState elem
       currentState = infoAt elem store
-  newState <- incomingState `meet` currentState
+  newState <- meet incomingState currentState lir elem
   if newState == currentState
   then kildall rest store lir
   else do
