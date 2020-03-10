@@ -173,9 +173,6 @@ meet' r1 r2 [b,a] node
             -- There is a definition. Does it excuse the conflict
             defs -> do
               let ds = filter (\(vr, rr) -> rr == k) defs
-              print defs
-              print ds
-              print node'
               return $ case ds of
                 [(vr, rr)] -> addToMap rr vr m'
                 _ -> Error $ unwords [ "Conflict at register"
