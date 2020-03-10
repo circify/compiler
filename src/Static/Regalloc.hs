@@ -1,6 +1,7 @@
 module Static.Regalloc where
 import           AST.LIR
 import           AST.Regalloc
+import           Control.Monad  (foldM, unless, when)
 import qualified Data.Map       as M
 import           Data.Maybe     (catMaybes, fromJust, isJust, isNothing)
 import qualified Data.Set       as S
@@ -28,8 +29,9 @@ data RegisterState = RegMap { regmap :: (M.Map Loc VirtualRegister) }
 
 instance Eq RegisterState where
     (RegMap m) == (RegMap n) = m == n
-    Error{}    == _          = True
-    _          == Error{}    = True
+    Error{}    == Error{}    = True
+    Error{}    == _          = False
+    _          == Error{}    = False
     EmptyMap   == EmptyMap   = True
     EmptyMap   == _          = False
     _          == EmptyMap   = False
@@ -154,65 +156,75 @@ initState lirs =
 
 meet' :: RegisterState
       -> RegisterState
-      -> RegisterState
+      -> IO RegisterState
 meet' r1 r2
-  | isError r1 = r1
-  | isError r2 = r2
-  | isEmpty r1 = r2
-  | isEmpty r2 = r1
-  | isStart r1 && isStart r2 = EmptyMap
-  | isStart r1 = r2
-  | isStart r2 = r1
-  | otherwise = let keys = S.union (S.fromList $ M.keys r1') (S.fromList $ M.keys r2')
-                    r'    = foldl (\m' k ->
-                      if (r1' M.! k) == (r2' M.! k)
-                      then m'
-                      else Error $ unwords $ ["Conflicting virtual regs for phys reg"
-                                             , show k
-                                             , ":"
-                                             , show $ r1' M.! k
-                                             , ","
-                                             , show $ r2' M.! k
-                                             ]
-                               ) EmptyMap keys
-                in if isError r'
-                   then r'
-                   else RegMap $ M.union r1' r2'
+  | isError r1 = return r1
+  | isError r2 = return r2
+  | isEmpty r1 = return r2
+  | isEmpty r2 = return r1
+  | isStart r1 && isStart r2 = return EmptyMap
+  | isStart r1 = return r2
+  | isStart r2 = return r1
+  | otherwise = do
+      let keys = S.intersection (S.fromList $ M.keys r1') (S.fromList $ M.keys r2')
+      r' <- foldM (\m' k -> do
+        let v1' = r1' M.! k
+            v2' = r2' M.! k
+        if v1' == v2'
+        then return m'
+        else return $ Error $ unwords $ ["Conflicting virtual regs for phys reg"
+                                        , show k
+                                        , ":"
+                                        , show v1'
+                                        , ","
+                                        , show v2'
+                                        ]
+                  ) EmptyMap keys
+      return $ if isError r'
+               then r'
+               else RegMap $ M.union r1' r2'
       where r1' = regmap r1
             r2' = regmap r2
 
 lookupNode :: LIR
            -> WorkNode a
-           -> LNode
-lookupNode lir (WorkNode (bid, nid) _) =
+           -> IO LNode
+lookupNode lir (WorkNode (bid, nid) _) = do
+  putStrLn $ unwords ["Looking up"
+                     , show bid
+                     , show nid
+                     ]
   let bs     = makeBlockMap $ blocks lir
-      block  = bs M.! bid
+  unless (M.member bid bs) $
+    error $ unwords [show bid, "not in", show bs]
+  let block  = bs M.! bid
       ns     = makeNodeMap $ nodes block
-  in if not $ M.member bid bs
-     then error $ unwords [show bid, "not in", show bs]
-     else if not $ M.member nid ns
-          then error $ unwords [show nid, "not in", show ns]
-          else ns M.! nid
+  unless (M.member nid ns) $
+    error $ unwords [show nid, "not in", show ns]
+  let ret = ns M.! nid
+  return ret
 
 transfer' :: [LIR] -> WorkNode RegisterState -> IO (WorkNode RegisterState)
 transfer' [b, a] node = do
-  let afterNode  = lookupNode a node
-      beforeNode = lookupNode b node
-      newMap = case operation afterNode of
-        LMoveGroupOp{} ->
-          let curState = nodeState node
-          in foldl (\m (from, to) ->
-                     case m of
-                       Start    -> EmptyMap
-                       EmptyMap -> EmptyMap
-                       Error{}  -> m
-                       RegMap m -> case M.lookup from m of
-                                     Nothing -> RegMap m
-                                     Just v -> let newM = M.delete from m
-                                               in RegMap $ M.insert to v m
-                   ) curState $ getNodeMoveInfo afterNode
-        _ -> meet (nodeState node) $ getNodeInfo beforeNode afterNode
-  return $ WorkNode (workNode node) newMap
+  afterNode <- lookupNode a node
+  case operation afterNode of
+    LMoveGroupOp{} -> do
+        let curState = nodeState node
+            newMap = foldl (\m (from, to) ->
+                      case m of
+                        Start    -> EmptyMap
+                        EmptyMap -> EmptyMap
+                        Error{}  -> m
+                        RegMap m -> case M.lookup from m of
+                                      Nothing -> RegMap m
+                                      Just v -> let newM = M.delete from m
+                                                in RegMap $ M.insert to v m
+                           ) curState $ getNodeMoveInfo afterNode
+        return $ WorkNode (workNode node) newMap
+    _ -> do
+      beforeNode <- lookupNode b node
+      newMap <- meet (nodeState node) $ getNodeInfo beforeNode afterNode
+      return $ WorkNode (workNode node) newMap
 transfer' _ _         = error "Unexpected number of LIRs"
 
 instance Checkable RegisterState where

@@ -96,7 +96,7 @@ updateStore node item (Store store) = Store $ M.insert (workNode node) item stor
 -- in order to check the program using Kilall's algorithm
 -- We also need a transfer function that "propagates information thru an expression"
 class Checkable a where
-    meet :: a -> a -> a
+    meet :: a -> a -> IO a
     transfer :: [LIR] -> WorkNode a -> IO (WorkNode a)
 
 -- | http://www.ccs.neu.edu/home/types/resources/notes/kildall/kildall.pdf
@@ -108,20 +108,22 @@ kildall :: (Checkable a, Eq a, Show a)
         -> IO (Store a)
 kildall [] store _ = return store
 kildall (elem:rest) store lir = do
---  print elem
+  putStrLn $ unwords $ ["Starting to analyze", show $ workNode elem]
   let incomingState = nodeState elem
       currentState = infoAt elem store
-      newState = incomingState `meet` currentState
+  newState <- incomingState `meet` currentState
   if newState == currentState
   then kildall rest store lir
   else do
     succs <- getSuccessors elem lir
     let newStore = updateStore elem newState store
-    next <- forM succs $ \e -> do
-      nextNodeInfo <- transfer lir $ WorkNode (workNode elem) newState
-      return $ WorkNode e (nodeState nextNodeInfo)
+    putStrLn "-----------------------------------"
+    putStrLn $ unwords ["Transferring after node", show (workNode elem)]
+    transferredState <- transfer lir $ WorkNode (workNode elem) newState
+    putStrLn $ unwords ["Transferred state is", show transferredState]
+    next <- forM succs $ \e -> return $ WorkNode e (nodeState transferredState)
     putStrLn "------------------------------------"
-    print $ workNode elem
+    putStrLn $ unwords ["Getting succs for", show $ workNode elem]
     print succs
     print next
     kildall (rest++next) newStore lir
