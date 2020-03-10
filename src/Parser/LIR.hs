@@ -24,20 +24,17 @@ printRegAlloc = do
       let regs = makeRegallocMap graphs
           befores = beforeRegalloc regs
           afters  = afterRegalloc regs
-      forM_ (M.keys befores) $ \k -> do
-        if k == 17
-        then do
-          let lirBefore = befores M.! k
-              lirAfter  = afters M.! k
-              worklist  = initList [lirBefore, lirAfter]
-              state     = initState [lirBefore, lirAfter]
-          s <- kildall worklist state [lirBefore, lirAfter]
-          putStrLn "-----------------------------------------------------"
-          print k
-          forM_ (M.toList $ storeMap s) $ \(k, v) -> do
-            print k
-            print v
-        else return ()
+      forM_ (M.keys befores) $ \k -> do --when (k == 17) $ do
+        let lirBefore = befores M.! k
+            lirAfter  = afters M.! k
+            worklist  = initList [lirBefore, lirAfter]
+            state     = initState [lirBefore, lirAfter]
+        s <- kildall worklist state [lirBefore, lirAfter]
+        putStrLn "-----------------------------------------------------"
+        print k
+        forM_ (M.toList $ storeMap s) $ \(k, v) -> do
+                                       print k
+                                       print v
         -- forM_ (zip lirBefore lirAfter) $ \(bblock, ablock) -> do
         --   print "BLOCK BOUNDARY"
         --   let beforeNodes = makeNodeMap $ nodes bblock

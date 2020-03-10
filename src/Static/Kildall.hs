@@ -1,7 +1,7 @@
 module Static.Kildall where
 import           AST.LIR
 import           AST.Regalloc
-import           Control.Monad (forM, forM_, unless)
+import           Control.Monad (forM, forM_, unless, when)
 import           Data.List     (elemIndex)
 import qualified Data.Map      as M
 import           Data.Maybe    (fromJust)
@@ -60,19 +60,22 @@ getSuccessors node (_:program:_) = do
              then return []
              -- Next node
              else do
-               let ns  = map id $ nodes block
-                   idx = fromJust $ elemIndex nodeid ns
-               return [(fst wn, ns !! idx + 1)]
+               let ns      = map id $ nodes block
+                   idx     = fromJust $ elemIndex nodeid ns
+                   nextIdx = ns !! (idx + 1)
+                   ret = [(fst wn, nextIdx)]
+               return ret
        -- If there are successors in other blocks, they are
        -- the first nodes of those blocks
        bs -> do
          -- the next node is not always '1'
          -- sometimes it is nine or some bullshit
-         return $ map (\b -> let nextBlock = blocks' M.! b
+         let fin = map (\b -> let nextBlock = blocks' M.! b
                              in case nodes nextBlock of
                                   []   -> error "Empty next block"
-                                  n:ns ->(b, id n)
-                      ) bs
+                                  n:ns -> (b, id n)
+                       ) bs
+         return fin
       where wn = workNode node
 
 -- Functions for interacting with the store
@@ -117,13 +120,6 @@ kildall (elem:rest) store lir = do
   else do
     succs <- getSuccessors elem lir
     let newStore = updateStore elem newState store
-    putStrLn "-----------------------------------"
-    putStrLn $ unwords ["Transferring after node", show (workNode elem)]
     transferredState <- transfer lir $ WorkNode (workNode elem) newState
-    putStrLn $ unwords ["Transferred state is", show transferredState]
     next <- forM succs $ \e -> return $ WorkNode e (nodeState transferredState)
-    putStrLn "------------------------------------"
-    putStrLn $ unwords ["Getting succs for", show $ workNode elem]
-    print succs
-    print next
     kildall (rest++next) newStore lir

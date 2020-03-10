@@ -201,10 +201,6 @@ lookupNode :: LIR
            -> WorkNode a
            -> IO LNode
 lookupNode lir (WorkNode (bid, nid) _) = do
-  putStrLn $ unwords ["Looking up"
-                     , show bid
-                     , show nid
-                     ]
   let bs     = makeBlockMap $ blocks lir
   unless (M.member bid bs) $
     error $ unwords [show bid, "not in", show bs]
