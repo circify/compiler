@@ -2,7 +2,7 @@ module Static.Kildall where
 import           AST.LIR
 import           AST.Regalloc
 import           Control.Monad (forM, forM_, unless, when)
-import           Data.List     (elemIndex)
+import qualified Data.List     as L (elem, elemIndex)
 import qualified Data.Map      as M
 import           Data.Maybe    (fromJust)
 import           Prelude       hiding (id)
@@ -52,7 +52,7 @@ getSuccessors node (_:program:_) = do
                     ]
   let node'   = nodes' M.! nodeid
       ns      = map id $ nodes block
-      idx     = fromJust $ elemIndex nodeid ns
+      idx     = fromJust $ L.elemIndex nodeid ns
       nextIdx = idx + 1
   case successors node' of
        -- If there are no other block successors, the next node
@@ -116,6 +116,9 @@ kildall (elem:rest) store lir = do
   then kildall rest store lir
   else do
     succs <- getSuccessors elem lir
+    when ((4,58) `L.elem` succs) $ do
+      print $ workNode elem
+      print $ nodeState elem
     let newStore = updateStore elem newState store
     transferredState <- transfer lir $ WorkNode (workNode elem) newState
     next <- forM succs $ \e -> return $ WorkNode e (nodeState transferredState)

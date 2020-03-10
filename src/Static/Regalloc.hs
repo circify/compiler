@@ -157,34 +157,52 @@ meet' r1 r2 [b,a] node
         -- We have a conflict.
         -- Is it an ok conflict (introduced by a new def?)
         -- Or a bad conflict (use => different allocation for some register)
-        then do
-          let v1 = r1' M.! k
-              v2 = r2' M.! k
-              ds = getDefInfo (defs node') ++ getDefInfo (temps node')
-          case ds of
-            -- The conflict is just the same value. Fine!
-            _  | v1 == v2 -> do
-               return $ addToMap k v1 m'
-            -- There are no definitions that could excuse the conflict
-            [] -> do
-               return $ Error $ unwords [ "Conflict at register"
+        then case operation node' of
+          LMoveGroupOp{} -> return m' -- we will take care of this at the end
+          _ -> do
+            let v1 = r1' M.! k
+                v2 = r2' M.! k
+                ds = getDefInfo (defs node') ++ getDefInfo (temps node')
+            case ds of
+              -- The conflict is just the same value. Fine!
+              _  | v1 == v2 -> do
+                return $ addToMap k v1 m'
+             -- There are no definitions that could excuse the conflict
+              [] -> do
+                 return $ Error $ unwords [ "Conflict at register"
+                                          , show k
+                                          ]
+              -- There is a definition. Does it excuse the conflict
+              defs -> do
+                let ds = filter (\(vr, rr) -> rr == k) defs
+                return $ case ds of
+                  [(vr, rr)] -> addToMap rr vr m'
+                  _ -> Error $ unwords [ "Conflict at register"
                                         , show k
                                         ]
-            -- There is a definition. Does it excuse the conflict
-            defs -> do
-              let ds = filter (\(vr, rr) -> rr == k) defs
-              return $ case ds of
-                [(vr, rr)] -> addToMap rr vr m'
-                _ -> Error $ unwords [ "Conflict at register"
-                                      , show k
-                                      ]
-          else return $ if S.member k r1ks
-               then addToMap k (r1' M.! k) m'
-               else addToMap k (r2' M.! k) m'
-                  ) EmptyMap allKeys
-      return $ r'
+            else return $ if S.member k r1ks
+                 then addToMap k (r1' M.! k) m'
+                 else addToMap k (r2' M.! k) m'
+                    ) EmptyMap allKeys
+      case operation node' of
+        LMoveGroupOp{} -> do
+          let locs = map getLocsFromMove $ moves $ operation node'
+          foldM (\m (from, to) -> do
+            if not $ M.member from r1'
+            -- info hasn't flowed in yet
+            then return m
+            else do
+              let movedVal = r1' M.! from
+              return $ addToMap to movedVal $ removeFromMap from m
+                ) r' locs
+        _ -> return r'
       where r1' = regmap r1
             r2' = regmap r2
+            removeFromMap k m = case m of
+                               Start     -> m
+                               Error{}   -> m
+                               EmptyMap  -> m
+                               RegMap m' -> RegMap $ M.delete k m'
             addToMap k v m = case m of
                                Start     -> RegMap $ M.fromList [(k,v)]
                                Error{}   -> m
