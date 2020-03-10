@@ -5,7 +5,6 @@ import           Control.Monad  (foldM, unless, when)
 import qualified Data.Map       as M
 import           Data.Maybe     (catMaybes, fromJust, isJust, isNothing)
 import qualified Data.Set       as S
-import           Debug.Trace
 import           Prelude        hiding (id)
 import           Static.Kildall
 
@@ -159,14 +158,12 @@ meet' r1 r2 [b,a] node
         -- Is it an ok conflict (introduced by a new def?)
         -- Or a bad conflict (use => different allocation for some register)
         then do
-          putStrLn $ unwords ["Conflict at", show k]
           let v1 = r1' M.! k
               v2 = r2' M.! k
               ds = getDefInfo (defs node') ++ getDefInfo (temps node')
           case ds of
             -- The conflict is just the same value. Fine!
             _  | v1 == v2 -> do
-               print "Is ok"
                return $ addToMap k v1 m'
             -- There are no definitions that could excuse the conflict
             [] -> do

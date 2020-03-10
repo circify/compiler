@@ -50,21 +50,19 @@ getSuccessors node (_:program:_) = do
                     , "outside of range"
                     , show nodes'
                     ]
-  let node' = nodes' M.! nodeid
+  let node'   = nodes' M.! nodeid
+      ns      = map id $ nodes block
+      idx     = fromJust $ elemIndex nodeid ns
+      nextIdx = idx + 1
   case successors node' of
        -- If there are no other block successors, the next node
        -- is either (1) nothing or (2) the next node in the block
-       [] -> if M.size nodes' == (fromIntegral $ snd wn)
+       [] -> if nextIdx >= length ns
              -- No blocks afterwards if we're the last node in a
              -- block with no successors
              then return []
              -- Next node
-             else do
-               let ns      = map id $ nodes block
-                   idx     = fromJust $ elemIndex nodeid ns
-                   nextIdx = ns !! (idx + 1)
-                   ret = [(fst wn, nextIdx)]
-               return ret
+             else return $ [(fst wn, ns !! nextIdx)]
        -- If there are successors in other blocks, they are
        -- the first nodes of those blocks
        bs -> do
@@ -111,7 +109,6 @@ kildall :: (Checkable a, Eq a, Show a)
         -> IO (Store a)
 kildall [] store _ = return store
 kildall (elem:rest) store lir = do
-  putStrLn $ unwords $ ["Starting to analyze", show $ workNode elem]
   let incomingState = nodeState elem
       currentState = infoAt elem store
   newState <- meet incomingState currentState lir elem
