@@ -116,10 +116,12 @@ getNodeUseInfo :: LNode -> LNode -> RegisterState
 getNodeUseInfo nodeBefore nodeAfter =
   let operandsBefore = map getVirtFromAllocation $ operands nodeBefore
       operandsAfter  = map getLocFromAllocation $ operands nodeAfter
-      operandMap     = catMaybes $ map (\(b, a) -> if isJust b && isJust a
+      operandMap     = M.fromList $
+                       catMaybes $ map (\(b, a) -> if isJust b && isJust a
                                        then Just (fromJust a, fromJust b)
                                        else Nothing
                                        ) $ zip operandsBefore operandsAfter
+      operandState   = if null operandMap then EmptyMap else RegMap operandMap
       tempsBefore    = map getVirtFromDefinition $ temps nodeBefore
       tempsAfter     = map getLocFromDefinition $ temps nodeAfter
       tempsMap       = catMaybes $ map (\(b, a) -> if isJust a
@@ -130,13 +132,8 @@ getNodeUseInfo nodeBefore nodeAfter =
              case m of
                EmptyMap -> RegMap $ M.fromList [(k, v)]
                Error{}  -> m
-               RegMap m ->
-                 if M.member k m
-                 then case m M.! k of
-                        v' | v == v' -> RegMap m
-                        e  -> Error $ unwords $ [show k, "cannot be", show v, "and", show e]
-                 else RegMap $ M.insert k v m
-           ) EmptyMap $ tempsMap ++ operandMap
+               RegMap m -> RegMap $ M.insert k v m
+           ) operandState tempsMap
 
 
 
