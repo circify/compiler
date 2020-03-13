@@ -3,6 +3,7 @@ module Static.Regalloc where
 import           AST.LIR
 import           AST.Regalloc
 import           Control.Monad  (foldM, unless, when)
+import           Data.List      (nub)
 import qualified Data.Map       as M
 import           Data.Maybe     (catMaybes, fromJust, isJust, isNothing)
 import qualified Data.Set       as S
@@ -101,25 +102,19 @@ getNodeMoveInfo node =
     LMoveGroupOp{} -> map getLocsFromMove $ moves op
     _              -> error "Cannot get move info from non-move node"
 
-getNodeInfo :: LNode -> LNode -> RegisterState
-getNodeInfo nodeBefore nodeAfter =
-  let operandsBefore = map getVirtFromAllocation $ operands nodeBefore
-      operandsAfter  = map getLocFromAllocation $ operands nodeAfter
-      operandMap     = M.fromList $
-                       catMaybes $ map (\(b, a) -> if isJust b && isJust a
-                                       then Just (fromJust a, fromJust b)
-                                       else Nothing
-                                       ) $ zip operandsBefore operandsAfter
-      operandState   = if null operandMap then EmptyMap else RegMap operandMap
-      ts             = getDefInfo $ temps nodeAfter
-      ds             = getDefInfo $ defs nodeAfter
-  in foldl (\m (v,k) ->
-             case m of
-               EmptyMap  -> RegMap $ M.fromList [(k, v)]
-               Error{}   -> m
-               Start     -> RegMap $ M.fromList [(k, v)]
-               RegMap m' -> RegMap $ M.insert k v m'
-           ) operandState $ ts ++ ds
+lookupNode :: LIR
+           -> WorkNode a
+           -> IO LNode
+lookupNode lir (WorkNode (bid, nid) _) = do
+  let bs     = makeBlockMap $ blocks lir
+  unless (M.member bid bs) $
+    error $ unwords [show bid, "not in", show bs]
+  let block  = bs M.! bid
+      ns     = makeNodeMap $ nodes block
+  unless (M.member nid ns) $
+    error $ unwords [show nid, "not in", show ns]
+  let ret = ns M.! nid
+  return ret
 
 ---
 --- The transfer function
@@ -148,108 +143,76 @@ meet' r1 r2 [b,a] node
   | isStart r1 && isStart r2 = return EmptyMap
   | isStart r1 = return r2
   | isStart r2 = return r1
-  | otherwise = do
-      let r1ks    = S.fromList $ M.keys r1'
-          r2ks    = S.fromList $ M.keys r2'
-          allKeys = S.union r1ks r2ks
-      node' <- lookupNode a node
-      r' <- foldM (\m' k -> do
-        if S.member k r1ks && S.member k r2ks
-        -- We have a conflict.
-        -- Is it an ok conflict (introduced by a new def?)
-        -- Or a bad conflict (use => different allocation for some register)
-        then case operation node' of
-          LOp "Phi"      -> do
-            print k
-            print m'
-            return m'
-          LMoveGroupOp{} -> return m' -- we will take care of this at the end
-          _ -> do
-            let v1 = r1' M.! k
-                v2 = r2' M.! k
-                ds = getDefInfo (defs node') ++ getDefInfo (temps node')
-            case ds of
-              -- The conflict is just the same value. Fine!
-              _  | v1 == v2 -> do
-                return $ addToMap k v1 m'
-             -- There are no definitions that could excuse the conflict
-              [] -> do
-                 return $ Error $ unwords [ "Conflict at register"
-                                          , show k
-                                          ]
-              -- There is a definition. Does it excuse the conflict
-              defs -> do
-                let ds = filter (\(vr, rr) -> rr == k) defs
-                return $ case ds of
-                  [(vr, rr)] -> addToMap rr vr m'
-                  _ -> Error $ unwords [ "Conflict at register"
-                                        , show k
-                                        ]
-            else return $ if S.member k r1ks
-                 then addToMap k (r1' M.! k) m'
-                 else addToMap k (r2' M.! k) m'
-                    ) EmptyMap allKeys
-      case operation node' of
-        LMoveGroupOp{} -> do
-          let locs = map getLocsFromMove $ moves $ operation node'
-          foldM (\m (from, to) -> do
-            if not $ M.member from r1'
-            -- info hasn't flowed in yet
-            then return m
-            else do
-              let movedVal = r1' M.! from
-              return $ addToMap to movedVal $ removeFromMap from m
-                ) r' locs
-        _ -> return r'
-      where r1' = regmap r1
-            r2' = regmap r2
-            removeFromMap k m = case m of
-                               Start     -> m
-                               Error{}   -> m
-                               EmptyMap  -> m
-                               RegMap m' -> RegMap $ M.delete k m'
-            addToMap k v m = case m of
-                               Start     -> RegMap $ M.fromList [(k,v)]
-                               Error{}   -> m
-                               EmptyMap  -> RegMap $ M.fromList [(k,v)]
-                               RegMap m' -> RegMap $ M.insert k v m'
-
-lookupNode :: LIR
-           -> WorkNode a
-           -> IO LNode
-lookupNode lir (WorkNode (bid, nid) _) = do
-  let bs     = makeBlockMap $ blocks lir
-  unless (M.member bid bs) $
-    error $ unwords [show bid, "not in", show bs]
-  let block  = bs M.! bid
-      ns     = makeNodeMap $ nodes block
-  unless (M.member nid ns) $
-    error $ unwords [show nid, "not in", show ns]
-  let ret = ns M.! nid
-  return ret
+  | otherwise = return $ RegMap $ M.unionWith S.union (regmap r1) (regmap r2)
 
 transfer' :: [LIR] -> WorkNode RegisterState -> IO (WorkNode RegisterState)
 transfer' [b, a] node = do
   afterNode <- lookupNode a node
+  let curState = nodeState node
   case operation afterNode of
+    -- swap any RRs that must be swapped according to the move group
     LMoveGroupOp{} -> do
-        let curState = nodeState node
-            newMap = foldl (\m (from, to) ->
-                      case m of
-                        Start    -> EmptyMap
-                        EmptyMap -> EmptyMap
-                        Error{}  -> m
-                        RegMap m -> case M.lookup from m of
-                                      Nothing -> RegMap m
-                                      Just v -> let newM = M.delete from m
-                                                in RegMap $ M.insert to v m
-                           ) curState $ getNodeMoveInfo afterNode
-        return $ WorkNode (workNode node) newMap
-    _ -> do
+      let moves = getNodeMoveInfo afterNode
+      return $ makeNode $ foldl (\m (loc1, loc2) -> switchInMap loc1 loc2 m) curState moves
+    -- if its a phi, check the phi well-formed-ness condition
+    -- ie rr = phi rr1, rr2, rr3 => rr = rr1 = rr2 = rr3....
+    LOp "Phi" -> do
+      let ds = getDefInfo $ defs afterNode
+      case ds of
+        [(vr, rr)] -> do
+          let rrs = nub $ catMaybes $ map getLocFromAllocation $ operands afterNode
+          return $ makeNode $ if [rr] == rrs
+          then foldl (\m (v, k) -> resetInMap k v m) curState ds
+          else Error "Unmoved phi argument"
+        _ -> error "Malformed phi"
+    -- not a special node
+    _              -> do
       beforeNode <- lookupNode b node
-      newMap <- meet (nodeState node) (getNodeInfo beforeNode afterNode) [b,a] node
-      return $ WorkNode (workNode node) newMap
-transfer' _ _         = error "Unexpected number of LIRs"
+      let operandsBefore = map getVirtFromAllocation $ operands beforeNode
+          operandsAfter  = map getLocFromAllocation $ operands afterNode
+      unless (length operandsBefore == length operandsAfter) $ error "Malformed IR"
+          -- check for any conflicts with used operands
+      newRegs <- foldM (\m (a, b) -> if isJust b && isJust a
+                                     then do return $ addToMap (fromJust a) (fromJust b) m
+                                     else return m
+                       ) curState $ zip operandsAfter operandsBefore
+          -- define new operands
+      let ts = getDefInfo $ temps afterNode
+          ds = getDefInfo $ defs afterNode
+          newRegs' = foldl (\m (v, k) -> resetInMap k v m) newRegs $ ts ++ ds
+      return $ makeNode newRegs'
+
+        -- "Phi" -> return $ if map snd (getDefInfo (defs afterNode)) == nub (catMaybes operandsAfter)
+        --          then makeNode newRegs'
+        --          else makeNode $ Error $ unwords ["Badly formed phi"
+        --                                          , show $ workNode node
+        --                                          ]
+    where makeNode ns = WorkNode (workNode node) ns
+          resetInMap rr vr m = doToMap (\m -> M.insert rr (S.singleton vr) m) m
+          addToMap rr vr m = case m of
+                               RegMap m -> case M.lookup rr m of
+                                 Nothing -> RegMap $ M.insert rr (S.singleton vr) m
+                                 Just vs -> if vs == S.singleton vr
+                                            then RegMap m
+                                            else Error $ unwords ["Conflict at"
+                                                                 , show rr
+                                                                 ]
+                               Error{} -> m
+                               EmptyMap -> RegMap $ M.fromList [(rr, S.singleton vr)]
+                               _ -> EmptyMap
+          switchInMap from to m = doToMap (\m -> case M.lookup from m of
+                                              Nothing -> m
+                                              Just vs -> M.insert to vs $ M.delete from m
+                                          ) m
+
+doToMap :: (M.Map Loc (S.Set VirtualRegister) -> M.Map Loc (S.Set VirtualRegister))
+        -> RegisterState
+        -> RegisterState
+doToMap fn m = case m of
+                 Error{}  -> m
+                 RegMap m -> RegMap $ fn m
+                 EmptyMap -> RegMap $ fn M.empty
+                 _        -> EmptyMap
 
 instance Checkable RegisterState where
     meet = meet'
