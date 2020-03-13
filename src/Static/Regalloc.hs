@@ -179,14 +179,6 @@ transfer' [b, a] node = do
                                      then do return $ addToMap (fromJust a) (fromJust b) m
                                      else return m
                        ) curState $ zip operandsAfter operandsBefore
-      -- when (isError newRegs && not (isError $ nodeState node)) $ do
-      --   putStrLn "\n"
-      --   putStrLn "Conflict"
-      --   print $ nodeState node
-      --   print $ operands beforeNode
-      --   print $ operands afterNode
-      --   print newRegs
-      --   putStrLn "---------------------------------------------------"
           -- define new operands
       let ts = getDefInfo $ temps afterNode
           ds = getDefInfo $ defs afterNode
@@ -206,7 +198,8 @@ transfer' [b, a] node = do
                                EmptyMap -> RegMap $ M.fromList [(rr, S.singleton vr)]
                                _ -> EmptyMap
           switchInMap from to m = doToMap (\m -> case M.lookup from m of
-                                              Nothing -> m
+                                              -- If we don't have full flowing info yet, kill
+                                              Nothing -> M.delete to $ M.delete from m
                                               Just vs -> M.insert to vs $ M.delete from m
                                           ) m
 
