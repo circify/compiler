@@ -24,7 +24,6 @@ data Loc = Reg RegisterName
 
 data RegisterState = RegMap { regmap :: (M.Map Loc (S.Set VirtualRegister)) }
                    | Error String
-                   | EmptyMap
                    | Start
                    deriving (Ord, Show)
 
@@ -33,9 +32,6 @@ instance Eq RegisterState where
     Error{}    == Error{}    = True
     Error{}    == _          = False
     _          == Error{}    = False
-    EmptyMap   == EmptyMap   = True
-    EmptyMap   == _          = False
-    _          == EmptyMap   = False
     Start      == _          = False
     _          == Start      = False
 
@@ -47,9 +43,9 @@ isError :: RegisterState -> Bool
 isError Error{} = True
 isError _       = False
 
-isEmpty :: RegisterState -> Bool
-isEmpty EmptyMap = True
-isEmpty _        = False
+isMap :: RegisterState -> Bool
+isMap RegMap{} = True
+isMap _        = False
 
 getVirtFromAllocation :: LAllocation -> Maybe VirtualRegister
 getVirtFromAllocation alloc =
@@ -138,9 +134,7 @@ meet' :: RegisterState
 meet' r1 r2 [b,a] node
   | isError r1 = return r1
   | isError r2 = return r2
-  | isEmpty r1 = return r2
-  | isEmpty r2 = return r1
-  | isStart r1 && isStart r2 = return EmptyMap
+  | isStart r1 && isStart r2 = return $ RegMap M.empty
   | isStart r1 = return r2
   | isStart r2 = return r1
   | otherwise = return $ RegMap $ M.unionWith S.union (regmap r1) (regmap r2)
@@ -156,19 +150,26 @@ transfer' [b, a] node = do
       return $ makeNode $ foldl (\m (loc1, loc2) -> switchInMap loc1 loc2 m) curState moves
     -- if its a phi, check the phi well-formed-ness condition
     -- ie rr = phi rr1, rr2, rr3 => rr = rr1 = rr2 = rr3....
+    -- you can't check within the node itself, because that information is
+    -- from before the moves took place
     LOp "Phi" -> do
-      let ds = getDefInfo $ defs afterNode
-      case ds of
-        [(vr, rr)] -> do
-          let rrs = nub $ catMaybes $ map getLocFromAllocation $ operands afterNode
-          if [rr] == rrs
-          then return $ makeNode $ foldl (\m (v, k) -> resetInMap k v m) curState ds
-          else do
-            -- print "BUGGY"
-            -- print afterNode
-            return $ makeNode $ Error "Unmoved phi argument"
-        _ -> error "Malformed phi"
-    -- not a special node
+      beforeNode <- lookupNode b node
+      let ops' = catMaybes $ map getVirtFromAllocation $ operands beforeNode
+          defs' = map getVirtFromDefinition $ defs beforeNode
+      case curState of
+        Error{}  -> return $ makeNode curState
+        RegMap m -> do
+          let usedRrs = concatMap (\vr -> M.keys $ getRrsFromVr vr m) ops'
+              defRrs  = concatMap (\vr -> M.keys $ getRrsFromVr vr m) defs'
+          return $ makeNode $
+            if (not $ null defRrs) && (not $ null usedRrs) && (nub usedRrs /= nub defRrs)
+            then Error $ unwords $ ["Broken phi"
+                                   , show usedRrs
+                                   , show defRrs
+                                   , show curState
+                                   ]
+            else curState
+        _        -> return $ makeNode $ RegMap M.empty
     _              -> do
       beforeNode <- lookupNode b node
       let operandsBefore = map getVirtFromAllocation $ operands beforeNode
@@ -184,6 +185,7 @@ transfer' [b, a] node = do
           ds = getDefInfo $ defs afterNode
           newRegs' = foldl (\m (v, k) -> resetInMap k v m) newRegs $ ts ++ ds
       return $ makeNode newRegs'
+    -- adding nodes to the map and crap like that
     where makeNode ns = WorkNode (workNode node) ns
           resetInMap rr vr m = doToMap (\m -> M.insert rr (S.singleton vr) m) m
           addToMap rr vr m = case m of
@@ -195,13 +197,13 @@ transfer' [b, a] node = do
                                                                  , show rr
                                                                  ]
                                Error{} -> m
-                               EmptyMap -> RegMap $ M.fromList [(rr, S.singleton vr)]
-                               _ -> EmptyMap
+                               Start -> RegMap M.empty
           switchInMap from to m = doToMap (\m -> case M.lookup from m of
                                               -- If we don't have full flowing info yet, kill
-                                              Nothing -> M.delete to $ M.delete from m
+                                              Nothing -> M.delete to m
                                               Just vs -> M.insert to vs $ M.delete from m
                                           ) m
+          getRrsFromVr vr m = M.filter (S.member vr) m
 
 doToMap :: (M.Map Loc (S.Set VirtualRegister) -> M.Map Loc (S.Set VirtualRegister))
         -> RegisterState
@@ -209,8 +211,7 @@ doToMap :: (M.Map Loc (S.Set VirtualRegister) -> M.Map Loc (S.Set VirtualRegiste
 doToMap fn m = case m of
                  Error{}  -> m
                  RegMap m -> RegMap $ fn m
-                 EmptyMap -> RegMap $ fn M.empty
-                 _        -> EmptyMap
+                 _        -> RegMap M.empty
 
 instance Checkable RegisterState where
     meet = meet'
