@@ -19,13 +19,12 @@ parseRegAlloc name = decodeFileStrict name
 printRegAlloc :: IO ()
 printRegAlloc = do
   r <- parseRegAlloc "examples/parent.json"
-  print "HERE HERE HERE"
   case r of
     Just graphs -> do
       let regs = makeRegallocMap graphs
           befores = beforeRegalloc regs
           afters  = afterRegalloc regs
-      forM_ (M.keys befores) $ \k -> when (k == 82) $ do
+      forM_ (M.keys befores) $ \k -> do
         let lirBefore = befores M.! k
             lirAfter  = afters M.! k
             worklist  = initList [lirBefore, lirAfter]
@@ -34,14 +33,11 @@ printRegAlloc = do
         putStrLn "-----------------------------------------------------"
         print k
         forM_ (M.toList $ storeMap s) $ \(k, v) -> do
-                                       putStrLn "\n"
-                                       n <- lookupNode lirAfter (WorkNode k "")
-                                       when (k == (5, 19)) $ do
-                                         b <- lookupNode lirBefore (WorkNode k "")
-                                         print b
-                                       print n
-                                       print k
-                                       print v
+                     putStrLn "\n"
+                     n <- lookupNode lirAfter (WorkNode k "")
+                     print n
+                     print k
+                     print v
         -- forM_ (zip lirBefore lirAfter) $ \(bblock, ablock) -> do
         --   print "BLOCK BOUNDARY"
         --   let beforeNodes = makeNodeMap $ nodes bblock

@@ -161,9 +161,12 @@ transfer' [b, a] node = do
       case ds of
         [(vr, rr)] -> do
           let rrs = nub $ catMaybes $ map getLocFromAllocation $ operands afterNode
-          return $ makeNode $ if [rr] == rrs
-          then foldl (\m (v, k) -> resetInMap k v m) curState ds
-          else Error "Unmoved phi argument"
+          if [rr] == rrs
+          then return $ makeNode $ foldl (\m (v, k) -> resetInMap k v m) curState ds
+          else do
+            -- print "BUGGY"
+            -- print afterNode
+            return $ makeNode $ Error "Unmoved phi argument"
         _ -> error "Malformed phi"
     -- not a special node
     _              -> do
@@ -176,17 +179,19 @@ transfer' [b, a] node = do
                                      then do return $ addToMap (fromJust a) (fromJust b) m
                                      else return m
                        ) curState $ zip operandsAfter operandsBefore
+      -- when (isError newRegs && not (isError $ nodeState node)) $ do
+      --   putStrLn "\n"
+      --   putStrLn "Conflict"
+      --   print $ nodeState node
+      --   print $ operands beforeNode
+      --   print $ operands afterNode
+      --   print newRegs
+      --   putStrLn "---------------------------------------------------"
           -- define new operands
       let ts = getDefInfo $ temps afterNode
           ds = getDefInfo $ defs afterNode
           newRegs' = foldl (\m (v, k) -> resetInMap k v m) newRegs $ ts ++ ds
       return $ makeNode newRegs'
-
-        -- "Phi" -> return $ if map snd (getDefInfo (defs afterNode)) == nub (catMaybes operandsAfter)
-        --          then makeNode newRegs'
-        --          else makeNode $ Error $ unwords ["Badly formed phi"
-        --                                          , show $ workNode node
-        --                                          ]
     where makeNode ns = WorkNode (workNode node) ns
           resetInMap rr vr m = doToMap (\m -> M.insert rr (S.singleton vr) m) m
           addToMap rr vr m = case m of
