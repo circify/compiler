@@ -116,9 +116,6 @@ kildall (elem:rest) store lir = do
   then kildall rest store lir
   else do
     succs <- getSuccessors elem lir
-    when ((4,58) `L.elem` succs) $ do
-      print $ workNode elem
-      print $ nodeState elem
     let newStore = updateStore elem newState store
     transferredState <- transfer lir $ WorkNode (workNode elem) newState
     next <- forM succs $ \e -> return $ WorkNode e (nodeState transferredState)

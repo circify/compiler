@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Static.Regalloc where
 import           AST.LIR
 import           AST.Regalloc
@@ -20,7 +21,7 @@ data Loc = Reg RegisterName
          | ASlot ArgumentIndex
          deriving (Eq, Ord, Show)
 
-data RegisterState = RegMap { regmap :: (M.Map Loc VirtualRegister) }
+data RegisterState = RegMap { regmap :: (M.Map Loc (S.Set VirtualRegister)) }
                    | Error String
                    | EmptyMap
                    | Start
@@ -158,6 +159,10 @@ meet' r1 r2 [b,a] node
         -- Is it an ok conflict (introduced by a new def?)
         -- Or a bad conflict (use => different allocation for some register)
         then case operation node' of
+          LOp "Phi"      -> do
+            print k
+            print m'
+            return m'
           LMoveGroupOp{} -> return m' -- we will take care of this at the end
           _ -> do
             let v1 = r1' M.! k
