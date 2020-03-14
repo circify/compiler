@@ -2,7 +2,7 @@
 module Static.Regalloc where
 import           AST.LIR
 import           AST.Regalloc
-import           Control.Monad  (foldM, unless, when)
+import           Control.Monad  (foldM, forM_, unless, when)
 import           Data.List      (nub)
 import qualified Data.Map       as M
 import           Data.Maybe     (catMaybes, fromJust, isJust, isNothing)
@@ -128,10 +128,8 @@ initState lirs =
 
 meet' :: RegisterState
       -> RegisterState
-      -> [LIR]
-      -> WorkNode a
       -> IO RegisterState
-meet' r1 r2 [b,a] node
+meet' r1 r2
   | isError r1 = return r1
   | isError r2 = return r2
   | isStart r1 && isStart r2 = return $ RegMap M.empty
@@ -143,67 +141,88 @@ transfer' :: [LIR] -> WorkNode RegisterState -> IO (WorkNode RegisterState)
 transfer' [b, a] node = do
   afterNode <- lookupNode a node
   let curState = nodeState node
+
   case operation afterNode of
-    -- swap any RRs that must be swapped according to the move group
     LMoveGroupOp{} -> do
-      let moves = getNodeMoveInfo afterNode
-      return $ makeNode $ foldl (\m (loc1, loc2) -> switchInMap loc1 loc2 m) curState moves
-    -- if its a phi, check the phi well-formed-ness condition
-    -- ie rr = phi rr1, rr2, rr3 => rr = rr1 = rr2 = rr3....
-    -- you can't check within the node itself, because that information is
-    -- from before the moves took place
+      state <- transferMove curState afterNode
+      return $ makeNode state
     LOp "Phi" -> do
       beforeNode <- lookupNode b node
-      let ops' = catMaybes $ map getVirtFromAllocation $ operands beforeNode
-          defs' = map getVirtFromDefinition $ defs beforeNode
-      case curState of
-        Error{}  -> return $ makeNode curState
-        RegMap m -> do
-          let usedRrs = concatMap (\vr -> M.keys $ getRrsFromVr vr m) ops'
-              defRrs  = concatMap (\vr -> M.keys $ getRrsFromVr vr m) defs'
-          return $ makeNode $
-            if (not $ null defRrs) && (not $ null usedRrs) && (nub usedRrs /= nub defRrs)
-            then Error $ unwords $ ["Broken phi"
-                                   , show usedRrs
-                                   , show defRrs
-                                   , show curState
-                                   ]
-            else curState
-        _        -> return $ makeNode $ RegMap M.empty
+      state <- transferPhi curState beforeNode afterNode
+      return $ makeNode state
     _              -> do
       beforeNode <- lookupNode b node
-      let operandsBefore = map getVirtFromAllocation $ operands beforeNode
-          operandsAfter  = map getLocFromAllocation $ operands afterNode
-      unless (length operandsBefore == length operandsAfter) $ error "Malformed IR"
-          -- check for any conflicts with used operands
-      newRegs <- foldM (\m (a, b) -> if isJust b && isJust a
-                                     then do return $ addToMap (fromJust a) (fromJust b) m
-                                     else return m
-                       ) curState $ zip operandsAfter operandsBefore
-          -- define new operands
-      let ts = getDefInfo $ temps afterNode
-          ds = getDefInfo $ defs afterNode
-          newRegs' = foldl (\m (v, k) -> resetInMap k v m) newRegs $ ts ++ ds
-      return $ makeNode newRegs'
-    -- adding nodes to the map and crap like that
+      state <- transferOther curState beforeNode afterNode
+      return $ makeNode state
     where makeNode ns = WorkNode (workNode node) ns
-          resetInMap rr vr m = doToMap (\m -> M.insert rr (S.singleton vr) m) m
-          addToMap rr vr m = case m of
-                               RegMap m -> case M.lookup rr m of
-                                 Nothing -> RegMap $ M.insert rr (S.singleton vr) m
-                                 Just vs -> if vs == S.singleton vr
-                                            then RegMap m
-                                            else Error $ unwords ["Conflict at"
-                                                                 , show rr
-                                                                 ]
-                               Error{} -> m
-                               Start -> RegMap M.empty
-          switchInMap from to m = doToMap (\m -> case M.lookup from m of
-                                              -- If we don't have full flowing info yet, kill
-                                              Nothing -> M.delete to m
-                                              Just vs -> M.insert to vs $ M.delete from m
-                                          ) m
-          getRrsFromVr vr m = M.filter (S.member vr) m
+
+resetInMap rr vr m = doToMap (\m -> M.insert rr (S.singleton vr) m) m
+
+-- | Swap the real registers that must be swapped according to the move group.
+-- If there is not yet information flowing in about one side of the swap, delete
+-- both sides from the map. This way the register state won't cause errors when it
+-- flows to later nodes.
+transferMove :: RegisterState -> LNode -> IO RegisterState
+transferMove curState after = do
+  let moves = getNodeMoveInfo after
+  return $ foldl (\m (loc1, loc2) -> switchInMap loc1 loc2 m) curState moves
+  where switchInMap from to m = doToMap (\m -> case M.lookup from m of
+                                                 -- If we don't have full flowing info yet, kill
+                                                 Nothing -> M.delete to $ M.delete from m
+                                                 Just vs -> M.insert to vs $ M.delete from m
+                                        ) m
+
+-- | If its a phi, check the phi well-formed-ness condition
+-- After: rr = phi vr1...vrn
+-- Lookup up vr1..vrn in the
+transferPhi :: RegisterState -> LNode -> LNode -> IO RegisterState
+transferPhi curState before after = do
+  let ops' = catMaybes $ map getVirtFromAllocation $ operands before
+      defs' = getDefInfo $ defs after
+  case defs' of
+    [(vr, rr)] -> do
+               let usedRrs = concatMap (\vr -> case curState of
+                                                 RegMap m -> M.keys $ getRrsFromVr vr m
+                                                 _ -> []
+                                       ) ops'
+               if null usedRrs || [rr] == nub usedRrs
+               then return $ resetInMap rr vr curState
+               else return $ Error $ unwords [ "Broken phi"
+                                             , show after
+                                             , show before
+                                             , show curState
+                                             , show $ nub usedRrs
+                                             , show rr
+                                             ]
+  where getRrsFromVr vr m = M.filter (S.member vr) m
+
+-- | Check all uses against the current state of the register map
+-- Then add all definitions to the register map
+transferOther :: RegisterState -> LNode -> LNode -> IO RegisterState
+transferOther curState before after = do
+  let operandsBefore = map getVirtFromAllocation $ operands before
+      operandsAfter  = map getLocFromAllocation $ operands after
+  unless (length operandsBefore == length operandsAfter) $ error "Malformed IR"
+  -- check for any conflicts with used operands
+  newRegs <- foldM (\m (a, b) -> if isJust b && isJust a
+                                 then return $ checkInMap (fromJust a) (fromJust b) m
+                                 else return m
+                   ) curState $ zip operandsAfter operandsBefore
+  -- define new operands
+  let ts = getDefInfo $ temps after
+      ds = getDefInfo $ defs after
+  return $ foldl (\m (v, k) -> resetInMap k v m) newRegs $ ts ++ ds
+  -- if there's a conflict, return an error. otherwise return the map
+  where checkInMap k v m = case m of
+                             RegMap m' -> case M.lookup k m' of
+                                           Nothing -> m
+                                           Just v' | v' == (S.singleton v) -> m
+                                           _ -> Error $ unwords [ "Conflict at"
+                                                                , show k
+                                                                ]
+                             Start     -> RegMap M.empty
+                             _         -> m
+
 
 doToMap :: (M.Map Loc (S.Set VirtualRegister) -> M.Map Loc (S.Set VirtualRegister))
         -> RegisterState
