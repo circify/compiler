@@ -142,21 +142,38 @@ transfer' [b, a] node = do
   afterNode <- lookupNode a node
   let curState = nodeState node
 
-  case operation afterNode of
-    LMoveGroupOp{} -> do
-      state <- transferMove curState afterNode
-      return $ makeNode state
-    LOp "Phi" -> do
+  regs <- case operation afterNode of
+    LMoveGroupOp{} -> transferMove curState afterNode
+    LOp "Phi"      -> do
       beforeNode <- lookupNode b node
-      state <- transferPhi curState beforeNode afterNode
-      return $ makeNode state
+      transferPhi curState beforeNode afterNode
     _              -> do
       beforeNode <- lookupNode b node
-      state <- transferOther curState beforeNode afterNode
-      return $ makeNode state
+      transferOther curState beforeNode afterNode
+
+  sanityCheckResult node afterNode curState regs
+
+  return $ makeNode regs
     where makeNode ns = WorkNode (workNode node) ns
 
 resetInMap rr vr m = doToMap (\m -> M.insert rr (S.singleton vr) m) m
+
+sanityCheckResult node afterNode oldRegs newRegs = do
+  let elems = if isMap newRegs then concatMap S.toList $ M.elems $ regmap newRegs else []
+  unless (nub elems == elems) $
+    error $ unlines [ "Inconsistency in map"
+                    , show $ workNode node
+                    , "\n"
+                    , show afterNode
+                    , "\n"
+                    , show oldRegs
+                    , "\n"
+                    , show newRegs
+                    ]
+
+---
+--- Logic for the transfer functions
+---
 
 -- | Swap the real registers that must be swapped according to the move group.
 -- If there is not yet information flowing in about one side of the swap, delete
