@@ -141,32 +141,39 @@ transfer' :: [LIR] -> WorkNode RegisterState -> IO (WorkNode RegisterState)
 transfer' [b, a] node = do
   afterNode <- lookupNode a node
   let curState = nodeState node
+--  sanityCheckResult node afterNode curStatecurState
 
   regs <- case operation afterNode of
     LMoveGroupOp{} -> transferMove curState afterNode
     LOp "Phi"      -> do
       beforeNode <- lookupNode b node
-      transferPhi curState beforeNode afterNode
+      state <- transferPhi curState beforeNode afterNode
+      return state
     _              -> do
       beforeNode <- lookupNode b node
-      transferOther curState beforeNode afterNode
-
-  sanityCheckResult node afterNode curState regs
+      r <- transferOther curState beforeNode afterNode
+      when (isError r && not (isError curState)) $ do
+        print "Introduced error"
+        print $ r
+        print $ curState
+        print beforeNode
+        print afterNode
+      return r
 
   return $ makeNode regs
     where makeNode ns = WorkNode (workNode node) ns
 
 resetInMap rr vr m = doToMap (\m -> M.insert rr (S.singleton vr) m) m
 
-sanityCheckResult node afterNode oldRegs newRegs = do
+sanityCheckResult node beforeNode afterNode newRegs = do
   let elems = if isMap newRegs then concatMap S.toList $ M.elems $ regmap newRegs else []
   unless (nub elems == elems) $
     error $ unlines [ "Inconsistency in map"
                     , show $ workNode node
                     , "\n"
-                    , show afterNode
+                    , show beforeNode
                     , "\n"
-                    , show oldRegs
+                    , show afterNode
                     , "\n"
                     , show newRegs
                     ]
@@ -231,14 +238,31 @@ transferOther curState before after = do
   return $ foldl (\m (v, k) -> resetInMap k v m) newRegs $ ts ++ ds
   -- if there's a conflict, return an error. otherwise return the map
   where checkInMap k v m = case m of
-                             RegMap m' -> case M.lookup k m' of
-                                           Nothing -> m
-                                           Just v' | v' == (S.singleton v) -> m
-                                           _ -> Error $ unwords [ "Conflict at"
-                                                                , show k
-                                                                ]
-                             Start     -> RegMap M.empty
-                             _         -> m
+          RegMap m' -> case M.keys $ M.filter (S.member v) m' of
+                         [k'] | k == k' -> case M.lookup k m' of
+                                             Nothing -> m
+                                             Just v' | v' == (S.singleton v) -> m
+                                             Just vs -> Error $ unwords [ "Conflict at"
+                                                                        , show k
+                                                                        , show vs
+                                                                        ]
+                         [] -> case M.lookup k m' of
+                                 Nothing -> m
+                                 Just v' | v' == (S.singleton v) -> m
+                                 Just vs -> Error $ unwords [ "Conflict at"
+                                                            , show k
+                                                            , show vs
+                                                            ]
+                         ks  -> Error $ unwords ["Virtual register"
+                                                , show v
+                                                , "used with real register"
+                                                , show k
+                                                , "but already assigned to"
+                                                , show ks
+                                                ]
+          Start     -> RegMap M.empty
+          _         -> m
+
 
 
 doToMap :: (M.Map Loc (S.Set VirtualRegister) -> M.Map Loc (S.Set VirtualRegister))

@@ -81,6 +81,11 @@ data LNode = LNode { id                :: LNodeId
                    }
            deriving (Generic, Show)
 
+isMoveGroup :: LNode -> Bool
+isMoveGroup node = case operation node of
+                     LMoveGroupOp{} -> True
+                     _              -> False
+
 getVirtualTemps :: LNode -> [VirtualRegister]
 getVirtualTemps = map virtualReg . temps
 

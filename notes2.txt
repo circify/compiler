@@ -1,0 +1,25 @@
+
+Introduced error at 0,8
+The error: Virtual register 4 used with real register rcx but already assigned to SSlot 16
+
+State before: Slot 16, 4 
+
+VRs:
+
+5 (rcx) = FunctionEnvironment 4 (rcx)
+
+
+============================
+
+1. 1 (aslot 0) = parameter
+2. 2 (aslot 8) = parameter
+3. start
+4. check over recursed
+5. osi point
+6. 3 (rax) = unbox 1 (aslot 0)
+21. move group from rax to sslot 8 (type = object)
+7. 4 (rcx) = callee
+22. move group from rcx to sslot 16 (type = object)
+8. 5 (rcx) = FunctionEnv 4 (rcx)
+
+

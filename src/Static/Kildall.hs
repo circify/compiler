@@ -119,7 +119,7 @@ kildall (elem:rest) store lir = do
     let newStore = updateStore elem newState store
     transferredState <- transfer lir $ WorkNode (workNode elem) newState
     next <- forM succs $ \e -> return $ WorkNode e (nodeState transferredState)
-    -- when ((11, 44) `L.elem` succs) $ do
+    -- when ((0, 23) `L.elem` succs) $ do
     --   print "PARENT"
     --   print elem
     kildall (rest++next) newStore lir
