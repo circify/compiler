@@ -22,4 +22,8 @@ VRs:
 22. move group from rcx to sslot 16 (type = object)
 8. 5 (rcx) = FunctionEnv 4 (rcx)
 
+============================
+
+Parents are (11,68) and (6,50)
+
 

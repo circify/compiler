@@ -24,7 +24,7 @@ printRegAlloc = do
       let regs = makeRegallocMap graphs
           befores = beforeRegalloc regs
           afters  = afterRegalloc regs
-      forM_ (M.keys befores) $ \k -> when (k == 18) $ do
+      forM_ (M.keys befores) $ \k -> do
         let lirBefore = befores M.! k
             lirAfter  = afters M.! k
             worklist  = initList [lirBefore, lirAfter]
@@ -41,17 +41,4 @@ printRegAlloc = do
                        print b
                      print k
                      print v
-        -- forM_ (zip lirBefore lirAfter) $ \(bblock, ablock) -> do
-        --   print "BLOCK BOUNDARY"
-        --   let beforeNodes = makeNodeMap $ nodes bblock
-        --       afterNodes  = nodes ablock
-        --   forM_ afterNodes $ \node -> do
-        --     print "-----------------------------------"
-        --     let nodeid = id node
-        --         bnode  = beforeNodes M.! nodeid
-        --     if (M.member nodeid beforeNodes)
-        --     then do
-        --       print $ getNodeInfo bnode node
-        --     else do
-        --       print $ getNodeMoveInfo node
     Nothing     -> print "Failed"

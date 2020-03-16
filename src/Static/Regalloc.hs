@@ -3,7 +3,7 @@ module Static.Regalloc where
 import           AST.LIR
 import           AST.Regalloc
 import           Control.Monad  (foldM, forM_, unless, when)
-import           Data.List      (nub)
+import           Data.List      (elem, intercalate, isInfixOf, nub)
 import qualified Data.Map       as M
 import           Data.Maybe     (catMaybes, fromJust, isJust, isNothing)
 import qualified Data.Set       as S
@@ -20,12 +20,22 @@ https://xavierleroy.org/publi/validation-regalloc.pdf
 data Loc = Reg RegisterName
          | SSlot StackSlot
          | ASlot ArgumentIndex
-         deriving (Eq, Ord, Show)
+         deriving (Eq, Ord)
+
+instance Show Loc where
+    show (Reg r)   = show r
+    show (SSlot n) = 's':(show n)
+    show (ASlot a) = 'a':(show a)
 
 data RegisterState = RegMap { regmap :: (M.Map Loc (S.Set VirtualRegister)) }
                    | Error String
                    | Start
-                   deriving (Ord, Show)
+
+instance Show RegisterState where
+    show (RegMap m) =
+      M.foldlWithKey (\str k v -> str ++ "\n" ++ show k ++ " : " ++ show v) "" m
+    show Start = "Start"
+    show (Error str) = "ERROR:" ++ show str
 
 instance Eq RegisterState where
     (RegMap m) == (RegMap n) = m == n
@@ -144,7 +154,9 @@ transfer' [b, a] node = do
 --  sanityCheckResult node afterNode curStatecurState
 
   regs <- case operation afterNode of
-    LMoveGroupOp{} -> transferMove curState afterNode
+    LMoveGroupOp{} -> do
+      r <- transferMove curState afterNode
+      return r
     LOp "Phi"      -> do
       beforeNode <- lookupNode b node
       state <- transferPhi curState beforeNode afterNode
@@ -152,31 +164,19 @@ transfer' [b, a] node = do
     _              -> do
       beforeNode <- lookupNode b node
       r <- transferOther curState beforeNode afterNode
-      when (isError r && not (isError curState)) $ do
-        print "Introduced error"
-        print $ r
-        print $ curState
-        print beforeNode
-        print afterNode
       return r
 
+  -- when (workNode node == (13, 224)) $ do
+  --   putStrLn "CULPRIT: -----------------------------------"
+  --   print afterNode
+  --   putStrLn "Before:"
+  --   print curState
+  --   putStrLn "After:"
+  --   print regs
   return $ makeNode regs
     where makeNode ns = WorkNode (workNode node) ns
 
 resetInMap rr vr m = doToMap (\m -> M.insert rr (S.singleton vr) m) m
-
-sanityCheckResult node beforeNode afterNode newRegs = do
-  let elems = if isMap newRegs then concatMap S.toList $ M.elems $ regmap newRegs else []
-  unless (nub elems == elems) $
-    error $ unlines [ "Inconsistency in map"
-                    , show $ workNode node
-                    , "\n"
-                    , show beforeNode
-                    , "\n"
-                    , show afterNode
-                    , "\n"
-                    , show newRegs
-                    ]
 
 ---
 --- Logic for the transfer functions
@@ -188,13 +188,18 @@ sanityCheckResult node beforeNode afterNode newRegs = do
 -- flows to later nodes.
 transferMove :: RegisterState -> LNode -> IO RegisterState
 transferMove curState after = do
-  let moves = getNodeMoveInfo after
-  return $ foldl (\m (loc1, loc2) -> switchInMap loc1 loc2 m) curState moves
-  where switchInMap from to m = doToMap (\m -> case M.lookup from m of
-                                                 -- If we don't have full flowing info yet, kill
-                                                 Nothing -> M.delete to $ M.delete from m
-                                                 Just vs -> M.insert to vs $ M.delete from m
-                                        ) m
+  let moves   = getNodeMoveInfo after
+      toMerge = foldl (\m (from, to) -> putInMap from to m) M.empty moves
+      merged  = foldl (\m (from, to) -> case M.lookup to toMerge of
+                                            Nothing -> doToMap (M.delete to) m
+                                            Just vs -> doToMap (M.insert to vs) m
+                      ) curState moves
+  return merged
+  where putInMap from to map = case curState of
+                                 RegMap m -> case M.lookup from m of
+                                               Nothing -> map
+                                               Just vs -> M.insert to vs map
+                                 _        -> map
 
 -- | If its a phi, check the phi well-formed-ness condition
 -- After: rr = phi vr1...vrn
@@ -205,17 +210,17 @@ transferPhi curState before after = do
       defs' = getDefInfo $ defs after
   case defs' of
     [(vr, rr)] -> do
-               let usedRrs = concatMap (\vr -> case curState of
-                                                 RegMap m -> M.keys $ getRrsFromVr vr m
-                                                 _ -> []
-                                       ) ops'
-               if null usedRrs || [rr] == nub usedRrs
+               let usedRrs = map (\vr -> case curState of
+                                           RegMap m -> M.keys $ getRrsFromVr vr m
+                                           _ -> []
+                                 ) ops'
+               if null usedRrs || all (\rs -> if null rs then True else rr `elem` rs) usedRrs
                then return $ resetInMap rr vr curState
                else return $ Error $ unwords [ "Broken phi"
-                                             , show after
                                              , show before
+                                             , show after
                                              , show curState
-                                             , show $ nub usedRrs
+                                             , show usedRrs
                                              , show rr
                                              ]
   where getRrsFromVr vr m = M.filter (S.member vr) m
@@ -238,28 +243,13 @@ transferOther curState before after = do
   return $ foldl (\m (v, k) -> resetInMap k v m) newRegs $ ts ++ ds
   -- if there's a conflict, return an error. otherwise return the map
   where checkInMap k v m = case m of
-          RegMap m' -> case M.keys $ M.filter (S.member v) m' of
-                         [k'] | k == k' -> case M.lookup k m' of
-                                             Nothing -> m
-                                             Just v' | v' == (S.singleton v) -> m
-                                             Just vs -> Error $ unwords [ "Conflict at"
-                                                                        , show k
-                                                                        , show vs
-                                                                        ]
-                         [] -> case M.lookup k m' of
-                                 Nothing -> m
-                                 Just v' | v' == (S.singleton v) -> m
-                                 Just vs -> Error $ unwords [ "Conflict at"
-                                                            , show k
-                                                            , show vs
-                                                            ]
-                         ks  -> Error $ unwords ["Virtual register"
-                                                , show v
-                                                , "used with real register"
-                                                , show k
-                                                , "but already assigned to"
-                                                , show ks
-                                                ]
+          RegMap m' -> case M.lookup k m' of
+                         Nothing -> m
+                         Just v' | v' == (S.singleton v) -> m
+                         Just vs -> Error $ unwords [ "Conflict at"
+                                                    , show k
+                                                    , show vs
+                                                    ]
           Start     -> RegMap M.empty
           _         -> m
 
