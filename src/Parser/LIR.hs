@@ -34,11 +34,11 @@ printRegAlloc = do
         print k
         forM_ (M.toList $ storeMap s) $ \(k, v) -> do
                      putStrLn "\n"
-                     n <- lookupNode lirAfter (WorkNode k "")
-                     print n
-                     unless (isMoveGroup n) $ do
-                       b <- lookupNode lirBefore (WorkNode k "")
-                       print b
+                     -- n <- lookupNode lirAfter (WorkNode k "")
+                     -- print n
+                     -- unless (isMoveGroup n) $ do
+                     --   b <- lookupNode lirBefore (WorkNode k "")
+                     --   print b
                      print k
                      print v
     Nothing     -> print "Failed"
