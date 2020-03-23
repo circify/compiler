@@ -1,0 +1,420 @@
+  {
+    "graphId": 17,
+    "pass": "beforeRegisterAllocation",
+    "lir": {
+      "blocks": [
+        {
+          "id": 0,
+          "entryMoves": null,
+          "exitMoves": null,
+          "nodes": [
+            {
+              "id": 1,
+              "operation": {
+                "code": "Parameter"
+              },
+              "isCall": false,
+              "recoversInput": false,
+              "callPreservesRegs": [],
+              "operands": [],
+              "defs": [
+                {
+                  "virtualRegister": 1,
+                  "type": "box",
+                  "policy": "fixed",
+                  "output": {
+                    "kind": "argumentSlot",
+                    "index": 0
+                  }
+                }
+              ],
+              "temps": [],
+              "successors": [],
+              "inputMoves": null,
+              "fixReuseMoves": null,
+              "movesAfter": null
+            },
+            {
+              "id": 2,
+              "operation": {
+                "code": "Parameter"
+              },
+              "isCall": false,
+              "recoversInput": false,
+              "callPreservesRegs": [],
+              "operands": [],
+              "defs": [
+                {
+                  "virtualRegister": 2,
+                  "type": "box",
+                  "policy": "fixed",
+                  "output": {
+                    "kind": "argumentSlot",
+                    "index": 8
+                  }
+                }
+              ],
+              "temps": [],
+              "successors": [],
+              "inputMoves": null,
+              "fixReuseMoves": null,
+              "movesAfter": null
+            },
+            {
+              "id": 3,
+              "operation": {
+                "code": "Start"
+              },
+              "isCall": false,
+              "recoversInput": false,
+              "callPreservesRegs": [],
+              "operands": [],
+              "defs": [],
+              "temps": [],
+              "successors": [],
+              "inputMoves": null,
+              "fixReuseMoves": null,
+              "movesAfter": null
+            },
+            {
+              "id": 4,
+              "operation": {
+                "code": "CheckOverRecursed"
+              },
+              "isCall": false,
+              "recoversInput": false,
+              "callPreservesRegs": [],
+              "operands": [],
+              "defs": [],
+              "temps": [],
+              "successors": [],
+              "inputMoves": null,
+              "fixReuseMoves": null,
+              "movesAfter": null
+            },
+            {
+              "id": 5,
+              "operation": {
+                "code": "OsiPoint"
+              },
+              "isCall": false,
+              "recoversInput": false,
+              "callPreservesRegs": [],
+              "operands": [],
+              "defs": [],
+              "temps": [],
+              "successors": [],
+              "inputMoves": null,
+              "fixReuseMoves": null,
+              "movesAfter": null
+            },
+            {
+              "id": 6,
+              "operation": {
+                "code": "Unbox"
+              },
+              "isCall": false,
+              "recoversInput": false,
+              "callPreservesRegs": [],
+              "operands": [
+                {
+                  "kind": "use",
+                  "policy": "any",
+                  "virtualRegister": 2,
+                  "registerCode": 0,
+                  "usedAtStart": true
+                }
+              ],
+              "defs": [
+                {
+                  "virtualRegister": 3,
+                  "type": "object",
+                  "policy": "register",
+                  "output": null
+                }
+              ],
+              "temps": [],
+              "successors": [],
+              "inputMoves": null,
+              "fixReuseMoves": null,
+              "movesAfter": null
+            },
+            {
+              "id": 7,
+              "operation": {
+                "code": "RecompileCheck"
+              },
+              "isCall": false,
+              "recoversInput": false,
+              "callPreservesRegs": [],
+              "operands": [],
+              "defs": [],
+              "temps": [
+                {
+                  "virtualRegister": 4,
+                  "type": "general",
+                  "policy": "register",
+                  "output": null
+                }
+              ],
+              "successors": [],
+              "inputMoves": null,
+              "fixReuseMoves": null,
+              "movesAfter": null
+            },
+            {
+              "id": 8,
+              "operation": {
+                "code": "OsiPoint"
+              },
+              "isCall": false,
+              "recoversInput": false,
+              "callPreservesRegs": [],
+              "operands": [],
+              "defs": [],
+              "temps": [],
+              "successors": [],
+              "inputMoves": null,
+              "fixReuseMoves": null,
+              "movesAfter": null
+            },
+            {
+              "id": 9,
+              "operation": {
+                "code": "StringLength"
+              },
+              "isCall": false,
+              "recoversInput": false,
+              "callPreservesRegs": [],
+              "operands": [
+                {
+                  "kind": "use",
+                  "policy": "register",
+                  "virtualRegister": 3,
+                  "registerCode": 0,
+                  "usedAtStart": true
+                }
+              ],
+              "defs": [
+                {
+                  "virtualRegister": 5,
+                  "type": "int32",
+                  "policy": "register",
+                  "output": null
+                }
+              ],
+              "temps": [],
+              "successors": [],
+              "inputMoves": null,
+              "fixReuseMoves": null,
+              "movesAfter": null
+            },
+            {
+              "id": 10,
+              "operation": {
+                "code": "BoundsCheck"
+              },
+              "isCall": false,
+              "recoversInput": false,
+              "callPreservesRegs": [],
+              "operands": [
+                {
+                  "kind": "constantValue"
+                },
+                {
+                  "kind": "use",
+                  "policy": "any",
+                  "virtualRegister": 5,
+                  "registerCode": 0,
+                  "usedAtStart": false
+                }
+              ],
+              "defs": [],
+              "temps": [],
+              "successors": [],
+              "inputMoves": null,
+              "fixReuseMoves": null,
+              "movesAfter": null
+            },
+            {
+              "id": 11,
+              "operation": {
+                "code": "Integer"
+              },
+              "isCall": false,
+              "recoversInput": false,
+              "callPreservesRegs": [],
+              "operands": [],
+              "defs": [
+                {
+                  "virtualRegister": 6,
+                  "type": "int32",
+                  "policy": "register",
+                  "output": null
+                }
+              ],
+              "temps": [],
+              "successors": [],
+              "inputMoves": null,
+              "fixReuseMoves": null,
+              "movesAfter": null
+            },
+            {
+              "id": 12,
+              "operation": {
+                "code": "SpectreMaskIndex"
+              },
+              "isCall": false,
+              "recoversInput": false,
+              "callPreservesRegs": [],
+              "operands": [
+                {
+                  "kind": "use",
+                  "policy": "register",
+                  "virtualRegister": 6,
+                  "registerCode": 0,
+                  "usedAtStart": false
+                },
+                {
+                  "kind": "use",
+                  "policy": "any",
+                  "virtualRegister": 5,
+                  "registerCode": 0,
+                  "usedAtStart": false
+                }
+              ],
+              "defs": [
+                {
+                  "virtualRegister": 7,
+                  "type": "int32",
+                  "policy": "register",
+                  "output": null
+                }
+              ],
+              "temps": [],
+              "successors": [],
+              "inputMoves": null,
+              "fixReuseMoves": null,
+              "movesAfter": null
+            },
+            {
+              "id": 13,
+              "operation": {
+                "code": "CharCodeAt"
+              },
+              "isCall": false,
+              "recoversInput": false,
+              "callPreservesRegs": [],
+              "operands": [
+                {
+                  "kind": "use",
+                  "policy": "register",
+                  "virtualRegister": 3,
+                  "registerCode": 0,
+                  "usedAtStart": false
+                },
+                {
+                  "kind": "use",
+                  "policy": "register",
+                  "virtualRegister": 7,
+                  "registerCode": 0,
+                  "usedAtStart": false
+                }
+              ],
+              "defs": [
+                {
+                  "virtualRegister": 9,
+                  "type": "int32",
+                  "policy": "register",
+                  "output": null
+                }
+              ],
+              "temps": [
+                {
+                  "virtualRegister": 8,
+                  "type": "general",
+                  "policy": "register",
+                  "output": null
+                }
+              ],
+              "successors": [],
+              "inputMoves": null,
+              "fixReuseMoves": null,
+              "movesAfter": null
+            },
+            {
+              "id": 14,
+              "operation": {
+                "code": "OsiPoint"
+              },
+              "isCall": false,
+              "recoversInput": false,
+              "callPreservesRegs": [],
+              "operands": [],
+              "defs": [],
+              "temps": [],
+              "successors": [],
+              "inputMoves": null,
+              "fixReuseMoves": null,
+              "movesAfter": null
+            },
+            {
+              "id": 15,
+              "operation": {
+                "code": "Box"
+              },
+              "isCall": false,
+              "recoversInput": false,
+              "callPreservesRegs": [],
+              "operands": [
+                {
+                  "kind": "use",
+                  "policy": "register",
+                  "virtualRegister": 9,
+                  "registerCode": 0,
+                  "usedAtStart": false
+                }
+              ],
+              "defs": [
+                {
+                  "virtualRegister": 10,
+                  "type": "box",
+                  "policy": "register",
+                  "output": null
+                }
+              ],
+              "temps": [],
+              "successors": [],
+              "inputMoves": null,
+              "fixReuseMoves": null,
+              "movesAfter": null
+            },
+            {
+              "id": 16,
+              "operation": {
+                "code": "Return"
+              },
+              "isCall": false,
+              "recoversInput": false,
+              "callPreservesRegs": [],
+              "operands": [
+                {
+                  "kind": "use",
+                  "policy": "fixed",
+                  "virtualRegister": 10,
+                  "registerCode": 1,
+                  "usedAtStart": false
+                }
+              ],
+              "defs": [],
+              "temps": [],
+              "successors": [],
+              "inputMoves": null,
+              "fixReuseMoves": null,
+              "movesAfter": null
+            }
+          ]
+        }
+      ]
+    }
+  },
