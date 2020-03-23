@@ -14,6 +14,7 @@ import           Data.Maybe                 (catMaybes, fromJust, isJust)
 import           Data.Text                  hiding (concatMap, foldl, map,
                                              unwords)
 import           Data.Word
+import           Debug.Trace
 import           GHC.Generics
 import           Prelude                    hiding (id)
 
@@ -41,7 +42,7 @@ data MBlock = MBlock { blockId     :: MBlockId
                      , marked      :: Bool
                      , preds       :: [MBlockId]
                      , succs       :: [MBlockId]
-                     , resumePoint :: ResumePoint
+                     , resumePoint :: BlockResumePoint
                      , phiNodes    :: [MNode]
                      , instrs      :: [MNode]
                      }
@@ -60,18 +61,18 @@ instance FromJSON MBlock where
       instrs      <- o .: ("instructionNodes" :: Text)
       return $ MBlock blockId blockKind unreachable marked preds succs resume phis instrs
 
-data ResumePoint = ResumePoint { resumeMode :: Text
-                               , resumeAt   :: Int
-                               , resumeOps  :: [TypedOp]
-                               }
-                 deriving (Show, Generic)
+data BlockResumePoint = BlockResumePoint { bresumeKind :: Text
+                                         , bresumeMode :: Text
+                                         , bresumeOps  :: [TypedOp]
+                                         }
+                      deriving (Show, Generic)
 
-instance FromJSON ResumePoint where
-    parseJSON = withObject "rp" $ \o -> do
+instance FromJSON BlockResumePoint where
+    parseJSON = withObject "brp" $ \o -> do
+      rk <- o .: ("kind" :: Text)
       rm <- o .: ("mode" :: Text)
-      ra <- o .: ("resumeAt" :: Text)
       ro <- o .: ("operands" :: Text)
-      return $ ResumePoint rm ra ro
+      return $ BlockResumePoint rk rm ro
 
 data TypedOp = TypedOp { opName :: Text
                        , opType :: Text
@@ -102,3 +103,17 @@ instance FromJSON MNode where
       os <- o .:  ("operands" :: Text)
       r  <- o .:? ("resumePoint" :: Text)
       return $ MNode k i t on os r
+
+data ResumePoint = ResumePoint { resumeMode :: Text
+                               , resumeAt   :: Maybe Int
+                               , resumeOps  :: [TypedOp]
+                               }
+                 deriving (Show, Generic)
+
+
+instance FromJSON ResumePoint where
+    parseJSON = withObject "rp" $ \o -> do
+      rm <- o .:  ("mode" :: Text)
+      ra <- o .:? ("resumeAt" :: Text)
+      ro <- o .:  ("operands" :: Text)
+      return $ ResumePoint rm ra ro

@@ -2,6 +2,7 @@ module Lib
     ( someFunc
     ) where
 import           Parser.LIR
+import           Parser.MIR
 
 someFunc :: IO ()
-someFunc = printRegAlloc
+someFunc = printLICM --printRegAlloc

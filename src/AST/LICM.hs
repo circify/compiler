@@ -4,9 +4,10 @@
 module AST.LICM where
 import           AST.MIR
 import           Data.Aeson
-import qualified Data.Map   as M
-import           Data.Text  hiding (foldl, unwords)
+import qualified Data.Map    as M
+import           Data.Text   hiding (foldl, unwords)
 import           Data.Word
+import           Debug.Trace
 
 data LICMMap = LICMMap { beforeLICM :: M.Map Word32 MIR
                        , afterLICM  :: M.Map Word32 MIR
@@ -36,5 +37,5 @@ instance FromJSON OptGraph where
                     "beforeLICM" -> BeforeLICM
                     "afterLICM"  -> AfterLICM
                     _            -> error "Unknown regalloc option"
-      mir <- o .: ("MIR" :: Text)
+      mir <- o .: if when' == BeforeLICM then ("MIR" :: Text) else ("LICM" :: Text)
       return $ OptGraph gid when' mir

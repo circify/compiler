@@ -14,16 +14,16 @@ import           Prelude       hiding (id)
 parseLICM :: FilePath -> IO (Maybe [OptGraph])
 parseLICM name = decodeFileStrict name
 
-printRegAlloc :: IO ()
-printRegAlloc = do
+printLICM :: IO ()
+printLICM = do
   r <- parseLICM "examples/mir.json"
   case r of
     Just graphs -> do
       let regs = makeLICMMap graphs
           befores = beforeLICM regs
           afters  = afterLICM regs
-      forM_ (M.keys befores) $ \k -> do
-        let mirBefore = befores M.! k
-            mirAfter  = afters M.! k
-        print mirBefore
-        print mirAfter
+      putStrLn "Before graphIds"
+      forM_ (M.keys befores) print
+      putStrLn "After graphIds"
+      forM_ (M.keys afters) print
+    Nothing -> error "ERROR PARSING"
