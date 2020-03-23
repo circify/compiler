@@ -8,8 +8,8 @@ import qualified Data.Map   as M
 import           Data.Text  hiding (foldl, unwords)
 import           Data.Word
 
-data LICMMap = LICMMap { beforeRegalloc :: M.Map Word32 MIR
-                       , afterRegalloc  :: M.Map Word32 MIR
+data LICMMap = LICMMap { beforeLICM :: M.Map Word32 MIR
+                       , afterLICM  :: M.Map Word32 MIR
                        }
                  deriving (Show)
 
