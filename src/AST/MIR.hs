@@ -23,7 +23,6 @@ This module is an AST for IonMonkey's MIR.
 
 -}
 
-type LOperand = Text
 type MBlockId = Word32
 type MNodeId = Word32
 
@@ -53,16 +52,26 @@ instance FromJSON MBlock where
     --   nodes <- o .: ("nodes" :: Text)
     --   return $ LBlock blockId entries exits nodes
 
-data ResumePoint = ResumePoint
+data ResumePoint = ResumePoint { resumeKind :: Text
+                               , resumeMode :: Text
+                               , resumeOps  :: [TypedOp]
+                               }
                  deriving (Show, Generic)
 
 instance FromJSON ResumePoint where
+
+data TypedOp = TypedOp { opName :: Text
+                       , opType :: Text
+                       }
+             deriving (Show, Generic)
+
+instance FromJSON TypedOp where
 
 data MNode = MNode { kind            :: Text
                    , id              :: MNodeId
                    , ty              :: Text
                    , opName          :: Text
-                   , operands        :: [Int]
+                   , operands        :: [TypedOp]
                    , nodeResumePoint :: Maybe ResumePoint
                    }
            deriving (Generic, Show)
@@ -82,17 +91,3 @@ instance FromJSON MNode where
     --   frm <- o .: ("fixReuseMoves" :: Text)
     --   ma <- o .: ("movesAfter" :: Text)
     --   return $ LNode id op iscall reci cpr ops defs temps succs im frm ma
-
-
-data LDefinitionType = General
-                     | Int32
-                     | Object
-                     | Slots
-                     | Float32
-                     | Double
-                     | SIMD32Int
-                     | SIMD128Float
-                     | Type
-                     | Payload
-                     | Box
-                       deriving (Show)
