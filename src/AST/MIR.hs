@@ -21,6 +21,9 @@ import           Prelude                    hiding (id)
 
 This module is an AST for IonMonkey's MIR.
 
+We do all the shit explicitly because debugging and i dont know what types things
+will end up being, i know its gross but it doesnt matter
+
 -}
 
 type MBlockId = Word32
@@ -45,20 +48,30 @@ data MBlock = MBlock { blockId     :: MBlockId
             deriving (Show, Generic)
 
 instance FromJSON MBlock where
-    -- parseJSON = withObject "lblock" $ \o -> do
-    --   blockId <- o .: ("id" :: Text)
-    --   entries <- o .: ("entryMoves" :: Text)
-    --   exits <- o .: ("exitMoves" :: Text)
-    --   nodes <- o .: ("nodes" :: Text)
-    --   return $ LBlock blockId entries exits nodes
+    parseJSON = withObject "mblock" $ \o -> do
+      blockId     <- o .: ("id" :: Text)
+      blockKind   <- o .: ("kind" :: Text)
+      unreachable <- o .: ("unreachable" :: Text)
+      marked      <- o .: ("marked" :: Text)
+      preds       <- o .: ("predecessors" :: Text)
+      succs       <- o .: ("successors" :: Text)
+      resume      <- o .: ("resumePoint" :: Text)
+      phis        <- o .: ("phiNodes" :: Text)
+      instrs      <- o .: ("instructionNodes" :: Text)
+      return $ MBlock blockId blockKind unreachable marked preds succs resume phis instrs
 
-data ResumePoint = ResumePoint { resumeKind :: Text
-                               , resumeMode :: Text
+data ResumePoint = ResumePoint { resumeMode :: Text
+                               , resumeAt   :: Int
                                , resumeOps  :: [TypedOp]
                                }
                  deriving (Show, Generic)
 
 instance FromJSON ResumePoint where
+    parseJSON = withObject "rp" $ \o -> do
+      rm <- o .: ("mode" :: Text)
+      ra <- o .: ("resumeAt" :: Text)
+      ro <- o .: ("operands" :: Text)
+      return $ ResumePoint rm ra ro
 
 data TypedOp = TypedOp { opName :: Text
                        , opType :: Text
@@ -66,6 +79,10 @@ data TypedOp = TypedOp { opName :: Text
              deriving (Show, Generic)
 
 instance FromJSON TypedOp where
+    parseJSON = withObject "to" $ \o -> do
+      n <- o .: ("name" :: Text)
+      t <- o .: ("type" :: Text)
+      return $ TypedOp n t
 
 data MNode = MNode { kind            :: Text
                    , id              :: MNodeId
@@ -77,17 +94,11 @@ data MNode = MNode { kind            :: Text
            deriving (Generic, Show)
 
 instance FromJSON MNode where
-    -- parseJSON = withObject "node" $ \o -> do
-    --   id <- o .: ("id" :: Text)
-    --   op <- o .: ("operation" :: Text)
-    --   iscall <- o .: ("isCall" :: Text)
-    --   reci <- o .: ("recoversInput" :: Text)
-    --   cpr <- o .: ("callPreservesRegs" :: Text)
-    --   ops <- o .: ("operands" :: Text)
-    --   defs <- o .: ("defs" :: Text)
-    --   temps <- o .: ("temps" :: Text)
-    --   succs <- o .: ("successors" :: Text)
-    --   im <- o .: ("inputMoves" :: Text)
-    --   frm <- o .: ("fixReuseMoves" :: Text)
-    --   ma <- o .: ("movesAfter" :: Text)
-    --   return $ LNode id op iscall reci cpr ops defs temps succs im frm ma
+    parseJSON = withObject "n" $ \o -> do
+      k  <- o .:  ("kind" :: Text)
+      i  <- o .:  ("id" :: Text)
+      t  <- o .:  ("type" :: Text)
+      on <- o .:  ("opName" :: Text)
+      os <- o .:  ("operands" :: Text)
+      r  <- o .:? ("resumePoint" :: Text)
+      return $ MNode k i t on os r
