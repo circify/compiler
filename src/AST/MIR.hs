@@ -74,8 +74,10 @@ instance FromJSON BlockResumePoint where
       ro <- o .: ("operands" :: Text)
       return $ BlockResumePoint rk rm ro
 
-data TypedOp = TypedOp { opName :: Text
-                       , opType :: Text
+data TypedOp = TypedOp { opName    :: Text
+                       , opType    :: Text
+                       , opId      :: Int
+                       , opBlockId :: Int
                        }
              deriving (Show, Generic)
 
@@ -83,7 +85,9 @@ instance FromJSON TypedOp where
     parseJSON = withObject "to" $ \o -> do
       n <- o .: ("name" :: Text)
       t <- o .: ("type" :: Text)
-      return $ TypedOp n t
+      i <- o .: ("id" :: Text)
+      b <- o .: ("blockId" :: Text)
+      return $ TypedOp n t i b
 
 data MNode = MNode { kind            :: Text
                    , id              :: MNodeId

@@ -16,7 +16,7 @@ parseLICM name = decodeFileStrict name
 
 printLICM :: IO ()
 printLICM = do
-  r <- parseLICM "examples/mir.json"
+  r <- parseLICM "examples/mir-correct.json"
   case r of
     Just graphs -> do
       let regs = makeLICMMap graphs
