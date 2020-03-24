@@ -22,8 +22,14 @@ printLICM = do
       let regs = makeLICMMap graphs
           befores = beforeLICM regs
           afters  = afterLICM regs
-      putStrLn "Before graphIds"
-      forM_ (M.keys befores) print
-      putStrLn "After graphIds"
-      forM_ (M.keys afters) print
+      forM_ (M.keys befores) $ \k ->
+        when (M.member k afters) $ do
+          let before = befores M.! k
+              after  = afters M.! k
+              beforeBlocks = blocks before
+              afterBlocks  = blocks after
+              beforeInstrs = instrs $ beforeBlocks !! 0
+              afterInstrs = instrs $ afterBlocks !! 0
+          print $ beforeInstrs == afterInstrs
+
     Nothing -> error "ERROR PARSING"

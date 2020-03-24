@@ -46,7 +46,7 @@ data MBlock = MBlock { blockId     :: MBlockId
                      , phiNodes    :: [MNode]
                      , instrs      :: [MNode]
                      }
-            deriving (Show, Generic)
+            deriving (Show, Generic, Eq)
 
 instance FromJSON MBlock where
     parseJSON = withObject "mblock" $ \o -> do
@@ -65,7 +65,7 @@ data BlockResumePoint = BlockResumePoint { bresumeKind :: Text
                                          , bresumeMode :: Text
                                          , bresumeOps  :: [TypedOp]
                                          }
-                      deriving (Show, Generic)
+                      deriving (Show, Generic, Eq)
 
 instance FromJSON BlockResumePoint where
     parseJSON = withObject "brp" $ \o -> do
@@ -79,7 +79,7 @@ data TypedOp = TypedOp { opName    :: Text
                        , opId      :: Int
                        , opBlockId :: Int
                        }
-             deriving (Show, Generic)
+             deriving (Show, Generic, Eq)
 
 instance FromJSON TypedOp where
     parseJSON = withObject "to" $ \o -> do
@@ -96,7 +96,7 @@ data MNode = MNode { kind            :: Text
                    , operands        :: [TypedOp]
                    , nodeResumePoint :: Maybe ResumePoint
                    }
-           deriving (Generic, Show)
+           deriving (Generic, Show, Eq)
 
 instance FromJSON MNode where
     parseJSON = withObject "n" $ \o -> do
@@ -112,7 +112,7 @@ data ResumePoint = ResumePoint { resumeMode :: Text
                                , resumeAt   :: Maybe Int
                                , resumeOps  :: [TypedOp]
                                }
-                 deriving (Show, Generic)
+                 deriving (Show, Generic, Eq)
 
 
 instance FromJSON ResumePoint where
