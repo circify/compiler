@@ -85,19 +85,19 @@ class Checkable a where
 kildall :: (Checkable a, Eq a, Show a)
         => [WorkNode a] -- ^ Worklist
         -> Store a -- ^ Store of analysis information
-        -> [MIR]
+        -> MIR
         -> IO (Store a)
 kildall [] store _ = return store
-kildall (elem:rest) store lir = do
+kildall (elem:rest) store mir = do
   let incomingState = nodeState elem
       currentState = infoAt elem store
   newState <- meet incomingState currentState
   if newState == currentState
-  then kildall rest store lir
+  then kildall rest store mir
   else do
-    succs <- getSuccessors elem lir
+    succs <- getSuccessors elem [mir]
     let newStore = updateStore elem newState store
-    transferredState <- transfer lir $ WorkNode (workNode elem) newState
+    transferredState <- transfer [mir] $ WorkNode (workNode elem) newState
     next <- forM succs $ \e -> return $ WorkNode e (nodeState transferredState)
-    kildall (rest++next) newStore lir
+    kildall (rest++next) newStore mir
 

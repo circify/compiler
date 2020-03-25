@@ -3,11 +3,17 @@ import           AST.MIR
 import           Control.Monad.State.Strict (unless)
 import qualified Data.Map                   as M
 import qualified Data.Set                   as S
+import           Prelude                    hiding (id)
 import           Static.KildallMIR
 
 data Deps = Start
           | DepMap { depmap :: M.Map NodeId (S.Set NodeId) }
-          deriving (Eq)
+          deriving (Show)
+
+instance Eq Deps where
+    Start == _ = False
+    _ == Start = False
+    (DepMap m) == (DepMap n) = m == n
 
 isStart :: Deps -> Bool
 isStart Start = True
@@ -53,6 +59,15 @@ lookupNode mir (WorkNode (bid, nid) _) = do
     error $ unwords [show nid, "not in", show ns]
   let ret = ns M.! nid
   return ret
+
+initList :: MIR -> [WorkNode Deps]
+initList mir =
+  concatMap (\b -> map (\n -> WorkNode (blockId b, id n) Start) $ instrs b) $ blocks mir
+
+initState :: MIR -> Store Deps
+initState mir =
+  let nodes = map workNode $ initList mir
+  in Store $ foldl (\m n -> M.insert n Start m) M.empty nodes
 
 instance Checkable Deps where
     meet = meet'
