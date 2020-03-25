@@ -41,31 +41,21 @@ getSuccessors node [program] = do
                     , "outside of range"
                     , show nodes'
                     ]
-  -- let node'   = nodes' M.! nodeid
-  --     ns      = map id $ instrs block
-  --     idx     = fromJust $ L.elemIndex nodeid ns
-  --     nextIdx = idx + 1
-  -- case succs node' of
-  --      -- If there are no other block successors, the next node
-  --      -- is either (1) nothing or (2) the next node in the block
-  --      [] -> if nextIdx >= length ns
-  --            -- No blocks afterwards if we're the last node in a
-  --            -- block with no successors
-  --            then return []
-  --            -- Next node
-  --            else return $ [(fst wn, ns !! nextIdx)]
-  --      -- If there are successors in other blocks, they are
-  --      -- the first nodes of those blocks
-  --      bs -> do
-  --        -- the next node is not always '1'
-  --        -- sometimes it is nine or some bullshit
-  --        let fin = map (\b -> let nextBlock = blocks' M.! b
-  --                            in case nodes nextBlock of
-  --                                 []   -> error "Empty next block"
-  --                                 n:ns -> (b, id n)
-  --                      ) bs
-  --        return fin
-  error ""
+  let node' = nodes' M.! nodeid
+      ns      = map id $ instrs block
+      idx     = fromJust $ L.elemIndex nodeid ns
+      nextIdx = idx + 1
+  if nextIdx >= length ns
+  -- we need to look in the next block for the successor node
+  then do
+    let fin = map (\b -> let nextBlock = blocks' M.! b
+                         in case instrs nextBlock of
+                              []   -> error "Empty next block"
+                              n:ns -> (b, id n)
+                  ) $ succs block
+    return fin
+  -- we can look in the current block for the successor node
+  else return $ [(fst wn, ns !! nextIdx)]
   where wn = workNode node
 
 -- Functions for interacting with the store

@@ -69,9 +69,9 @@ getSuccessors node (_:program:_) = do
          -- the next node is not always '1'
          -- sometimes it is nine or some bullshit
          let fin = map (\b -> let nextBlock = blocks' M.! b
-                             in case nodes nextBlock of
-                                  []   -> error "Empty next block"
-                                  n:ns -> (b, id n)
+                              in case nodes nextBlock of
+                                   []   -> error "Empty next block"
+                                   n:ns -> (b, id n)
                        ) bs
          return fin
       where wn = workNode node
