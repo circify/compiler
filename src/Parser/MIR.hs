@@ -34,7 +34,14 @@ printLICM = do
               state    = initState after
           kildall worklist state after
         unless (beforeResults == afterResults) $ do
-          print "HUGE ERROR!"
+          -- Compare the results for each graph
+          forM_ (M.keys beforeResults) $ \k ->
+            when (M.member k afterResults) $ do
+              beforeMap <- foldM meet Start $ storeMap $ beforeResults M.! k
+              afterMap  <- foldM meet Start $ storeMap $ afterResults M.! k
+              print $ beforeMap == afterMap
+              -- compare the dependency maps
+
 
       -- forM_ (M.keys befores) $ \k ->
       --   when (M.member k afters) $ do
