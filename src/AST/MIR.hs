@@ -33,7 +33,7 @@ type MNodeId = Word32
 
 -- ^ Raw Firefox MIR
 data MIR = MIR { blocks :: [MBlock] }
-         deriving (Show, Generic)
+         deriving (Show, Generic, Eq)
 
 instance FromJSON MIR where
 

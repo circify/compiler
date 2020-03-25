@@ -18,7 +18,7 @@ data WorkNode a = WorkNode { workNode  :: NodeId
 
 -- | A store of information about the analysis state of nodes in the program
 data Store a = Store { storeMap :: (M.Map NodeId a) }
-             deriving (Show)
+             deriving (Show, Eq)
 
 
 getSuccessors :: (Show a) => WorkNode a -> [MIR] -> IO [NodeId]

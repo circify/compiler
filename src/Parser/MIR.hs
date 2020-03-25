@@ -24,11 +24,17 @@ printLICM = do
       let regs = makeLICMMap graphs
           befores = beforeLICM regs
           afters  = afterLICM regs
-      beforeResults <- forM befores $ \before -> do
-        let worklist = initList before
-            state    = initState before
-        kildall worklist state before
-      forM_ beforeResults print
+      unless (befores == afters) $ do
+        beforeResults <- forM befores $ \before -> do
+          let worklist = initList before
+              state    = initState before
+          kildall worklist state before
+        afterResults <-  forM afters $ \after -> do
+          let worklist = initList after
+              state    = initState after
+          kildall worklist state after
+        unless (beforeResults == afterResults) $ do
+          print "HUGE ERROR!"
 
       -- forM_ (M.keys befores) $ \k ->
       --   when (M.member k afters) $ do
