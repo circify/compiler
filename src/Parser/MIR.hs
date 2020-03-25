@@ -16,7 +16,7 @@ parseLICM name = decodeFileStrict name
 
 printLICM :: IO ()
 printLICM = do
-  r <- parseLICM "examples/mir3.json"
+  r <- parseLICM "examples/mir4.json"
   case r of
     Just graphs -> do
       let regs = makeLICMMap graphs
@@ -31,5 +31,6 @@ printLICM = do
               beforeInstrs = instrs $ beforeBlocks !! 0
               afterInstrs = instrs $ afterBlocks !! 0
           print $ beforeInstrs == afterInstrs
+          print k
 
     Nothing -> error "ERROR PARSING"
