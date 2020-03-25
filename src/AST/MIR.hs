@@ -9,10 +9,11 @@ import           AST.Typed
 import           Control.Monad.State.Strict (join, unless, when)
 import           Data.Aeson                 hiding (Object)
 import qualified Data.HashMap.Strict        as HM
+import           Data.List                  (intercalate)
 import qualified Data.Map                   as M
 import           Data.Maybe                 (catMaybes, fromJust, isJust)
-import           Data.Text                  hiding (concatMap, foldl, map,
-                                             unwords)
+import           Data.Text                  hiding (concatMap, foldl,
+                                             intercalate, map, unwords)
 import           Data.Word
 import           Debug.Trace
 import           GHC.Generics
@@ -48,6 +49,13 @@ data MBlock = MBlock { blockId     :: MBlockId
                      }
             deriving (Show, Generic, Eq)
 
+makeBlockMap :: [MBlock] -> M.Map MBlockId MBlock
+makeBlockMap = foldl (\m b -> M.insert (blockId b) b m) M.empty
+
+makeNodeMap :: [MNode] -> M.Map MNodeId MNode
+makeNodeMap = foldl insertNode M.empty
+  where insertNode m n = M.insert (id n) n m
+
 instance FromJSON MBlock where
     parseJSON = withObject "mblock" $ \o -> do
       blockId     <- o .: ("id" :: Text)
@@ -74,12 +82,15 @@ instance FromJSON BlockResumePoint where
       ro <- o .: ("operands" :: Text)
       return $ BlockResumePoint rk rm ro
 
-data TypedOp = TypedOp { opName    :: Text
-                       , opType    :: Text
-                       , opId      :: Int
-                       , opBlockId :: Int
+data TypedOp = TypedOp { topName    :: Text
+                       , topType    :: Text
+                       , topId      :: Int
+                       , topBlockId :: Int
                        }
              deriving (Show, Generic, Eq)
+
+prettyOp :: TypedOp -> String
+prettyOp to = unwords ["{", show $ topId to, ",", show $ topBlockId to, "}"]
 
 instance FromJSON TypedOp where
     parseJSON = withObject "to" $ \o -> do
@@ -97,6 +108,16 @@ data MNode = MNode { kind            :: Text
                    , nodeResumePoint :: Maybe ResumePoint
                    }
            deriving (Generic, Show, Eq)
+
+prettyNode :: MNode -> String
+prettyNode node = unwords [ "id"
+                          , show $ id node
+                          , "="
+                          , show $ opName node
+                          , "("
+                          , intercalate " " $ map prettyOp $ operands node
+                          , ")"
+                          ]
 
 instance FromJSON MNode where
     parseJSON = withObject "n" $ \o -> do
