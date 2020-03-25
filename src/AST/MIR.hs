@@ -84,8 +84,8 @@ instance FromJSON BlockResumePoint where
 
 data TypedOp = TypedOp { topName    :: Text
                        , topType    :: Text
-                       , topId      :: Int
-                       , topBlockId :: Int
+                       , topId      :: Word32
+                       , topBlockId :: Word32
                        }
              deriving (Show, Generic, Eq)
 
