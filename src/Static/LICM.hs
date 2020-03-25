@@ -9,6 +9,14 @@ data Deps = Start
           | DepMap { depmap :: M.Map NodeId (S.Set NodeId) }
           deriving (Eq)
 
+isStart :: Deps -> Bool
+isStart Start = True
+isStart _     = False
+
+isMap :: Deps -> Bool
+isMap DepMap{} = True
+isMap _        = False
+
 transfer' :: [MIR] -> WorkNode Deps -> IO (WorkNode Deps)
 transfer' [program] node = do
   let blockId = fst $ workNode node
@@ -25,7 +33,12 @@ transfer' _ _            = error "Unexpected format for MIR"
 meet' :: Deps
       -> Deps
       -> IO Deps
-meet' = undefined
+meet' r1 r2
+    | isStart r1 && isStart r2 = return $ DepMap M.empty
+    | isStart r1 = return r2
+    | isStart r2 = return r1
+    | otherwise = return $ DepMap $ M.unionWith S.union (depmap r1) (depmap r2)
+    | otherwise = error ""
 
 lookupNode :: MIR
            -> WorkNode a
