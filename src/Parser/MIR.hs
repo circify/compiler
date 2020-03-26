@@ -40,8 +40,8 @@ printLICM = do
                 afterState = initState afterMIR
             afterDefs <- kildall afterList afterState afterMIR
             putStrLn $ unwords $ ["Checking", show k]
-            void $ check beforeMIR beforeDefs
-
+            check beforeMIR beforeDefs
+            check afterMIR afterDefs
     --   afterResults <-  forM afters $ \after -> do
       --     let worklist = initList after
       --         state    = initState after
