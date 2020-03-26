@@ -41,7 +41,7 @@ getSuccessors node [program] = do
                     , "outside of range"
                     , show nodes'
                     ]
-  let node' = nodes' M.! nodeid
+  let node'   = nodes' M.! nodeid
       ns      = map id $ instrs block
       idx     = fromJust $ L.elemIndex nodeid ns
       nextIdx = idx + 1

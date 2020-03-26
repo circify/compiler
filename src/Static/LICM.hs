@@ -1,49 +1,66 @@
 module Static.LICM where
 import           AST.MIR
-import           Control.Monad.State.Strict (unless)
+import           Control.Monad.State.Strict (forM_, unless)
 import qualified Data.Map                   as M
 import qualified Data.Set                   as S
 import           Prelude                    hiding (id)
 import           Static.KildallMIR
 
-data Deps = Start
-          | DepMap { depmap :: M.Map NodeId (S.Set NodeId) }
+-- x = 5      after: { x }
+-- y = x + 12 after: { y, x }
+-- z = foo(y) after: { z, y, x }
+-- y = foo(z) after: { z, y, x }
+
+data Defs = Start
+          | Defs { defs :: S.Set NodeId }
           deriving (Show)
 
-instance Eq Deps where
+instance Eq Defs where
     Start == _ = False
     _ == Start = False
-    (DepMap m) == (DepMap n) = m == n
+    (Defs s) == (Defs d) = s == d
 
-isStart :: Deps -> Bool
+isStart :: Defs -> Bool
 isStart Start = True
 isStart _     = False
 
-isMap :: Deps -> Bool
-isMap DepMap{} = True
-isMap _        = False
+isMap :: Defs -> Bool
+isMap Defs{} = True
+isMap _      = False
 
-transfer' :: [MIR] -> WorkNode Deps -> IO (WorkNode Deps)
+check :: MIR -> Store Defs -> IO ()
+check mir defs = do
+  forM_ (M.toList $ storeMap defs) $ \(nodeId, ds) -> do
+    node <- lookupNode mir (WorkNode nodeId S.empty)
+    let useds = map (\op -> (topBlockId op, topId op)) $ operands node
+    forM_ useds $ \use ->
+      case ds of
+        Start  -> error "Uninitialized analysis set"
+        Defs d -> unless (S.member use d) $ error $ unwords [ "Expected"
+                                                            , show use
+                                                            , "in"
+                                                            , show d
+                                                            , "at"
+                                                            , show nodeId
+                                                            ]
+
+transfer' :: [MIR] -> WorkNode Defs -> IO (WorkNode Defs)
 transfer' [program] node = do
-  let blockId = fst $ workNode node
-      nodeId  = snd $ workNode node
-      name    = (blockId, nodeId)
-  node' <- lookupNode program node
-  let ops = map (\op -> (topBlockId op, topId op)) $ operands node'
-      state' = DepMap $ case nodeState node of
-                 Start     -> M.fromList [(name, S.fromList ops)]
-                 DepMap ds -> M.insert name (S.fromList ops) ds
-  return $ WorkNode (workNode node) state'
+  let name  = workNode node
+      start = case nodeState node of
+                Start   -> Defs $ S.singleton name
+                Defs ds -> Defs $ S.insert name ds
+  return $ WorkNode name start
 transfer' _ _            = error "Unexpected format for MIR"
 
-meet' :: Deps
-      -> Deps
-      -> IO Deps
+meet' :: Defs
+      -> Defs
+      -> IO Defs
 meet' r1 r2
-    | isStart r1 && isStart r2 = return $ DepMap M.empty
+    | isStart r1 && isStart r2 = return $ Defs S.empty
     | isStart r1 = return r2
     | isStart r2 = return r1
-    | otherwise = return $ DepMap $ M.unionWith S.union (depmap r1) (depmap r2)
+    | otherwise = return $ Defs $ S.union (defs r1) (defs r2)
     | otherwise = error ""
 
 lookupNode :: MIR
@@ -60,15 +77,15 @@ lookupNode mir (WorkNode (bid, nid) _) = do
   let ret = ns M.! nid
   return ret
 
-initList :: MIR -> [WorkNode Deps]
+initList :: MIR -> [WorkNode Defs]
 initList mir =
   concatMap (\b -> map (\n -> WorkNode (blockId b, id n) Start) $ instrs b) $ blocks mir
 
-initState :: MIR -> Store Deps
+initState :: MIR -> Store Defs
 initState mir =
   let nodes = map workNode $ initList mir
   in Store $ foldl (\m n -> M.insert n Start m) M.empty nodes
 
-instance Checkable Deps where
+instance Checkable Defs where
     meet = meet'
     transfer = transfer'

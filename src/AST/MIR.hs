@@ -44,7 +44,6 @@ data MBlock = MBlock { blockId     :: MBlockId
                      , preds       :: [MBlockId]
                      , succs       :: [MBlockId]
                      , resumePoint :: BlockResumePoint
-                     , phiNodes    :: [MNode]
                      , instrs      :: [MNode]
                      }
             deriving (Show, Generic, Eq)
@@ -67,7 +66,7 @@ instance FromJSON MBlock where
       resume      <- o .: ("resumePoint" :: Text)
       phis        <- o .: ("phiNodes" :: Text)
       instrs      <- o .: ("instructionNodes" :: Text)
-      return $ MBlock blockId blockKind unreachable marked preds succs resume phis instrs
+      return $ MBlock blockId blockKind unreachable marked preds succs resume (phis ++ instrs)
 
 data BlockResumePoint = BlockResumePoint { bresumeKind :: Text
                                          , bresumeMode :: Text
