@@ -1,0 +1,24 @@
+<!--
+
+XML language accounts for permindex.xml
+Copyright (c) 2012-2017 ARM Limited or its affiliates. All rights reserved.
+This document is Confidential.
+
+--> 
+
+<!ELEMENT a (#PCDATA)>
+<!ATTLIST a href CDATA #REQUIRED>
+
+<!ELEMENT left (#PCDATA | a)*>
+<!ELEMENT right (#PCDATA | a)*>
+
+<!ELEMENT line (left, right)>
+<!ATTLIST line initialtag CDATA #IMPLIED>
+
+<!ELEMENT in (#PCDATA)>
+<!ATTLIST in link CDATA #REQUIRED>
+<!ELEMENT initials (in+)>
+<!ATTLIST initials howmany CDATA #REQUIRED>
+
+<!ELEMENT permindex (initials?, line+)>
+<!ATTLIST permindex titlename CDATA #REQUIRED what CDATA #REQUIRED>

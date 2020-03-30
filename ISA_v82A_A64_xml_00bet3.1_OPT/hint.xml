@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet type="text/xsl" encoding="UTF-8" href="iform.xsl" version="1.0"?>
+<!DOCTYPE instructionsection PUBLIC "-//ARM//DTD instructionsection //EN" "iform-p.dtd">
+<!-- Copyright (c) 2010-2017 ARM Limited or its affiliates. All rights reserved. -->
+<!-- This document is Confidential. This document may only be used and distributed in accordance with the terms of the agreement entered into by ARM and the party that ARM delivered this document to. -->
+
+<instructionsection id="HINT" title="HINT -- A64" type="instruction">
+  <docvars>
+    <docvar key="instr-class" value="system" />
+    <docvar key="isa" value="A64" />
+    <docvar key="mnemonic" value="HINT" />
+  </docvars>
+  <heading>HINT</heading>
+  <desc>
+    <brief>
+      <para>Hint instruction</para>
+    </brief>
+    <authored>
+      <para>Hint instruction is for the instruction set space that is reserved for architectural hint instructions.</para>
+      <para>Some encodings described here are unallocated in this revision of the architecture, and behave as NOPs. These encodings might be allocated to other hint functionality in future revisions of the architecture.</para>
+    </authored>
+  </desc>
+  <alias_list howmany="0"></alias_list>
+  <classes>
+    <iclass name="System" oneof="1" id="system" no_encodings="3" isa="A64">
+      <docvars>
+        <docvar key="instr-class" value="system" />
+        <docvar key="isa" value="A64" />
+        <docvar key="mnemonic" value="HINT" />
+      </docvars>
+      <iclassintro count="3"></iclassintro>
+      <regdiagram form="32" psname="aarch64/instrs/system/hints/HINT_1">
+        <box hibit="31" width="10" settings="10">
+          <c>1</c>
+          <c>1</c>
+          <c>0</c>
+          <c>1</c>
+          <c>0</c>
+          <c>1</c>
+          <c>0</c>
+          <c>1</c>
+          <c>0</c>
+          <c>0</c>
+        </box>
+        <box hibit="21" name="L" settings="1">
+          <c>0</c>
+        </box>
+        <box hibit="20" width="2" name="op0" settings="2">
+          <c>0</c>
+          <c>0</c>
+        </box>
+        <box hibit="18" width="3" name="op1" settings="3">
+          <c>0</c>
+          <c>1</c>
+          <c>1</c>
+        </box>
+        <box hibit="15" width="4" name="CRn" settings="4">
+          <c>0</c>
+          <c>0</c>
+          <c>1</c>
+          <c>0</c>
+        </box>
+        <box hibit="11" width="4" name="CRm" usename="1">
+          <c colspan="4"></c>
+        </box>
+        <box hibit="7" width="3" name="op2" usename="1">
+          <c colspan="3"></c>
+        </box>
+        <box hibit="4" width="5" name="Rt" settings="5">
+          <c>1</c>
+          <c>1</c>
+          <c>1</c>
+          <c>1</c>
+          <c>1</c>
+        </box>
+      </regdiagram>
+      <encoding name="HINT_1" oneofinclass="3" oneof="3" label="Hints 6 and 7" bitdiffs="CRm == 0000 &amp;&amp; op2 == 11x">
+        <docvars>
+          <docvar key="hint-variants" value="hint-6-7" />
+          <docvar key="instr-class" value="system" />
+          <docvar key="isa" value="A64" />
+          <docvar key="mnemonic" value="HINT" />
+        </docvars>
+        <box hibit="11" width="4" name="CRm">
+          <c>0</c>
+          <c>0</c>
+          <c>0</c>
+          <c>0</c>
+        </box>
+        <box hibit="7" width="3" name="op2">
+          <c>1</c>
+          <c>1</c>
+          <c></c>
+        </box>
+        <asmtemplate><text>HINT  #</text><a link="imm" hover="7-bit unsigned immediate [0-127], excluding the allocated encodings described below (field &quot;CRm:op2&quot;)">&lt;imm&gt;</a></asmtemplate>
+      </encoding>
+      <encoding name="HINT_2" oneofinclass="3" oneof="3" label="Hints 8 to 15, and 24 to 127" bitdiffs="CRm != 00x0">
+        <docvars>
+          <docvar key="hint-variants" value="hint-8-15-24-127" />
+          <docvar key="instr-class" value="system" />
+          <docvar key="isa" value="A64" />
+          <docvar key="mnemonic" value="HINT" />
+        </docvars>
+        <box hibit="11" width="4" name="CRm">
+          <c>Z</c>
+          <c>Z</c>
+          <c></c>
+          <c>Z</c>
+        </box>
+        <asmtemplate><text>HINT  #</text><a link="imm" hover="7-bit unsigned immediate [0-127], excluding the allocated encodings described below (field &quot;CRm:op2&quot;)">&lt;imm&gt;</a></asmtemplate>
+      </encoding>
+      <encoding name="HINT_3" oneofinclass="3" oneof="3" label="Hints 17 to 23" bitdiffs="CRm == 0010 &amp;&amp; op2 != 00x">
+        <docvars>
+          <docvar key="hint-variants" value="hint-17-23" />
+          <docvar key="instr-class" value="system" />
+          <docvar key="isa" value="A64" />
+          <docvar key="mnemonic" value="HINT" />
+        </docvars>
+        <box hibit="11" width="4" name="CRm">
+          <c>0</c>
+          <c>0</c>
+          <c>1</c>
+          <c>0</c>
+        </box>
+        <box hibit="7" width="3" name="op2">
+          <c>Z</c>
+          <c>Z</c>
+          <c></c>
+        </box>
+        <asmtemplate><text>HINT  #</text><a link="imm" hover="7-bit unsigned immediate [0-127], excluding the allocated encodings described below (field &quot;CRm:op2&quot;)">&lt;imm&gt;</a></asmtemplate>
+      </encoding>
+    </iclass>
+  </classes>
+  <explanations scope="all">
+    <explanation enclist="HINT_1, HINT_2, HINT_3" symboldefcount="1">
+      <symbol link="imm">&lt;imm&gt;</symbol>
+      <account encodedin="CRm:op2">
+        <intro>
+          <para>Is a 7-bit unsigned immediate, in the range 0 to 127, excluding the allocated encodings described below, encoded in "CRm:op2".</para>
+          <para>The following encodings of "CRm:op2" are allocated:</para>
+          <list type="param">
+            <listitem>
+              <param>0000000</param><content><instruction>NOP</instruction></content>
+            </listitem>
+            <listitem>
+              <param>0000001</param><content><instruction>YIELD</instruction></content>
+            </listitem>
+            <listitem>
+              <param>0000010</param><content><instruction>WFE</instruction></content>
+            </listitem>
+            <listitem>
+              <param>0000011</param><content><instruction>WFI</instruction></content>
+            </listitem>
+            <listitem>
+              <param>0000100</param><content><instruction>SEV</instruction></content>
+            </listitem>
+            <listitem>
+              <param>0000101</param><content><instruction>SEVL</instruction></content>
+            </listitem>
+          </list>
+          <note>
+            <para>For allocated encodings of "CRm:op2":</para>
+            <list type="unordered">
+              <listitem><content>A disassembler will disassemble the allocated instruction, rather than the <instruction>HINT</instruction> instruction.</content></listitem>
+              <listitem><content>An assembler may support assembly of allocated encodings using <instruction>HINT</instruction> with the corresponding <syntax>&lt;imm&gt;</syntax> value, but it is not required to do so.</content></listitem>
+            </list>
+          </note>
+        </intro>
+      </account>
+    </explanation>
+  </explanations>
+</instructionsection>

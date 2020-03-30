@@ -5,4 +5,4 @@ import           Parser.LIR
 import           Parser.MIR
 
 someFunc :: IO ()
-someFunc = printLICM --printRegAlloc
+someFunc = parseXML -- printLICM --printRegAlloc

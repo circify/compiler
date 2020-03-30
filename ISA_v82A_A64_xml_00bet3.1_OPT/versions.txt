@@ -1,0 +1,8 @@
+# 
+# Copyright (c) 2010-2017 ARM Limited or its affiliates. All rights reserved.
+# 
+# This document is Confidential. This document may only be used and distributed in accordance with the terms of the agreement entered into by ARM and the party that ARM delivered this document to.
+main_isa: 25.07
+advsimd_isa: 23.0
+pseudocode_commit: v31.3
+pseudocode_version: v31.3
