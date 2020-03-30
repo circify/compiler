@@ -1,8 +1,3 @@
-<?xml version="1.0" encoding="utf-8"?>
-<?xml-stylesheet type="text/xsl" encoding="UTF-8" href="iform.xsl" version="1.0"?>
-<!DOCTYPE instructionsection PUBLIC "-//ARM//DTD instructionsection //EN" "iform-p.dtd">
-<!-- Copyright (c) 2010-2017 ARM Limited or its affiliates. All rights reserved. -->
-<!-- This document is Confidential. This document may only be used and distributed in accordance with the terms of the agreement entered into by ARM and the party that ARM delivered this document to. -->
 
 <instructionsection id="UMINP_advsimd" title="UMINP -- A64" type="instruction">
   <docvars>
@@ -199,6 +194,13 @@ for e = 0 to elements-1
     element1 = <a link="impl-shared.Int.2" file="shared_pseudocode.xml" hover="function: integer Int(bits(N) x, boolean unsigned)">Int</a>(<a link="impl-shared.Elem.read.3" file="shared_pseudocode.xml" hover="accessor: bits(size) Elem[bits(N) vector, integer e, integer size]">Elem</a>[concat, 2*e, esize], unsigned);
     element2 = <a link="impl-shared.Int.2" file="shared_pseudocode.xml" hover="function: integer Int(bits(N) x, boolean unsigned)">Int</a>(<a link="impl-shared.Elem.read.3" file="shared_pseudocode.xml" hover="accessor: bits(size) Elem[bits(N) vector, integer e, integer size]">Elem</a>[concat, (2*e)+1, esize], unsigned);
     maxmin = if minimum then <a link="impl-shared.Min.2" file="shared_pseudocode.xml" hover="function: integer Min(integer a, integer b)">Min</a>(element1, element2) else <a link="impl-shared.Max.2" file="shared_pseudocode.xml" hover="function: integer Max(integer a, integer b)">Max</a>(element1, element2);
+    <a link="impl-shared.Elem.write.3" file="shared_pseudocode.xml" hover="accessor: Elem[bits(N) &amp;vector, integer e, integer size] = bits(size) value">Elem</a>[result, e, esize] = maxmin&lt;esize-1:0&gt;;
+
+<a link="impl-aarch64.V.write.1" file="shared_pseudocode.xml" hover="accessor: V[integer n] = bits(width) value">V</a>[d] = result;</pstext>
+    </ps>
+  </ps_section>
+</instructionsection>
+ed_pseudocode.xml" hover="function: integer Max(integer a, integer b)">Max</a>(element1, element2);
     <a link="impl-shared.Elem.write.3" file="shared_pseudocode.xml" hover="accessor: Elem[bits(N) &amp;vector, integer e, integer size] = bits(size) value">Elem</a>[result, e, esize] = maxmin&lt;esize-1:0&gt;;
 
 <a link="impl-aarch64.V.write.1" file="shared_pseudocode.xml" hover="accessor: V[integer n] = bits(width) value">V</a>[d] = result;</pstext>

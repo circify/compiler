@@ -1,8 +1,3 @@
-<?xml version="1.0" encoding="utf-8"?>
-<?xml-stylesheet type="text/xsl" encoding="UTF-8" href="iform.xsl" version="1.0"?>
-<!DOCTYPE instructionsection PUBLIC "-//ARM//DTD instructionsection //EN" "iform-p.dtd">
-<!-- Copyright (c) 2010-2017 ARM Limited or its affiliates. All rights reserved. -->
-<!-- This document is Confidential. This document may only be used and distributed in accordance with the terms of the agreement entered into by ARM and the party that ARM delivered this document to. -->
 
 <instructionsection id="SUB_addsub_shift" title="SUB (shifted register) -- A64" type="instruction">
   <docvars>
@@ -239,6 +234,19 @@ bit carry_in;
 if sub_op then
     operand2 = <a link="impl-shared.NOT.1" file="shared_pseudocode.xml" hover="function: bits(N) NOT(bits(N) x)">NOT</a>(operand2);
     carry_in = '1';
+else
+    carry_in = '0';
+
+(result, nzcv) = <a link="impl-shared.AddWithCarry.3" file="shared_pseudocode.xml" hover="function: (bits(N), bits(4)) AddWithCarry(bits(N) x, bits(N) y, bit carry_in)">AddWithCarry</a>(operand1, operand2, carry_in);
+
+if setflags then 
+    PSTATE.&lt;N,Z,C,V&gt; = nzcv;
+
+<a link="impl-aarch64.X.write.1" file="shared_pseudocode.xml" hover="accessor: X[integer n] = bits(width) value">X</a>[d] = result;</pstext>
+    </ps>
+  </ps_section>
+</instructionsection>
+ry_in = '1';
 else
     carry_in = '0';
 

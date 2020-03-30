@@ -1,8 +1,3 @@
-<?xml version="1.0" encoding="utf-8"?>
-<?xml-stylesheet type="text/xsl" encoding="UTF-8" href="iform.xsl" version="1.0"?>
-<!DOCTYPE instructionsection PUBLIC "-//ARM//DTD instructionsection //EN" "iform-p.dtd">
-<!-- Copyright (c) 2010-2017 ARM Limited or its affiliates. All rights reserved. -->
-<!-- This document is Confidential. This document may only be used and distributed in accordance with the terms of the agreement entered into by ARM and the party that ARM delivered this document to. -->
 
 <instructionsection id="EOR_advsimd" title="EOR (vector) -- A64" type="instruction">
   <docvars>
@@ -183,6 +178,13 @@ case op of
     when <a link="VBitOp_VBIF" file="shared_pseudocode.xml" hover="enumeration VBitOp      {VBitOp_VBIF, VBitOp_VBIT, VBitOp_VBSL, VBitOp_VEOR}">VBitOp_VBIF</a>
         operand1 = <a link="impl-aarch64.V.read.1" file="shared_pseudocode.xml" hover="accessor: bits(width) V[integer n]">V</a>[d];
         operand2 = operand1;
+        operand3 = <a link="impl-shared.NOT.1" file="shared_pseudocode.xml" hover="function: bits(N) NOT(bits(N) x)">NOT</a>(<a link="impl-aarch64.V.read.1" file="shared_pseudocode.xml" hover="accessor: bits(width) V[integer n]">V</a>[m]);
+
+<a link="impl-aarch64.V.write.1" file="shared_pseudocode.xml" hover="accessor: V[integer n] = bits(width) value">V</a>[d] = operand1 EOR ((operand2 EOR operand4) AND operand3);</pstext>
+    </ps>
+  </ps_section>
+</instructionsection>
+    operand2 = operand1;
         operand3 = <a link="impl-shared.NOT.1" file="shared_pseudocode.xml" hover="function: bits(N) NOT(bits(N) x)">NOT</a>(<a link="impl-aarch64.V.read.1" file="shared_pseudocode.xml" hover="accessor: bits(width) V[integer n]">V</a>[m]);
 
 <a link="impl-aarch64.V.write.1" file="shared_pseudocode.xml" hover="accessor: V[integer n] = bits(width) value">V</a>[d] = operand1 EOR ((operand2 EOR operand4) AND operand3);</pstext>

@@ -1,8 +1,3 @@
-<?xml version="1.0" encoding="utf-8"?>
-<?xml-stylesheet type="text/xsl" encoding="UTF-8" href="iform.xsl" version="1.0"?>
-<!DOCTYPE instructionsection PUBLIC "-//ARM//DTD instructionsection //EN" "iform-p.dtd">
-<!-- Copyright (c) 2010-2017 ARM Limited or its affiliates. All rights reserved. -->
-<!-- This document is Confidential. This document may only be used and distributed in accordance with the terms of the agreement entered into by ARM and the party that ARM delivered this document to. -->
 
 <instructionsection id="UBFIZ_UBFM" title="UBFIZ -- A64" type="alias">
   <docvars>
@@ -174,6 +169,22 @@
         <intro>
           <para>For the 32-bit variant: is the width of the bitfield, in the range 1 to 32-&lt;lsb&gt;.</para>
         </intro>
+      </account>
+    </explanation>
+    <explanation enclist="UBFIZ_UBFM_64M_bitfield" symboldefcount="2">
+      <symbol link="width_1">&lt;width&gt;</symbol>
+      <account encodedin="">
+        <docvars>
+          <docvar key="datatype" value="64" />
+        </docvars>
+        <intro>
+          <para>For the 64-bit variant: is the width of the bitfield, in the range 1 to 64-&lt;lsb&gt;.</para>
+        </intro>
+      </account>
+    </explanation>
+  </explanations>
+</instructionsection>
+/intro>
       </account>
     </explanation>
     <explanation enclist="UBFIZ_UBFM_64M_bitfield" symboldefcount="2">

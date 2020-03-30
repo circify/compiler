@@ -1,8 +1,3 @@
-<?xml version="1.0" encoding="utf-8"?>
-<?xml-stylesheet type="text/xsl" encoding="UTF-8" href="iform.xsl" version="1.0"?>
-<!DOCTYPE instructionsection PUBLIC "-//ARM//DTD instructionsection //EN" "iform-p.dtd">
-<!-- Copyright (c) 2010-2017 ARM Limited or its affiliates. All rights reserved. -->
-<!-- This document is Confidential. This document may only be used and distributed in accordance with the terms of the agreement entered into by ARM and the party that ARM delivered this document to. -->
 
 <instructionsection id="SHA1M_advsimd" title="SHA1M -- A64" type="instruction">
   <docvars>
@@ -119,6 +114,13 @@ bits(32)  t;
 for e = 0 to 3
     t = <a link="impl-shared.SHAmajority.3" file="shared_pseudocode.xml" hover="function: bits(32) SHAmajority(bits(32) x, bits(32) y, bits(32) z)">SHAmajority</a>(X&lt;63:32&gt;, X&lt;95:64&gt;, X&lt;127:96&gt;);
     Y = Y + <a link="impl-shared.ROL.2" file="shared_pseudocode.xml" hover="function: bits(N) ROL(bits(N) x, integer shift)">ROL</a>(X&lt;31:0&gt;, 5) + t + <a link="impl-shared.Elem.read.3" file="shared_pseudocode.xml" hover="accessor: bits(size) Elem[bits(N) vector, integer e, integer size]">Elem</a>[W, e, 32];
+    X&lt;63:32&gt; = <a link="impl-shared.ROL.2" file="shared_pseudocode.xml" hover="function: bits(N) ROL(bits(N) x, integer shift)">ROL</a>(X&lt;63:32&gt;, 30);
+    &lt;Y, X&gt; = <a link="impl-shared.ROL.2" file="shared_pseudocode.xml" hover="function: bits(N) ROL(bits(N) x, integer shift)">ROL</a>(Y : X, 32);
+<a link="impl-aarch64.V.write.1" file="shared_pseudocode.xml" hover="accessor: V[integer n] = bits(width) value">V</a>[d] = X;</pstext>
+    </ps>
+  </ps_section>
+</instructionsection>
+
     X&lt;63:32&gt; = <a link="impl-shared.ROL.2" file="shared_pseudocode.xml" hover="function: bits(N) ROL(bits(N) x, integer shift)">ROL</a>(X&lt;63:32&gt;, 30);
     &lt;Y, X&gt; = <a link="impl-shared.ROL.2" file="shared_pseudocode.xml" hover="function: bits(N) ROL(bits(N) x, integer shift)">ROL</a>(Y : X, 32);
 <a link="impl-aarch64.V.write.1" file="shared_pseudocode.xml" hover="accessor: V[integer n] = bits(width) value">V</a>[d] = X;</pstext>

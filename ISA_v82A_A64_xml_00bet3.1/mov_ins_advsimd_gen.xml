@@ -1,8 +1,3 @@
-<?xml version="1.0" encoding="utf-8"?>
-<?xml-stylesheet type="text/xsl" encoding="UTF-8" href="iform.xsl" version="1.0"?>
-<!DOCTYPE instructionsection PUBLIC "-//ARM//DTD instructionsection //EN" "iform-p.dtd">
-<!-- Copyright (c) 2010-2017 ARM Limited or its affiliates. All rights reserved. -->
-<!-- This document is Confidential. This document may only be used and distributed in accordance with the terms of the agreement entered into by ARM and the party that ARM delivered this document to. -->
 
 <instructionsection id="MOV_INS_advsimd_gen" title="MOV (from general) -- A64" type="alias">
   <docvars>
@@ -208,6 +203,23 @@
               <row>
                 <entry class="bitfield">x1000</entry>
                 <entry class="symbol">X</entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </table>
+      </definition>
+    </explanation>
+    <explanation enclist="MOV_INS_asimdins_IR_r" symboldefcount="1">
+      <symbol link="n">&lt;n&gt;</symbol>
+      <account encodedin="Rn">
+        <intro>
+          <para>Is the number [0-30] of the general-purpose source register or ZR (31), encoded in the "Rn" field.</para>
+        </intro>
+      </account>
+    </explanation>
+  </explanations>
+</instructionsection>
+</entry>
               </row>
             </tbody>
           </tgroup>

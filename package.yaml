@@ -35,6 +35,9 @@ library:
   - text >= 1.2.3.1
   - unordered-containers >= 0.2.10.0
   - xeno >= 0.3
+  - filepath
+  - directory
+  - filemanip  
   
 executables:
   compiler-exe:

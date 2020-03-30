@@ -1,8 +1,3 @@
-<?xml version="1.0" encoding="utf-8"?>
-<?xml-stylesheet type="text/xsl" encoding="UTF-8" href="iform.xsl" version="1.0"?>
-<!DOCTYPE instructionsection PUBLIC "-//ARM//DTD instructionsection //EN" "iform-p.dtd">
-<!-- Copyright (c) 2010-2017 ARM Limited or its affiliates. All rights reserved. -->
-<!-- This document is Confidential. This document may only be used and distributed in accordance with the terms of the agreement entered into by ARM and the party that ARM delivered this document to. -->
 
 <instructionsection id="CRC32" title="CRC32B, CRC32H, CRC32W, CRC32X -- A64" type="instruction">
   <docvars>
@@ -201,6 +196,11 @@ bits(32+size) tempacc = <a link="impl-shared.BitReverse.1" file="shared_pseudoco
 bits(size+32) tempval = <a link="impl-shared.BitReverse.1" file="shared_pseudocode.xml" hover="function: bits(N) BitReverse(bits(N) data)">BitReverse</a>(val) : <a link="impl-shared.Zeros.1" file="shared_pseudocode.xml" hover="function: bits(N) Zeros(integer N)">Zeros</a>(32);
 
 // Poly32Mod2 on a bitstring does a polynomial Modulus over {0,1} operation
+<a link="impl-aarch64.X.write.1" file="shared_pseudocode.xml" hover="accessor: X[integer n] = bits(width) value">X</a>[d] = <a link="impl-shared.BitReverse.1" file="shared_pseudocode.xml" hover="function: bits(N) BitReverse(bits(N) data)">BitReverse</a>(<a link="impl-shared.Poly32Mod2.2" file="shared_pseudocode.xml" hover="function: bits(32) Poly32Mod2(bits(N) data, bits(32) poly)">Poly32Mod2</a>(tempacc EOR tempval, poly));</pstext>
+    </ps>
+  </ps_section>
+</instructionsection>
+,1} operation
 <a link="impl-aarch64.X.write.1" file="shared_pseudocode.xml" hover="accessor: X[integer n] = bits(width) value">X</a>[d] = <a link="impl-shared.BitReverse.1" file="shared_pseudocode.xml" hover="function: bits(N) BitReverse(bits(N) data)">BitReverse</a>(<a link="impl-shared.Poly32Mod2.2" file="shared_pseudocode.xml" hover="function: bits(32) Poly32Mod2(bits(N) data, bits(32) poly)">Poly32Mod2</a>(tempacc EOR tempval, poly));</pstext>
     </ps>
   </ps_section>

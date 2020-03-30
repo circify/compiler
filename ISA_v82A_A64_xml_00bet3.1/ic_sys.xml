@@ -1,8 +1,3 @@
-<?xml version="1.0" encoding="utf-8"?>
-<?xml-stylesheet type="text/xsl" encoding="UTF-8" href="iform.xsl" version="1.0"?>
-<!DOCTYPE instructionsection PUBLIC "-//ARM//DTD instructionsection //EN" "iform-p.dtd">
-<!-- Copyright (c) 2010-2017 ARM Limited or its affiliates. All rights reserved. -->
-<!-- This document is Confidential. This document may only be used and distributed in accordance with the terms of the agreement entered into by ARM and the party that ARM delivered this document to. -->
 
 <instructionsection id="IC_SYS" title="IC -- A64" type="alias">
   <docvars>
@@ -143,6 +138,20 @@
       <account encodedin="op2">
         <intro>
           <para>Is a 3-bit unsigned immediate, in the range 0 to 7, encoded in the "op2" field.</para>
+        </intro>
+      </account>
+    </explanation>
+    <explanation enclist="IC_SYS_CR_system" symboldefcount="1">
+      <symbol link="xt">&lt;Xt&gt;</symbol>
+      <account encodedin="Rt">
+        <intro>
+          <para>Is the 64-bit name of the optional general-purpose source register, defaulting to '11111', encoded in the "Rt" field.</para>
+        </intro>
+      </account>
+    </explanation>
+  </explanations>
+</instructionsection>
+, in the range 0 to 7, encoded in the "op2" field.</para>
         </intro>
       </account>
     </explanation>

@@ -1,8 +1,3 @@
-<?xml version="1.0" encoding="utf-8"?>
-<?xml-stylesheet type="text/xsl" encoding="UTF-8" href="iform.xsl" version="1.0"?>
-
-<!DOCTYPE textsection PUBLIC "-//ARM//DTD textsection //EN" "iform-p.dtd">
-
 <textsection title="Proprietary Notice">
   <para>
     This document is protected by copyright and other related rights
@@ -78,6 +73,14 @@ reserved.
     110 Fulbourn Road, Cambridge, England CB1 9NJ.
   </para>
   <para>
+    LES-PRE-20327
+  </para>
+  <para>
+    In this document, where the term ARM is used to refer to the
+company it means “ARM or any of its subsidiaries as appropriate”.
+  </para>
+</textsection>
+>
     LES-PRE-20327
   </para>
   <para>

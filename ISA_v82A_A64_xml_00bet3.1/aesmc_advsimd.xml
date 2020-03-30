@@ -1,8 +1,3 @@
-<?xml version="1.0" encoding="utf-8"?>
-<?xml-stylesheet type="text/xsl" encoding="UTF-8" href="iform.xsl" version="1.0"?>
-<!DOCTYPE instructionsection PUBLIC "-//ARM//DTD instructionsection //EN" "iform-p.dtd">
-<!-- Copyright (c) 2010-2017 ARM Limited or its affiliates. All rights reserved. -->
-<!-- This document is Confidential. This document may only be used and distributed in accordance with the terms of the agreement entered into by ARM and the party that ARM delivered this document to. -->
 
 <instructionsection id="AESMC_advsimd" title="AESMC -- A64" type="instruction">
   <docvars>
@@ -109,6 +104,13 @@ bits(128) operand = <a link="impl-aarch64.V.read.1" file="shared_pseudocode.xml"
 bits(128) result;
 if decrypt then
     result = <a link="impl-shared.AESInvMixColumns.1" file="shared_pseudocode.xml" hover="function: bits(128) AESInvMixColumns(bits (128) op)">AESInvMixColumns</a>(operand);
+else
+    result = <a link="impl-shared.AESMixColumns.1" file="shared_pseudocode.xml" hover="function: bits(128) AESMixColumns(bits (128) op)">AESMixColumns</a>(operand);
+<a link="impl-aarch64.V.write.1" file="shared_pseudocode.xml" hover="accessor: V[integer n] = bits(width) value">V</a>[d] = result;</pstext>
+    </ps>
+  </ps_section>
+</instructionsection>
+.AESInvMixColumns.1" file="shared_pseudocode.xml" hover="function: bits(128) AESInvMixColumns(bits (128) op)">AESInvMixColumns</a>(operand);
 else
     result = <a link="impl-shared.AESMixColumns.1" file="shared_pseudocode.xml" hover="function: bits(128) AESMixColumns(bits (128) op)">AESMixColumns</a>(operand);
 <a link="impl-aarch64.V.write.1" file="shared_pseudocode.xml" hover="accessor: V[integer n] = bits(width) value">V</a>[d] = result;</pstext>

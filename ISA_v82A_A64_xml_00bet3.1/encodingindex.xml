@@ -1,8 +1,3 @@
-<?xml version="1.0" encoding="utf-8"?>
-<?xml-stylesheet type="text/xsl" encoding="UTF-8" href="encodingindex-splitmaintable.xsl" version="1.0"?>
-<!DOCTYPE encodingindex PUBLIC "-//ARM//DTD encodingindex //EN" "encodingindex.dtd">
-<!-- Copyright (c) 2010-2017 ARM Limited or its affiliates. All rights reserved. -->
-<!-- This document is Confidential. This document may only be used and distributed in accordance with the terms of the agreement entered into by ARM and the party that ARM delivered this document to. -->
 
 <encodingindex instructionset="A64">
   <hierarchy>
@@ -26024,6 +26019,19 @@
           <td bitwidth="5" class="bitfield">00000</td>
           <td class="iformname" iformid="FMOV_float_imm">FMOV (scalar, immediate)</td>
           <td class="enctags">Half-precision</td>
+        </tr>
+        <tr class="instructiontable" encname="UNALLOCATED_16_floatimm" undef="1" oneofthismnem="8" first="t" last="t">
+          <td bitwidth="1" class="bitfield">1</td>
+          <td bitwidth="1" class="bitfield"></td>
+          <td bitwidth="2" class="bitfield"></td>
+          <td bitwidth="5" class="bitfield"></td>
+          <td class="iformname">UNALLOCATED</td>
+        </tr>
+      </tbody>
+    </instructiontable>
+  </iclass_sect>
+</encodingindex>
+         <td class="enctags">Half-precision</td>
         </tr>
         <tr class="instructiontable" encname="UNALLOCATED_16_floatimm" undef="1" oneofthismnem="8" first="t" last="t">
           <td bitwidth="1" class="bitfield">1</td>

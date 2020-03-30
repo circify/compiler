@@ -1,8 +1,3 @@
-<?xml version="1.0" encoding="utf-8"?>
-<?xml-stylesheet type="text/xsl" encoding="UTF-8" href="accounts.xsl" version="1.0"?>
-<!DOCTYPE accounts PUBLIC "-//ARM//DTD accounts //EN" "accounts.dtd">
-<!-- Copyright (c) 2010-2017 ARM Limited or its affiliates. All rights reserved. -->
-<!-- This document is Confidential. This document may only be used and distributed in accordance with the terms of the agreement entered into by ARM and the party that ARM delivered this document to. -->
 
 <accounts>
   <account iclass="addsub_ext" symbol="&lt;R&gt;" iclass_long="Add/subtract (extended register)">
@@ -7583,6 +7578,20 @@
           <tbody>
             <row>
               <entry class="bitfield">0</entry>
+              <entry class="symbol">W</entry>
+            </row>
+            <row>
+              <entry class="bitfield">1</entry>
+              <entry class="symbol">X</entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </table>
+      <after>In assembler source code an 'X' specifier is always permitted, but a 'W' specifier is only permitted when the bit number is less than 32.</after>
+    </definition>
+  </account>
+</accounts>
+<entry class="bitfield">0</entry>
               <entry class="symbol">W</entry>
             </row>
             <row>

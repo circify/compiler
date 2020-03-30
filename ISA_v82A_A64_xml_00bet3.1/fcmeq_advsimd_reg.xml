@@ -1,8 +1,3 @@
-<?xml version="1.0" encoding="utf-8"?>
-<?xml-stylesheet type="text/xsl" encoding="UTF-8" href="iform.xsl" version="1.0"?>
-<!DOCTYPE instructionsection PUBLIC "-//ARM//DTD instructionsection //EN" "iform-p.dtd">
-<!-- Copyright (c) 2010-2017 ARM Limited or its affiliates. All rights reserved. -->
-<!-- This document is Confidential. This document may only be used and distributed in accordance with the terms of the agreement entered into by ARM and the party that ARM delivered this document to. -->
 
 <instructionsection id="FCMEQ_advsimd_reg" title="FCMEQ (register) -- A64" type="instruction">
   <docvars>
@@ -595,6 +590,12 @@ for e = 0 to elements-1
         when <a link="CompareOp_GE" file="shared_pseudocode.xml" hover="enumeration CompareOp   {CompareOp_GT, CompareOp_GE, CompareOp_EQ,&#13; CompareOp_LE, CompareOp_LT}">CompareOp_GE</a> test_passed = <a link="impl-shared.FPCompareGE.3" file="shared_pseudocode.xml" hover="function: boolean FPCompareGE(bits(N) op1, bits(N) op2, FPCRType fpcr)">FPCompareGE</a>(element1, element2, FPCR);
         when <a link="CompareOp_GT" file="shared_pseudocode.xml" hover="enumeration CompareOp   {CompareOp_GT, CompareOp_GE, CompareOp_EQ,&#13; CompareOp_LE, CompareOp_LT}">CompareOp_GT</a> test_passed = <a link="impl-shared.FPCompareGT.3" file="shared_pseudocode.xml" hover="function: boolean FPCompareGT(bits(N) op1, bits(N) op2, FPCRType fpcr)">FPCompareGT</a>(element1, element2, FPCR);
     <a link="impl-shared.Elem.write.3" file="shared_pseudocode.xml" hover="accessor: Elem[bits(N) &amp;vector, integer e, integer size] = bits(size) value">Elem</a>[result, e, esize] = if test_passed then <a link="impl-shared.Ones.0" file="shared_pseudocode.xml" hover="function: bits(N) Ones()">Ones</a>() else <a link="impl-shared.Zeros.0" file="shared_pseudocode.xml" hover="function: bits(N) Zeros()">Zeros</a>();
+
+<a link="impl-aarch64.V.write.1" file="shared_pseudocode.xml" hover="accessor: V[integer n] = bits(width) value">V</a>[d] = result;</pstext>
+    </ps>
+  </ps_section>
+</instructionsection>
+r, integer e, integer size] = bits(size) value">Elem</a>[result, e, esize] = if test_passed then <a link="impl-shared.Ones.0" file="shared_pseudocode.xml" hover="function: bits(N) Ones()">Ones</a>() else <a link="impl-shared.Zeros.0" file="shared_pseudocode.xml" hover="function: bits(N) Zeros()">Zeros</a>();
 
 <a link="impl-aarch64.V.write.1" file="shared_pseudocode.xml" hover="accessor: V[integer n] = bits(width) value">V</a>[d] = result;</pstext>
     </ps>

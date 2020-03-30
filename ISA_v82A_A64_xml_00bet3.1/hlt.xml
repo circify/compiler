@@ -1,8 +1,3 @@
-<?xml version="1.0" encoding="utf-8"?>
-<?xml-stylesheet type="text/xsl" encoding="UTF-8" href="iform.xsl" version="1.0"?>
-<!DOCTYPE instructionsection PUBLIC "-//ARM//DTD instructionsection //EN" "iform-p.dtd">
-<!-- Copyright (c) 2010-2017 ARM Limited or its affiliates. All rights reserved. -->
-<!-- This document is Confidential. This document may only be used and distributed in accordance with the terms of the agreement entered into by ARM and the party that ARM delivered this document to. -->
 
 <instructionsection id="HLT" title="HLT -- A64" type="instruction">
   <docvars>
@@ -84,6 +79,11 @@
   </explanations>
   <ps_section howmany="1">
     <ps name="aarch64/instrs/system/exceptions/debug/halt" mylink="commonps" enclabels="" sections="1" secttype="Operation">
+      <pstext mayhavelinks="1" section="Execute" rep_section="execute"><a link="impl-shared.Halt.1" file="shared_pseudocode.xml" hover="function: Halt(bits(6) reason)">Halt</a>(<a link="DebugHalt_HaltInstruction" file="shared_pseudocode.xml" hover="constant bits(6) DebugHalt_HaltInstruction = '101111'">DebugHalt_HaltInstruction</a>);</pstext>
+    </ps>
+  </ps_section>
+</instructionsection>
+h64/instrs/system/exceptions/debug/halt" mylink="commonps" enclabels="" sections="1" secttype="Operation">
       <pstext mayhavelinks="1" section="Execute" rep_section="execute"><a link="impl-shared.Halt.1" file="shared_pseudocode.xml" hover="function: Halt(bits(6) reason)">Halt</a>(<a link="DebugHalt_HaltInstruction" file="shared_pseudocode.xml" hover="constant bits(6) DebugHalt_HaltInstruction = '101111'">DebugHalt_HaltInstruction</a>);</pstext>
     </ps>
   </ps_section>
