@@ -1,6 +1,7 @@
 module Parser.XML where
 import           Control.Monad.State.Strict (forM_)
 import qualified Data.ByteString            as B
+import           Static.ARM
 import           System.Directory           (canonicalizePath,
                                              getCurrentDirectory)
 import           System.FilePath            (isAbsolute, (</>))
@@ -11,14 +12,14 @@ parseXMLDir :: String -> IO () --[Node]
 parseXMLDir dir = do
   fs <- getSourceFiles dir [".xml"]
   forM_ fs parseXML
-  error ""
+  print "DONE"
 
 parseXML :: String -> IO ()
 parseXML filename = do
   contents <- B.readFile filename
   case parse contents of
-    Right conts -> print conts
-    Left err    -> print err
+    Right conts -> analyze conts
+    Left err    -> error $ filename ++ "\n" ++ show err
 
 -- | Get all source files if dir0 is a directory, otherwise get file dir0
 getSourceFiles :: FilePath -> [String] -> IO [FilePath]
