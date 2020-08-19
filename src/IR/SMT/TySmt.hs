@@ -91,25 +91,26 @@ module IR.SMT.TySmt
   )
 where
 
-import           Control.Monad       (foldM, forM, liftM2)
-import           Data.Binary.IEEE754 (wordToDouble)
-import qualified Data.Binary.IEEE754 as IEEE754
-import           Data.Bits           as Bits
-import qualified Data.BitVector      as Bv
-import           Data.Char           (digitToInt)
-import           Data.Dynamic        (Dynamic, Typeable, fromDyn, toDyn)
-import           Data.Fixed          (mod')
-import           Data.List           (foldl')
-import           Data.List.Split     (splitOn)
-import           Data.Map            (Map)
-import qualified Data.Map            as Map
-import qualified Data.Maybe          as Maybe
-import           Data.Proxy          (Proxy (..))
-import           Data.Typeable       (cast)
+import           Control.Monad              (foldM, forM, liftM2)
+import           Control.Monad.State.Strict (liftIO)
+import           Data.Binary.IEEE754        (wordToDouble)
+import qualified Data.Binary.IEEE754        as IEEE754
+import           Data.Bits                  as Bits
+import qualified Data.BitVector             as Bv
+import           Data.Char                  (digitToInt)
+import           Data.Dynamic               (Dynamic, Typeable, fromDyn, toDyn)
+import           Data.Fixed                 (mod')
+import           Data.List                  (foldl')
+import           Data.List.Split            (splitOn)
+import           Data.Map                   (Map)
+import qualified Data.Map                   as Map
+import qualified Data.Maybe                 as Maybe
+import           Data.Proxy                 (Proxy (..))
+import           Data.Typeable              (cast)
 import           GHC.TypeLits
-import           Prelude             hiding (exp)
-import           Z3.Monad            (MonadZ3)
-import qualified Z3.Monad            as Z
+import           Prelude                    hiding (exp)
+import           Z3.Monad                   (MonadZ3)
+import qualified Z3.Monad                   as Z
 
 data IntSort = IntSort deriving (Show,Ord,Eq,Typeable)
 data BoolSort = BoolSort deriving (Show,Ord,Eq,Typeable)
@@ -1226,6 +1227,7 @@ evalZ3 term =
     case snd m of
       Just model -> do
         s <- Z.modelToString model
+        liftIO $ print s
         return $ Just s
       Nothing -> return Nothing
 
@@ -1270,29 +1272,31 @@ evalZ3Model term = do
     Nothing -> return Map.empty
     Just str -> do
       let modelLines = splitOn "\n" str
-      vs <- forM (init modelLines) $ \line -> return $ case splitOn " -> " line of
-        [var, "true"]  -> (var, BVal True)
-        [var, "false"] -> (var, BVal False)
-        [var, strVal]  -> let maybeVal = drop 1 strVal
-                          in case maybeVal of
-                            -- Special values
-                            '_':' ':'-':'z':'e':'r':'o':_ -> (var, NegZ)
-                            '_':' ':'+':'z':'e':'r':'o':_ -> (var, DVal 0)
-                            '_':' ':'N':'a':'N':_         -> (var, NaN)
-                             -- Binary
-                            'b':n -> (var, IVal $ readBin n)
-                             -- Hex
-                            'x':_ -> (var, IVal (read ('0':maybeVal) :: Int))
-                            -- Non-special floating point
-                            'f':'p':' ':rest              ->
-                              let components = splitOn " " rest
-                                  sign = read (drop 2 $ components !! 0) :: Integer
-                                  exp = toDec $ drop 2 $ components !! 1
-                                  sig = read ('0':(drop 1 $ init $ components !! 2)) :: Integer
-                                  result = (sig .&. 0xfffffffffffff) .|. ((exp .&. 0x7ff) `shiftL` 52) .|. ((sign .&. 0x1) `shiftL` 63)
-                              in (var, DVal $ wordToDouble $ fromIntegral $ result)
-                            -- Did not recognize the pattern
-                            _     -> error $ unwords ["Bad line", show line]
+      vs <- forM (init modelLines) $ \line -> case splitOn " -> " line of
+        [var, "true"]  -> return (var, BVal True)
+        [var, "false"] -> return (var, BVal False)
+        [var, strVal]  -> do
+          let maybeVal = drop 1 strVal
+          case maybeVal of
+            -- Special values
+            '_':' ':'-':'z':'e':'r':'o':_ -> return (var, NegZ)
+            '_':' ':'+':'z':'e':'r':'o':_ -> return (var, DVal 0)
+            '_':' ':'N':'a':'N':_         -> return (var, NaN)
+            -- Binary
+            'b':n -> return (var, IVal $ readBin n)
+            -- Hex
+            'x':_ -> return (var, IVal (read ('0':maybeVal) :: Int))
+             -- Non-special floating point
+            'f':'p':' ':rest              -> do
+              let components = splitOn " " $ init rest
+                  sign = read (drop 2 $ components !! 0) :: Integer
+                  exp = toDec $ drop 2 $ components !! 1
+                  sig = read (drop 2 $ components !! 2) :: Integer
+                  result = (sig .&. 0xfffffffffffff) .|. ((exp .&. 0x7ff) `shiftL` 52) .|. ((sign .&. 0x1) `shiftL` 63)
+              print result
+              return (var, DVal $ wordToDouble $ fromIntegral $ result)
+            -- Did not recognize the pattern
+            _     -> error $ unwords ["Bad line", show line]
         _              -> error $ unwords ["Bad model", show model]
       return $ Map.fromList vs
  where
