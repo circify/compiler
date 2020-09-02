@@ -23,13 +23,13 @@ data ExampleState = StartState | EndState
 -- | Uses language-c's built-in (nice) annotation support
 -- See here for more info:
 -- https://hackage.haskell.org/package/language-c-0.8.3/docs/Language-C-Syntax-AST.html#g:9
-initTo :: CTranslUnit -> a -> CTranslationUnit (Decorated a)
-initTo t startState = decorate startState <$> t
+initTo :: a -> CTranslUnit -> CTranslationUnit (Decorated a)
+initTo startState t = decorate startState <$> t
 
 -- | Initialize everything to a start state and then print the AST
 analyzeAST :: String -> IO ()
 analyzeAST name = do
   tu <- parseC name
-  print $ initTo tu StartState
+  print $ initTo StartState tu
 
 
