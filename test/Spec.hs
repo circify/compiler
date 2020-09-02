@@ -1,3 +1,4 @@
+import           Analyze.Analyze
 import           BenchUtils
 import           Codegen.C.CUtilsTest
 import           Codegen.C.MemoryTest
@@ -23,10 +24,10 @@ generatorTests :: BenchTest
 generatorTests = benchTestGroup "Generator tests" [ memoryTest
                                                   , circomGenTests
                                                   , cTests
-                                                  , cutilsTest
-                                                  , cValueTests
-                                                  , cRealTests
-                                                  , cPequinTests
+                                                  -- , cutilsTest
+                                                  -- , cValueTests
+                                                  -- , cRealTests
+                                                  -- , cPequinTests
                                                   ]
 
 irTests :: BenchTest
@@ -38,9 +39,10 @@ irTests = benchTestGroup "IR tests" [ tySmtTests
 
 
 allTests :: [BenchTest]
-allTests = [ parserTests
-           , irTests
-           , generatorTests
+allTests = [--  parserTests
+           -- , irTests
+           -- , generatorTests
+            analyzeTests
            ]
 
 main :: IO ()

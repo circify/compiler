@@ -31,5 +31,3 @@ analyzeAST :: String -> IO ()
 analyzeAST name = do
   tu <- parseC name
   print $ initTo StartState tu
-
-
