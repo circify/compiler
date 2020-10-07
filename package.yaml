@@ -48,7 +48,9 @@ library:
   - union-find >= 0.2 && < 0.3
   - aeson >= 1.4.6 && < 1.5
   - text >= 1.2.3 && < 1.3
+  - string-interpolate >= 0.3.0
   - deepseq >= 1.4.4 && < 1.5
+  - natural-numbers >= 0.1.2
   - unordered-containers >= 0.2.10 && < 0.3
   - hashable >= 1.2.7 && < 1.3
 
