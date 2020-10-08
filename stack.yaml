@@ -53,9 +53,10 @@ extra-deps:
   - ghc-typelits-natnormalise-0.7.2@sha256:0fc48a3744aa25e5e53a054a8bb1fe6410752e497f446d75db9bd67bb258d05e,3495
   - integer-roots-1.0@sha256:5ea7ecb80633fb05a8a36acd40e9da6fe22a6cef320b1310cb9f0330801ac124,2271
   - mod-0.1.2.0@sha256:4c331986c46808d89da590d791841f046509041c849c4254b0872c72284f73ad,2202
+  - natural-numbers-0.1.2.0@sha256:0fcbe1220979b83fa612fca73a1adb1a99ff43c84f9652b3ff32b2323309b43c,1407
   - poly-0.4.0.0@sha256:75c243113712745dab5d2f4a52643705e146473770af212f9e0ce3d87a83f2ed,2123
   - semirings-0.5.4@sha256:5bd49c52a22c876c93d030cafa96b1233e9e7c42dacbe9f49686574368578c9c,2998
-
+  - string-interpolate-0.3.0.2@sha256:0102ed1eac13b7f85c6d2d3da764ad178d98a23d74912f5d2898eb54af624651,4022
 # Override default flag values for local packages and extra-deps
 # flags: {}
 
