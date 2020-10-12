@@ -44,15 +44,16 @@ library:
   - ghc-typelits-knownnat >= 0.7
   - bitvec >= 1.0.2
   - data-binary-ieee754 >= 0.4
-  - lens-simple >= 0.1.0.9 && < 0.2
+  - lens-simple >= 0.1.0.9
   - union-find >= 0.2 && < 0.3
   - aeson >= 1.4.6 && < 1.5
   - text >= 1.2.3 && < 1.3
   - deepseq >= 1.4.4 && < 1.5
   - unordered-containers >= 0.2.10 && < 0.3
-  - hashable >= 1.2.7 && < 1.3
-  - time >= 1.8 && < 1.9
-  - pretty-simple >= 2.2 && < 2.3
+  - hashable >= 1.2.7
+  - time >= 1.8
+  - pretty-simple >= 2.2
+  - hashcons >= 0.1.0
 
 executables:
   compiler-exe:

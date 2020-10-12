@@ -30,7 +30,7 @@ tySmtTests = benchTestGroup
     (Smt.PfNaryExpr
       Smt.PfMul
       [ Smt.mkVar "a" (Smt.SortPf 5)
-      , Smt.IntToPf @5 (Smt.IntLit 3)
+      , Smt.HC (Smt.IntToPf' @5 (Smt.IntLit 3))
       , Smt.mkVar "b" (Smt.SortPf 5)
       ]
     )

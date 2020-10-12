@@ -60,7 +60,7 @@ tySmtToZ3Tests = benchTestGroup
     False
     "bv unsat"
     (Smt.mkEq
-      (Smt.BvBinExpr @4 Smt.BvAdd
+      (Smt.BvBinExpr @(Smt.TermBv 4) @4 Smt.BvAdd
                         (Smt.mkVar "a" (Smt.SortBv 4))
                         (Smt.IntToBv (Smt.IntLit 1))
       )

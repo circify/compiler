@@ -16,6 +16,17 @@ packages:
   original:
     url: https://github.com/alex-ozdemir/haskell-z3/archive/6366ff55d377dcb27451be522692475c2030f41c.tar.gz
 - completed:
+    size: 15418
+    url: https://github.com/arthuraa/hashcons/archive/de974ad6c74cf38937cb28ad7440172cb55bff4e.tar.gz
+    name: hashcons
+    version: 0.1.0
+    sha256: b4dd39d1567930477314646457100d10e5a286c4fecdf56eadd36ce6a89355b7
+    pantry-tree:
+      size: 1518
+      sha256: 4059f399da4d2cc29c78a7d6c742120ab17253101b7baf6025b15efe14fef0a0
+  original:
+    url: https://github.com/arthuraa/hashcons/archive/de974ad6c74cf38937cb28ad7440172cb55bff4e.tar.gz
+- completed:
     hackage: arithmoi-0.11.0.1@sha256:5cb0d81848d25b20e58c1426bf1ff9dc4137efc182c9c4c567102e5fa16f1079,7639
     pantry-tree:
       size: 10135

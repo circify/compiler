@@ -3,12 +3,14 @@
 {-# LANGUAGE DataKinds              #-}
 {-# LANGUAGE DeriveGeneric          #-}
 {-# LANGUAGE DeriveAnyClass         #-}
+{-# LANGUAGE DerivingStrategies     #-}
 {-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs                  #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE PartialTypeSignatures  #-}
+{-# LANGUAGE PatternSynonyms        #-}
 {-# LANGUAGE Rank2Types             #-}
 {-# LANGUAGE ScopedTypeVariables    #-}
 {-# LANGUAGE StandaloneDeriving     #-}
@@ -16,7 +18,9 @@
 {-# LANGUAGE TypeFamilies           #-}
 {-# LANGUAGE TypeOperators          #-}
 {-# LANGUAGE TypeSynonymInstances   #-}
+{-# LANGUAGE ViewPatterns   #-}
 {-# OPTIONS_GHC -fplugin GHC.TypeLits.KnownNat.Solver #-}
+--{-# OPTIONS_GHC -Wno-missing-pattern-synonym-signatures #-}
 
 module IR.SMT.TySmt
   ( IntSort(..)
@@ -45,7 +49,64 @@ module IR.SMT.TySmt
   , FpUnOp(..)
   , FpBinPred(..)
   , FpUnPred(..)
-  , Term(..)
+  , Term
+  , HC(..)
+  , pattern BoolLit
+  , pattern BoolBinExpr
+  , pattern BoolNaryExpr
+  , pattern Not
+  , pattern Ite
+  , pattern Var
+  , pattern Let
+  , pattern Exists
+  , pattern Eq
+  , pattern BvConcat
+  , pattern BvExtract
+  , pattern BvBinExpr
+  , pattern BvUnExpr
+  , pattern BvBinPred
+  , pattern IntToBv
+  , pattern FpToBv
+  , pattern DynamizeBv
+  , pattern DynBvConcat
+  , pattern DynBvExtract
+  , pattern DynBvBinExpr
+  , pattern DynBvUnExpr
+  , pattern DynBvBinPred
+  , pattern DynBvLit
+  , pattern DynBvUext
+  , pattern DynBvSext
+  , pattern IntToDynBv
+  , pattern StatifyBv
+  , pattern RoundFpToDynBv
+  , pattern IntLit
+  , pattern IntUnExpr
+  , pattern IntBinExpr
+  , pattern IntNaryExpr
+  , pattern IntBinPred
+  , pattern PfToInt
+  , pattern BvToInt
+  , pattern SignedBvToInt
+  , pattern BoolToInt
+  , pattern Fp64Lit
+  , pattern Fp32Lit
+  , pattern FpUnExpr
+  , pattern FpBinExpr
+  , pattern FpFma
+  , pattern FpBinPred
+  , pattern FpUnPred
+  , pattern IntToFp
+  , pattern BvToFp
+  , pattern FpToFp
+  , pattern DynUbvToFp
+  , pattern DynSbvToFp
+  , pattern PfUnExpr
+  , pattern PfNaryExpr
+  , pattern IntToPf
+  , pattern Select
+  , pattern Store
+  , pattern ConstArray
+  , Term'(..)
   , Value(..)
   , mapTerm
   , mapTermM
@@ -109,6 +170,7 @@ import           Data.Dynamic                   ( Dynamic
                                                 )
 import           Data.Fixed                     ( mod' )
 import           Data.Hashable  ( Hashable(hashWithSalt))
+import Data.HashCons (HashCons, HC(..))
 import           Data.Map                       ( Map )
 import qualified Data.Map                      as Map
 import qualified Data.Maybe                    as Maybe
@@ -380,84 +442,96 @@ type TermDouble = Term F64
 type TermFloat = Term F32
 type TermArray k v = Term (ArraySort k v)
 
-data Term s where
+type TermBv' n = Term' (BvSort n)
+type TermFp' f = Term' (FpSort f)
+type TermDynBv' = Term' DynBvSort
+type TermBool' = Term' BoolSort
+type TermInt' = Term' IntSort
+type TermPf' n = Term' (PfSort n)
+type TermDouble' = Term' F64
+type TermFloat' = Term' F32
+type TermArray' k v = Term' (ArraySort k v)
+
+data Term' s where
     -- Boolean terms
-    BoolLit      :: !Bool -> TermBool
-    BoolBinExpr  :: !BoolBinOp -> !TermBool -> !TermBool -> TermBool
-    BoolNaryExpr :: !BoolNaryOp -> ![TermBool] -> TermBool
-    Not          :: !TermBool -> TermBool
+    BoolLit'      :: !Bool -> TermBool'
+    BoolBinExpr'  :: !BoolBinOp -> !TermBool -> !TermBool -> TermBool'
+    BoolNaryExpr' :: !BoolNaryOp -> ![TermBool] -> TermBool'
+    Not'          :: !TermBool -> TermBool'
 
     -- Core terms
-    Ite    :: !TermBool -> !(Term s) -> !(Term s) -> Term s
-    Var    :: !String -> !Sort -> Term s
-    Let    ::SortClass s => !String -> !(Term s) -> !(Term t) -> Term t
-    Exists :: !String -> !Sort -> !(Term t) -> Term t
-    Eq     ::SortClass s => !(Term s) -> !(Term s) -> TermBool
+    Ite'    :: !TermBool -> !(Term s) -> !(Term s) -> Term' s
+    Var'    :: !String -> !Sort -> Term' s
+    Let'    ::SortClass s => !String -> !(Term s) -> !(Term t) -> Term' t
+    Exists' :: !String -> !Sort -> !(Term t) -> Term' t
+    Eq'     ::SortClass s => !(Term s) -> !(Term s) -> TermBool'
 
     -- Bit-vector terms
-    BvConcat  ::(KnownNat n, KnownNat m) => !(TermBv n) -> !(TermBv m) -> TermBv (n + m)
-    BvExtract ::(KnownNat n, KnownNat i, i <= n) => !Int -> !(TermBv n) -> TermBv i
-    BvBinExpr ::KnownNat n => !BvBinOp -> !(TermBv n) -> !(TermBv n) -> TermBv n
-    BvUnExpr  ::KnownNat n => !BvUnOp -> !(TermBv n) -> TermBv n
-    BvBinPred ::KnownNat n => !BvBinPred -> !(TermBv n) -> TermBv n -> TermBool
-    IntToBv   ::KnownNat n => !TermInt -> TermBv n
-    FpToBv    ::(ComputableFp f) => !(Term (FpSort f)) -> Term (BvSort (Size f))
+    BvConcat'  ::(KnownNat n, KnownNat m) => !(TermBv n) -> !(TermBv m) -> TermBv' (n + m)
+    BvExtract' ::(KnownNat n, KnownNat i, i <= n) => !Int -> !(TermBv n) -> TermBv' i
+    BvBinExpr' ::KnownNat n => !BvBinOp -> !(TermBv n) -> !(TermBv n) -> TermBv' n
+    BvUnExpr'  ::KnownNat n => !BvUnOp -> !(TermBv n) -> TermBv' n
+    BvBinPred' ::KnownNat n => !BvBinPred -> !(TermBv n) -> TermBv n -> TermBool'
+    IntToBv'   ::KnownNat n => !TermInt -> TermBv' n
+    FpToBv'    ::(ComputableFp f) => !(Term (FpSort f)) -> Term' (BvSort (Size f))
 
-    DynamizeBv ::KnownNat n => !Int -> !(TermBv n) -> TermDynBv
-    DynBvExtract :: !Int -> !Int -> !TermDynBv -> TermDynBv
-    DynBvConcat  :: !Int -> !TermDynBv -> !TermDynBv -> TermDynBv
-    DynBvBinExpr :: !BvBinOp -> !Int -> !TermDynBv -> !TermDynBv -> TermDynBv
-    DynBvBinPred :: !BvBinPred -> !Int -> !TermDynBv -> !TermDynBv -> TermBool
-    DynBvUnExpr  :: !BvUnOp -> !Int -> !TermDynBv -> TermDynBv
-    DynBvLit     :: !Bv.BV -> TermDynBv
+    DynamizeBv' ::KnownNat n => !Int -> !(TermBv n) -> TermDynBv'
+    DynBvExtract' :: !Int -> !Int -> !TermDynBv -> TermDynBv'
+    DynBvConcat'  :: !Int -> !TermDynBv -> !TermDynBv -> TermDynBv'
+    DynBvBinExpr' :: !BvBinOp -> !Int -> !TermDynBv -> !TermDynBv -> TermDynBv'
+    DynBvBinPred' :: !BvBinPred -> !Int -> !TermDynBv -> !TermDynBv -> TermBool'
+    DynBvUnExpr'  :: !BvUnOp -> !Int -> !TermDynBv -> TermDynBv'
+    DynBvLit'     :: !Bv.BV -> TermDynBv'
     -- width, extension amount, inner
-    DynBvUext    :: !Int -> !Int -> !TermDynBv -> TermDynBv
+    DynBvUext'    :: !Int -> !Int -> !TermDynBv -> TermDynBv'
     -- width, extension amount, inner
-    DynBvSext    :: !Int -> !Int -> !TermDynBv -> TermDynBv
-    IntToDynBv   :: !Int -> !TermInt -> TermDynBv
-    StatifyBv ::KnownNat n => !TermDynBv -> TermBv n
+    DynBvSext'    :: !Int -> !Int -> !TermDynBv -> TermDynBv'
+    IntToDynBv'   :: !Int -> !TermInt -> TermDynBv'
+    StatifyBv' ::KnownNat n => !TermDynBv -> TermBv' n
     -- width, signedness, floating point number
-    RoundFpToDynBv ::(ComputableFp f) => !Int -> !Bool -> !(Term (FpSort f)) -> TermDynBv
+    RoundFpToDynBv' ::(ComputableFp f) => !Int -> !Bool -> !(Term (FpSort f)) -> TermDynBv'
 
     -- Integer terms
-    IntLit        :: !Integer -> TermInt
-    IntUnExpr     :: !IntUnOp -> !TermInt -> TermInt
-    IntBinExpr    :: !IntBinOp -> !TermInt -> !TermInt -> TermInt
-    IntNaryExpr   :: !IntNaryOp -> ![TermInt] -> TermInt
-    IntBinPred    :: !IntBinPred -> !TermInt -> !TermInt -> TermBool
-    PfToInt       ::(KnownNat n) => !(TermPf n) -> TermInt
-    BvToInt       ::(KnownNat n) => !(TermBv n) -> TermInt
-    SignedBvToInt ::(KnownNat n) => !(TermBv n) -> TermInt
-    BoolToInt     :: !TermBool -> TermInt
+    IntLit'        :: !Integer -> TermInt'
+    IntUnExpr'     :: !IntUnOp -> !TermInt -> TermInt'
+    IntBinExpr'    :: !IntBinOp -> !TermInt -> !TermInt -> TermInt'
+    IntNaryExpr'   :: !IntNaryOp -> ![TermInt] -> TermInt'
+    IntBinPred'    :: !IntBinPred -> !TermInt -> !TermInt -> TermBool'
+    PfToInt'       ::(KnownNat n) => !(TermPf n) -> TermInt'
+    BvToInt'       ::(KnownNat n) => !(TermBv n) -> TermInt'
+    SignedBvToInt' ::(KnownNat n) => !(TermBv n) -> TermInt'
+    BoolToInt'     :: !TermBool -> TermInt'
 
     -- Floating point terms
-    Fp64Lit   :: !Double -> Term F64
-    Fp32Lit   :: !Float -> Term F32
-    FpUnExpr  ::(ComputableFp f) => !FpUnOp -> TermFp f -> TermFp f
-    FpBinExpr ::(ComputableFp f) => !FpBinOp -> TermFp f -> TermFp f -> TermFp f
-    FpFma     ::(ComputableFp f) => !(TermFp f) -> TermFp f -> TermFp f -> TermFp f
-    FpBinPred ::(ComputableFp f) => !FpBinPred -> !(TermFp f) -> TermFp f -> TermBool
-    FpUnPred  ::(ComputableFp f) => !FpUnPred -> !(TermFp f) -> TermBool
-    IntToFp   ::(ComputableFp f) => !TermInt -> TermFp f
-    BvToFp    ::(ComputableFp f) => !(TermBv (Size f)) -> TermFp f
-    FpToFp    ::(ComputableFp f1, ComputableFp f2) => !(TermFp f1) -> TermFp f2
-    DynUbvToFp    ::(ComputableFp f) => !(Term DynBvSort) -> TermFp f
-    DynSbvToFp    ::(ComputableFp f) => !(Term DynBvSort) -> TermFp f
+    Fp64Lit'   :: !Double -> TermDouble'
+    Fp32Lit'   :: !Float -> TermFloat'
+    FpUnExpr'  ::(ComputableFp f) => !FpUnOp -> TermFp f -> TermFp' f
+    FpBinExpr' ::(ComputableFp f) => !FpBinOp -> TermFp f -> TermFp f -> TermFp' f
+    FpFma'     ::(ComputableFp f) => !(TermFp f) -> TermFp f -> TermFp f -> TermFp' f
+    FpBinPred' ::(ComputableFp f) => !FpBinPred -> !(TermFp f) -> TermFp f -> TermBool'
+    FpUnPred'  ::(ComputableFp f) => !FpUnPred -> !(TermFp f) -> TermBool'
+    IntToFp'   ::(ComputableFp f) => !TermInt -> TermFp' f
+    BvToFp'    ::(ComputableFp f) => !(TermBv (Size f)) -> TermFp' f
+    FpToFp'    ::(ComputableFp f1, ComputableFp f2) => !(TermFp f1) -> TermFp' f2
+    DynUbvToFp'    ::(ComputableFp f) => !(Term DynBvSort) -> TermFp' f
+    DynSbvToFp'    ::(ComputableFp f) => !(Term DynBvSort) -> TermFp' f
 
     -- Prime field terms
-    PfUnExpr   ::KnownNat n => !PfUnOp -> !(TermPf n) -> TermPf n
-    PfNaryExpr ::KnownNat n => !PfNaryOp -> !([TermPf n]) -> TermPf n
-    IntToPf    ::KnownNat n => !TermInt -> TermPf n
+    PfUnExpr'   ::KnownNat n => !PfUnOp -> !(TermPf n) -> TermPf' n
+    PfNaryExpr' ::KnownNat n => !PfNaryOp -> ![TermPf n] -> TermPf' n
+    IntToPf'    ::KnownNat n => !TermInt -> TermPf' n
 
     -- Array terms
-    Select   ::(SortClass k, SortClass v) => !(TermArray k v) -> !(Term k) -> Term v
-    Store    ::(SortClass k, SortClass v) => !(TermArray k v) -> !(Term k) -> !(Term v) -> Term (ArraySort k v)
+    Select'   ::(SortClass k, SortClass v) => !(TermArray k v) -> !(Term k) -> Term' v
+    Store'    ::(SortClass k, SortClass v) => !(TermArray k v) -> !(Term k) -> !(Term v) -> TermArray' k v
     -- domain, value
-    ConstArray ::(SortClass k, SortClass v) => !Sort -> !(Term v) -> TermArray k v
+    ConstArray' ::(SortClass k, SortClass v) => !Sort -> !(Term v) -> TermArray' k v
+    deriving anyclass (HashCons)
 
 
-deriving instance Show (Term s)
-deriving instance Typeable (Term s)
+deriving instance Show (Term' s)
+deriving instance Typeable (Term' s)
+type Term s = HC (Term' s)
 
 widthErr :: Term s -> Maybe String -> Int -> Int -> a
 widthErr term width expected actual = throw $ SortError $ unwords
@@ -480,7 +554,7 @@ mkStatifyBv t =
       w     = fromIntegral $ natVal $ Proxy @n
   in  if width == w
         then StatifyBv t
-        else widthErr (StatifyBv @n t) Nothing width w
+        else widthErr (HC $ StatifyBv' @n t) Nothing width w
 
 mkDynBvExtract :: Int -> Int -> TermDynBv -> TermDynBv
 mkDynBvExtract start width t =
@@ -943,7 +1017,7 @@ reduceTerm mapF i foldF t = case mapF t of
     ConstArray _s v -> reduceTerm mapF i foldF v
   Just s -> s
 
-asVarName :: Term s -> Maybe String
+asVarName :: SortClass s => Term s -> Maybe String
 asVarName (Var n _) = Just n
 asVarName _         = Nothing
 
@@ -1093,7 +1167,7 @@ modulus _ = natVal (Proxy :: Proxy n)
 size :: forall n . KnownNat n => TermBv n -> Int
 size _ = fromIntegral $ natVal $ Proxy @n
 
-eval :: forall s . Typeable s => Env -> Term s -> Value s
+eval :: forall s . SortClass s => Env -> Term s -> Value s
 eval e t = case t of
   BoolLit b -> ValBool b
   BoolBinExpr o l r ->
@@ -1254,69 +1328,180 @@ newArray _t v = case v of
 (#) :: Hashable a => Int -> a -> Int
 (#) = hashWithSalt
 
-instance SortClass sort => Hashable (Term sort) where
+instance SortClass sort => Hashable (Term' sort) where
   hashWithSalt s term =
     case term of
-      BoolLit b -> s # t 0 # b
-      BoolBinExpr o a b -> s # t 1 # o # a # b
-      BoolNaryExpr o bs -> s # t 2 # o # bs
-      Not b -> s # t 3 # b
-      Ite c a b -> s # t 4 # c # a # b
-      Var n sort -> s # t 5 # n # sort
-      Let n v b -> s # t 6 # n # v # b
-      Exists v sort b -> s # t 7 # v # sort # b
-      Eq a b -> s # t 8 # a # b
-      BvConcat a b -> s # t 9 # a # b
-      BvExtract a b -> s # t 10 # a # b
-      BvBinExpr o a b -> s # t 12 # o # a # b
-      BvUnExpr o b -> s # t 11 # o # b
-      BvBinPred o a b -> s # t 12 # o # a # b
-      IntToBv b -> s # t 13 # b
-      FpToBv b -> s # t 13 # b
-      DynamizeBv i b -> s # t 14 # i # b
-      DynBvConcat w a b -> s # t 15 # w # a # b
-      DynBvExtract w a b -> s # t 16 # w # a # b
-      DynBvBinExpr o w a b -> s # t 17 # o # w # a # b
-      DynBvUnExpr o w b -> s # t 18 # o # w # b
-      DynBvBinPred o w a b -> s # t 19 # o # w # a # b
-      DynBvLit b -> s # t 20 # (HashBv b)
-      DynBvUext w e b -> s # t 21 # w # e # b
-      DynBvSext w e b -> s # t 22 # w # e # b
-      IntToDynBv w b -> s # t 23 # w # b
-      StatifyBv b -> s # t 24 # b
-      RoundFpToDynBv w si fp -> s # t 25 # w # si # fp
-      IntLit i -> s # t 26 # i
-      IntUnExpr o i -> s # t 27 # o # i
-      IntBinExpr o a b -> s # t 28 # o # a # b
-      IntNaryExpr o is -> s # t 29 # o # is
-      IntBinPred o a b -> s # t 30 # o # a # b
-      PfToInt p -> s # t 31 # p
-      BvToInt b -> s # t 32 # b
-      SignedBvToInt b -> s # t 33 # b
-      BoolToInt b -> s # t 34 # b
-      Fp64Lit b -> s # t 35 # b
-      Fp32Lit b -> s # t 36 # b
-      FpUnExpr o b -> s # t 37 # o # b
-      FpBinExpr o a b -> s # t 38 # o # a # b
-      FpFma a b c -> s # t 39 # a # b # c
-      FpBinPred o a b -> s # t 40 # o # a # b
-      FpUnPred o b -> s # t 41 # o # b
-      IntToFp i -> s # t 42 # i
-      BvToFp b -> s # t 43 # b
-      FpToFp b -> s # t 44 # b
-      DynUbvToFp b -> s # t 45 # b
-      DynSbvToFp b -> s # t 46 # b
-      PfUnExpr o p -> s # t 47 # o # p
-      PfNaryExpr o ps -> s # t 48 # o # ps
-      IntToPf i -> s # t 49 # i
-      Select a i -> s # t 50 # a # i
-      Store a i v -> s # t 51 # a # i # v
-      ConstArray ks v -> s # t 52 # ks # v
+      BoolLit' b -> s # t 0 # b
+      BoolBinExpr' o a b -> s # t 1 # o # a # b
+      BoolNaryExpr' o bs -> s # t 2 # o # bs
+      Not' b -> s # t 3 # b
+      Ite' c a b -> s # t 4 # c # a # b
+      Var' n sort -> s # t 5 # n # sort
+      Let' n v b -> s # t 6 # n # v # b
+      Exists' v sort b -> s # t 7 # v # sort # b
+      Eq' a b -> s # t 8 # a # b
+      BvConcat' a b -> s # t 9 # a # b
+      BvExtract' a b -> s # t 10 # a # b
+      BvBinExpr' o a b -> s # t 12 # o # a # b
+      BvUnExpr' o b -> s # t 11 # o # b
+      BvBinPred' o a b -> s # t 12 # o # a # b
+      IntToBv' b -> s # t 13 # b
+      FpToBv' b -> s # t 13 # b
+      DynamizeBv' i b -> s # t 14 # i # b
+      DynBvConcat' w a b -> s # t 15 # w # a # b
+      DynBvExtract' w a b -> s # t 16 # w # a # b
+      DynBvBinExpr' o w a b -> s # t 17 # o # w # a # b
+      DynBvUnExpr' o w b -> s # t 18 # o # w # b
+      DynBvBinPred' o w a b -> s # t 19 # o # w # a # b
+      DynBvLit' b -> s # t 20 # (HashBv b)
+      DynBvUext' w e b -> s # t 21 # w # e # b
+      DynBvSext' w e b -> s # t 22 # w # e # b
+      IntToDynBv' w b -> s # t 23 # w # b
+      StatifyBv' b -> s # t 24 # b
+      RoundFpToDynBv' w si fp -> s # t 25 # w # si # fp
+      IntLit' i -> s # t 26 # i
+      IntUnExpr' o i -> s # t 27 # o # i
+      IntBinExpr' o a b -> s # t 28 # o # a # b
+      IntNaryExpr' o is -> s # t 29 # o # is
+      IntBinPred' o a b -> s # t 30 # o # a # b
+      PfToInt' p -> s # t 31 # p
+      BvToInt' b -> s # t 32 # b
+      SignedBvToInt' b -> s # t 33 # b
+      BoolToInt' b -> s # t 34 # b
+      Fp64Lit' b -> s # t 35 # b
+      Fp32Lit' b -> s # t 36 # b
+      FpUnExpr' o b -> s # t 37 # o # b
+      FpBinExpr' o a b -> s # t 38 # o # a # b
+      FpFma' a b c -> s # t 39 # a # b # c
+      FpBinPred' o a b -> s # t 40 # o # a # b
+      FpUnPred' o b -> s # t 41 # o # b
+      IntToFp' i -> s # t 42 # i
+      BvToFp' b -> s # t 43 # b
+      FpToFp' b -> s # t 44 # b
+      DynUbvToFp' b -> s # t 45 # b
+      DynSbvToFp' b -> s # t 46 # b
+      PfUnExpr' o p -> s # t 47 # o # p
+      PfNaryExpr' o ps -> s # t 48 # o # ps
+      IntToPf' i -> s # t 49 # i
+      Select' a i -> s # t 50 # a # i
+      Store' a i v -> s # t 51 # a # i # v
+      ConstArray' ks v -> s # t 52 # ks # v
    where
     -- Hash tags
     t :: Int -> Int
     t = id
 
+{-# COMPLETE BoolLit, BoolBinExpr, BoolNaryExpr, Not, Ite, Var, Let, Exists, Eq, BvConcat, BvExtract, BvBinExpr, BvUnExpr, BvBinPred, IntToBv, FpToBv, DynamizeBv, DynBvConcat, DynBvExtract, DynBvBinExpr, DynBvUnExpr, DynBvBinPred, DynBvLit, DynBvUext, DynBvSext, IntToDynBv, StatifyBv, RoundFpToDynBv, IntLit, IntUnExpr, IntBinExpr, IntNaryExpr, IntBinPred, PfToInt, BvToInt, SignedBvToInt, BoolToInt, Fp64Lit, Fp32Lit, FpUnExpr, FpBinExpr, FpFma, FpBinPred, FpUnPred, IntToFp, BvToFp, FpToFp, DynUbvToFp, DynSbvToFp, PfUnExpr, PfNaryExpr, IntToPf, Select, Store, ConstArray #-}
+--pattern BoolLit :: SortClass s => s ~ BoolSort => Bool -> TermBool
+pattern BoolLit b = HC (BoolLit' b)
+--pattern BoolBinExpr :: BoolBinOp -> TermBool -> TermBool -> TermBool
+pattern BoolBinExpr o a b = HC (BoolBinExpr' o a b)
+--pattern BoolNaryExpr :: BoolNaryOp -> [TermBool] -> TermBool
+pattern BoolNaryExpr o bs = HC (BoolNaryExpr' o bs)
+--pattern Not          :: TermBool -> TermBool
+pattern Not b = HC (Not' b)
+--pattern Ite    :: SortClass s => TermBool -> Term s -> Term s -> Term s
+pattern Ite c a b = HC (Ite' c a b)
+--pattern Var    :: SortClass s => String -> Sort -> Term s
+pattern Var n sort = HC (Var' n sort)
+--pattern Let    :: (SortClass t, SortClass s) => String -> (Term s) -> (Term t) -> Term t
+pattern Let n v b = HC (Let' n v b)
+--pattern Exists :: String -> Sort -> (Term t) -> Term t
+pattern Exists v sort b = HC (Exists' v sort b)
+--pattern Eq     ::SortClass s => (Term s) -> (Term s) -> TermBool
+pattern Eq a b = HC (Eq' a b)
+--pattern BvConcat  ::(KnownNat n, KnownNat m) => (TermBv n) -> (TermBv m) -> TermBv (n + m)
+pattern BvConcat a b = HC (BvConcat' a b)
+--pattern BvExtract ::(KnownNat n, KnownNat i, i <= n) => Int -> (TermBv n) -> TermBv i
+pattern BvExtract a b = HC (BvExtract' a b)
+pattern BvBinExpr ::forall s. SortClass s => forall n . (s ~ BvSort n, KnownNat n) => BvBinOp -> (TermBv n) -> (TermBv n) -> Term s
+pattern BvBinExpr o a b = HC (BvBinExpr' o a b)
+--pattern BvUnExpr  ::KnownNat n => BvUnOp -> (TermBv n) -> TermBv n
+pattern BvUnExpr o b = HC (BvUnExpr' o b)
+--pattern BvBinPred ::KnownNat n => BvBinPred -> TermBv n -> TermBv n -> TermBool
+pattern BvBinPred o a b = HC (BvBinPred' o a b)
+--pattern IntToBv   ::KnownNat n => TermInt -> TermBv n
+pattern IntToBv b = HC (IntToBv' b)
+--pattern FpToBv    ::(ComputableFp f) => (TermFp f) -> TermBv (Size f)
+pattern FpToBv b = HC (FpToBv' b)
+--pattern DynamizeBv ::KnownNat n => Int -> (TermBv n) -> TermDynBv
+pattern DynamizeBv i b = HC (DynamizeBv' i b)
+--pattern DynBvExtract :: Int -> Int -> TermDynBv -> TermDynBv
+pattern DynBvExtract w a b = HC (DynBvExtract' w a b)
+--pattern DynBvConcat  :: Int -> TermDynBv -> TermDynBv -> TermDynBv
+pattern DynBvConcat w a b = HC (DynBvConcat' w a b)
+--pattern DynBvBinExpr :: BvBinOp -> Int -> TermDynBv -> TermDynBv -> TermDynBv
+pattern DynBvBinExpr o w a b = HC (DynBvBinExpr' o w a b)
+--pattern DynBvBinPred :: BvBinPred -> Int -> TermDynBv -> TermDynBv -> TermBool
+pattern DynBvBinPred o w a b = HC (DynBvBinPred' o w a b)
+--pattern DynBvUnExpr  :: BvUnOp -> Int -> TermDynBv -> TermDynBv
+pattern DynBvUnExpr o w b = HC (DynBvUnExpr' o w b)
+--pattern DynBvLit     :: Bv.BV -> TermDynBv
+pattern DynBvLit b = HC (DynBvLit' b)
+--pattern DynBvUext    :: Int -> Int -> TermDynBv -> TermDynBv
+pattern DynBvUext w e b = HC (DynBvUext' w e b)
+--pattern DynBvSext    :: Int -> Int -> TermDynBv -> TermDynBv
+pattern DynBvSext w e b = HC (DynBvSext' w e b)
+--pattern IntToDynBv   :: Int -> TermInt -> TermDynBv
+pattern IntToDynBv w b = HC (IntToDynBv' w b)
+--pattern StatifyBv ::KnownNat n => TermDynBv -> TermBv n
+pattern StatifyBv b = HC (StatifyBv' b)
+--pattern RoundFpToDynBv ::(ComputableFp f) => Int -> Bool -> (TermFp f) -> TermDynBv
+pattern RoundFpToDynBv w si fp = HC (RoundFpToDynBv' w si fp)
+--pattern IntLit        :: Integer -> TermInt
+pattern IntLit i = HC (IntLit' i)
+--pattern IntUnExpr     :: IntUnOp -> TermInt -> TermInt
+pattern IntUnExpr o i = HC (IntUnExpr' o i)
+--pattern IntBinExpr    :: IntBinOp -> TermInt -> TermInt -> TermInt
+pattern IntBinExpr o a b = HC (IntBinExpr' o a b)
+--pattern IntNaryExpr   :: IntNaryOp -> [TermInt] -> TermInt
+pattern IntNaryExpr o is = HC (IntNaryExpr' o is)
+--pattern IntBinPred    :: IntBinPred -> TermInt -> TermInt -> TermBool
+pattern IntBinPred o a b = HC (IntBinPred' o a b)
+--pattern PfToInt       ::(KnownNat n) => (TermPf n) -> TermInt
+pattern PfToInt p = HC (PfToInt' p)
+--pattern BvToInt       ::(KnownNat n) => (TermBv n) -> TermInt
+pattern BvToInt b = HC (BvToInt' b)
+--pattern SignedBvToInt ::(KnownNat n) => (TermBv n) -> TermInt
+pattern SignedBvToInt b = HC (SignedBvToInt' b)
+--pattern BoolToInt     :: TermBool -> TermInt
+pattern BoolToInt b = HC (BoolToInt' b)
+--pattern Fp64Lit   :: Double -> Term F64
+pattern Fp64Lit b = HC (Fp64Lit' b)
+--pattern Fp32Lit   :: Float -> Term F32
+pattern Fp32Lit b = HC (Fp32Lit' b)
+--pattern FpUnExpr  ::(ComputableFp f) => FpUnOp -> TermFp f -> TermFp f
+pattern FpUnExpr o b = HC (FpUnExpr' o b)
+--pattern FpBinExpr ::(ComputableFp f) => FpBinOp -> TermFp f -> TermFp f -> TermFp f
+pattern FpBinExpr o a b = HC (FpBinExpr' o a b)
+--pattern FpFma     ::(ComputableFp f) => (TermFp f) -> TermFp f -> TermFp f -> TermFp f
+pattern FpFma a b c = HC (FpFma' a b c)
+--pattern FpBinPred ::(ComputableFp f) => FpBinPred -> (TermFp f) -> TermFp f -> TermBool
+pattern FpBinPred o a b = HC (FpBinPred' o a b)
+--pattern FpUnPred  ::(ComputableFp f) => FpUnPred -> (TermFp f) -> TermBool
+pattern FpUnPred o b = HC (FpUnPred' o b)
+--pattern IntToFp   ::(ComputableFp f) => TermInt -> TermFp f
+pattern IntToFp i = HC (IntToFp' i)
+--pattern BvToFp    ::(ComputableFp f) => (TermBv (Size f)) -> TermFp f
+pattern BvToFp b = HC (BvToFp' b)
+--pattern FpToFp    ::(ComputableFp f1, ComputableFp f2) => (TermFp f1) -> TermFp f2
+pattern FpToFp b = HC (FpToFp' b)
+--pattern DynUbvToFp    ::(ComputableFp f) => (Term DynBvSort) -> TermFp f
+pattern DynUbvToFp b = HC (DynUbvToFp' b)
+--pattern DynSbvToFp    ::(ComputableFp f) => (Term DynBvSort) -> TermFp f
+pattern DynSbvToFp b = HC (DynSbvToFp' b)
+--pattern PfUnExpr   ::KnownNat n => PfUnOp -> (TermPf n) -> TermPf n
+pattern PfUnExpr o p = HC (PfUnExpr' o p)
+--pattern PfNaryExpr ::KnownNat n => PfNaryOp -> ([TermPf n]) -> TermPf n
+pattern PfNaryExpr o ps = HC (PfNaryExpr' o ps)
+-- pattern IntToPf    :: () => (KnownNat n) => TermInt -> TermPf n
+pattern IntToPf i = HC (IntToPf' i)
+--pattern Select   ::(SortClass k, SortClass v) => (TermArray k v) -> (Term k) -> Term v
+pattern Select a i = HC (Select' a i)
+--pattern Store    ::(SortClass k, SortClass v) => (TermArray k v) -> (Term k) -> (Term v) -> TermArray k v
+pattern Store a i v = HC (Store' a i v)
+--pattern ConstArray ::(SortClass k, SortClass v) => Sort -> (Term v) -> TermArray k v
+pattern ConstArray ks v = HC (ConstArray' ks v)
 
 -- Tries to case the values to the same type
 dynEq :: (Typeable a, Typeable b) => Term a -> Term b -> Bool
@@ -1325,137 +1510,137 @@ dynEq a b = Just a == cast b
 -- BEGIN (MOSTLY) AUTOGENERATED
 -- Most of this comes from GHC's derive implementation of Eq
 -- I've replaced == with `dynEq` in strategic places.
-instance Eq (Term s) where
-  (==) (BoolLit a1_abUE) (BoolLit b1_abUF) = ((a1_abUE == b1_abUF))
-  (==) (BoolBinExpr a1_abUG a2_abUH a3_abUI) (BoolBinExpr b1_abUJ b2_abUK b3_abUL)
+instance Eq (Term' s) where
+  (==) (BoolLit' a1_abUE) (BoolLit' b1_abUF) = ((a1_abUE == b1_abUF))
+  (==) (BoolBinExpr' a1_abUG a2_abUH a3_abUI) (BoolBinExpr' b1_abUJ b2_abUK b3_abUL)
     = (  ((a1_abUG == b1_abUJ))
       && (((a2_abUH == b2_abUK)) && ((a3_abUI == b3_abUL)))
       )
-  (==) (BoolNaryExpr a1_abUM a2_abUN) (BoolNaryExpr b1_abUO b2_abUP) =
+  (==) (BoolNaryExpr' a1_abUM a2_abUN) (BoolNaryExpr' b1_abUO b2_abUP) =
     (((a1_abUM == b1_abUO)) && ((a2_abUN == b2_abUP)))
-  (==) (Not a1_abUQ) (Not b1_abUR) = ((a1_abUQ == b1_abUR))
-  (==) (Ite a1_abUS a2_abUT a3_abUU) (Ite b1_abUV b2_abUW b3_abUX) =
+  (==) (Not' a1_abUQ) (Not' b1_abUR) = ((a1_abUQ == b1_abUR))
+  (==) (Ite' a1_abUS a2_abUT a3_abUU) (Ite' b1_abUV b2_abUW b3_abUX) =
     (  ((a1_abUS == b1_abUV))
     && (((a2_abUT == b2_abUW)) && ((a3_abUU == b3_abUX)))
     )
-  (==) (Var a1_abUY a2_abUZ) (Var b1_abV0 b2_abV1) =
+  (==) (Var' a1_abUY a2_abUZ) (Var' b1_abV0 b2_abV1) =
     (((a1_abUY == b1_abV0)) && ((a2_abUZ == b2_abV1)))
-  (==) (Let a1_abV2 a2_abV3 a3_abV4) (Let b1_abV5 b2_abV6 b3_abV7) =
+  (==) (Let' a1_abV2 a2_abV3 a3_abV4) (Let' b1_abV5 b2_abV6 b3_abV7) =
     (  ((a1_abV2 == b1_abV5))
     && (((dynEq a2_abV3 b2_abV6)) && ((a3_abV4 == b3_abV7)))
     )
-  (==) (Exists a1_abV8 a2_abV9 a3_abVa) (Exists b1_abVb b2_abVc b3_abVd) =
+  (==) (Exists' a1_abV8 a2_abV9 a3_abVa) (Exists' b1_abVb b2_abVc b3_abVd) =
     (  ((a1_abV8 == b1_abVb))
     && (((a2_abV9 == b2_abVc)) && ((a3_abVa == b3_abVd)))
     )
-  (==) (Eq a1_abVe a2_abVf) (Eq b1_abVg b2_abVh) =
+  (==) (Eq' a1_abVe a2_abVf) (Eq' b1_abVg b2_abVh) =
     (((a1_abVe `dynEq` b1_abVg)) && ((a2_abVf `dynEq` b2_abVh)))
-  (==) (BvConcat a1_abVi a2_abVj) (BvConcat b1_abVk b2_abVl) =
+  (==) (BvConcat' a1_abVi a2_abVj) (BvConcat' b1_abVk b2_abVl) =
     (((a1_abVi `dynEq` b1_abVk)) && ((a2_abVj `dynEq` b2_abVl)))
-  (==) (BvExtract a1_abVm a2_abVn) (BvExtract b1_abVo b2_abVp) =
+  (==) (BvExtract' a1_abVm a2_abVn) (BvExtract' b1_abVo b2_abVp) =
     (((a1_abVm == b1_abVo)) && ((a2_abVn `dynEq` b2_abVp)))
-  (==) (BvBinExpr a1_abVq a2_abVr a3_abVs) (BvBinExpr b1_abVt b2_abVu b3_abVv)
+  (==) (BvBinExpr' a1_abVq a2_abVr a3_abVs) (BvBinExpr' b1_abVt b2_abVu b3_abVv)
     = (  ((a1_abVq == b1_abVt))
       && (((a2_abVr == b2_abVu)) && ((a3_abVs == b3_abVv)))
       )
-  (==) (BvUnExpr a1_abVw a2_abVx) (BvUnExpr b1_abVy b2_abVz) =
+  (==) (BvUnExpr' a1_abVw a2_abVx) (BvUnExpr' b1_abVy b2_abVz) =
     (((a1_abVw == b1_abVy)) && ((a2_abVx == b2_abVz)))
-  (==) (BvBinPred a1_abVA a2_abVB a3_abVC) (BvBinPred b1_abVD b2_abVE b3_abVF)
+  (==) (BvBinPred' a1_abVA a2_abVB a3_abVC) (BvBinPred' b1_abVD b2_abVE b3_abVF)
     = (  ((a1_abVA == b1_abVD))
       && (((a2_abVB `dynEq` b2_abVE)) && ((a3_abVC `dynEq` b3_abVF)))
       )
-  (==) (IntToBv a1_abVG) (IntToBv b1_abVH) = ((a1_abVG == b1_abVH))
-  (==) (FpToBv  a1_abVI) (FpToBv  b1_abVJ) = ((a1_abVI `dynEq` b1_abVJ))
-  (==) (DynamizeBv a1_abVK a2_abVL) (DynamizeBv b1_abVM b2_abVN) =
+  (==) (IntToBv' a1_abVG) (IntToBv' b1_abVH) = ((a1_abVG == b1_abVH))
+  (==) (FpToBv'  a1_abVI) (FpToBv'  b1_abVJ) = ((a1_abVI `dynEq` b1_abVJ))
+  (==) (DynamizeBv' a1_abVK a2_abVL) (DynamizeBv' b1_abVM b2_abVN) =
     (((a1_abVK == b1_abVM)) && ((a2_abVL `dynEq` b2_abVN)))
-  (==) (DynBvExtract a1_abVO a2_abVP a3_abVQ) (DynBvExtract b1_abVR b2_abVS b3_abVT)
+  (==) (DynBvExtract' a1_abVO a2_abVP a3_abVQ) (DynBvExtract' b1_abVR b2_abVS b3_abVT)
     = (  ((a1_abVO == b1_abVR))
       && (((a2_abVP == b2_abVS)) && ((a3_abVQ == b3_abVT)))
       )
-  (==) (DynBvConcat a1_abVU a2_abVV a3_abVW) (DynBvConcat b1_abVX b2_abVY b3_abVZ)
+  (==) (DynBvConcat' a1_abVU a2_abVV a3_abVW) (DynBvConcat' b1_abVX b2_abVY b3_abVZ)
     = (  ((a1_abVU == b1_abVX))
       && (((a2_abVV == b2_abVY)) && ((a3_abVW == b3_abVZ)))
       )
-  (==) (DynBvBinExpr a1_abW0 a2_abW1 a3_abW2 a4_abW3) (DynBvBinExpr b1_abW4 b2_abW5 b3_abW6 b4_abW7)
+  (==) (DynBvBinExpr' a1_abW0 a2_abW1 a3_abW2 a4_abW3) (DynBvBinExpr' b1_abW4 b2_abW5 b3_abW6 b4_abW7)
     = (  ((a1_abW0 == b1_abW4))
       && (  ((a2_abW1 == b2_abW5))
          && (((a3_abW2 == b3_abW6)) && ((a4_abW3 == b4_abW7)))
          )
       )
-  (==) (DynBvBinPred a1_abW8 a2_abW9 a3_abWa a4_abWb) (DynBvBinPred b1_abWc b2_abWd b3_abWe b4_abWf)
+  (==) (DynBvBinPred' a1_abW8 a2_abW9 a3_abWa a4_abWb) (DynBvBinPred' b1_abWc b2_abWd b3_abWe b4_abWf)
     = (  ((a1_abW8 == b1_abWc))
       && (  ((a2_abW9 == b2_abWd))
          && (((a3_abWa == b3_abWe)) && ((a4_abWb == b4_abWf)))
          )
       )
-  (==) (DynBvUnExpr a1_abWg a2_abWh a3_abWi) (DynBvUnExpr b1_abWj b2_abWk b3_abWl)
+  (==) (DynBvUnExpr' a1_abWg a2_abWh a3_abWi) (DynBvUnExpr' b1_abWj b2_abWk b3_abWl)
     = (  ((a1_abWg == b1_abWj))
       && (((a2_abWh == b2_abWk)) && ((a3_abWi == b3_abWl)))
       )
-  (==) (DynBvLit a1_abWg) (DynBvLit b1_abWj) = (a1_abWg == b1_abWj)
-  (==) (DynBvUext a1_abWm a2_abWn a) (DynBvUext b1_abWo b2_abWp b) =
+  (==) (DynBvLit' a1_abWg) (DynBvLit' b1_abWj) = (a1_abWg == b1_abWj)
+  (==) (DynBvUext' a1_abWm a2_abWn a) (DynBvUext' b1_abWo b2_abWp b) =
     (((a1_abWm == b1_abWo)) && ((a2_abWn == b2_abWp)) && (a == b))
-  (==) (DynBvSext a1_abWq a2_abWr a) (DynBvSext b1_abWs b2_abWt b) =
+  (==) (DynBvSext' a1_abWq a2_abWr a) (DynBvSext' b1_abWs b2_abWt b) =
     (((a1_abWq == b1_abWs)) && ((a2_abWr == b2_abWt)) && (a == b))
-  (==) (IntToDynBv a1_abWu a2_abWv) (IntToDynBv b1_abWw b2_abWx) =
+  (==) (IntToDynBv' a1_abWu a2_abWv) (IntToDynBv' b1_abWw b2_abWx) =
     (((a1_abWu == b1_abWw)) && ((a2_abWv == b2_abWx)))
-  (==) (StatifyBv a1_abWy) (StatifyBv b1_abWz) = ((a1_abWy == b1_abWz))
-  (==) (RoundFpToDynBv a1_abWA a2_abWB a3_abWC) (RoundFpToDynBv b1_abWD b2_abWE b3_abWF)
+  (==) (StatifyBv' a1_abWy) (StatifyBv' b1_abWz) = ((a1_abWy == b1_abWz))
+  (==) (RoundFpToDynBv' a1_abWA a2_abWB a3_abWC) (RoundFpToDynBv' b1_abWD b2_abWE b3_abWF)
     = (  ((a1_abWA == b1_abWD))
       && (((a2_abWB == b2_abWE)) && ((a3_abWC `dynEq` b3_abWF)))
       )
-  (==) (IntLit a1_abWG) (IntLit b1_abWH) = ((a1_abWG == b1_abWH))
-  (==) (IntUnExpr a1_abWI a2_abWJ) (IntUnExpr b1_abWK b2_abWL) =
+  (==) (IntLit' a1_abWG) (IntLit' b1_abWH) = ((a1_abWG == b1_abWH))
+  (==) (IntUnExpr' a1_abWI a2_abWJ) (IntUnExpr' b1_abWK b2_abWL) =
     (((a1_abWI == b1_abWK)) && ((a2_abWJ == b2_abWL)))
-  (==) (IntBinExpr a1_abWM a2_abWN a3_abWO) (IntBinExpr b1_abWP b2_abWQ b3_abWR)
+  (==) (IntBinExpr' a1_abWM a2_abWN a3_abWO) (IntBinExpr' b1_abWP b2_abWQ b3_abWR)
     = (  ((a1_abWM == b1_abWP))
       && (((a2_abWN == b2_abWQ)) && ((a3_abWO == b3_abWR)))
       )
-  (==) (IntNaryExpr a1_abWS a2_abWT) (IntNaryExpr b1_abWU b2_abWV) =
+  (==) (IntNaryExpr' a1_abWS a2_abWT) (IntNaryExpr' b1_abWU b2_abWV) =
     (((a1_abWS == b1_abWU)) && ((a2_abWT == b2_abWV)))
-  (==) (IntBinPred a1_abWW a2_abWX a3_abWY) (IntBinPred b1_abWZ b2_abX0 b3_abX1)
+  (==) (IntBinPred' a1_abWW a2_abWX a3_abWY) (IntBinPred' b1_abWZ b2_abX0 b3_abX1)
     = (  ((a1_abWW == b1_abWZ))
       && (((a2_abWX == b2_abX0)) && ((a3_abWY == b3_abX1)))
       )
-  (==) (PfToInt a1_abX2) (PfToInt b1_abX3) = ((a1_abX2 `dynEq` b1_abX3))
-  (==) (BvToInt a1_abX4) (BvToInt b1_abX5) = ((a1_abX4 `dynEq` b1_abX5))
-  (==) (SignedBvToInt a1_abX6) (SignedBvToInt b1_abX7) =
+  (==) (PfToInt' a1_abX2) (PfToInt' b1_abX3) = ((a1_abX2 `dynEq` b1_abX3))
+  (==) (BvToInt' a1_abX4) (BvToInt' b1_abX5) = ((a1_abX4 `dynEq` b1_abX5))
+  (==) (SignedBvToInt' a1_abX6) (SignedBvToInt' b1_abX7) =
     ((a1_abX6 `dynEq` b1_abX7))
-  (==) (BoolToInt a1_abX8) (BoolToInt b1_abX9) = ((a1_abX8 == b1_abX9))
-  (==) (Fp64Lit   a1_abXa) (Fp64Lit   b1_abXb) = ((a1_abXa == b1_abXb))
-  (==) (Fp32Lit   a1_abXc) (Fp32Lit   b1_abXd) = ((a1_abXc == b1_abXd))
-  (==) (FpUnExpr a1_abXe a2_abXf) (FpUnExpr b1_abXg b2_abXh) =
+  (==) (BoolToInt' a1_abX8) (BoolToInt' b1_abX9) = ((a1_abX8 == b1_abX9))
+  (==) (Fp64Lit'   a1_abXa) (Fp64Lit'   b1_abXb) = ((a1_abXa == b1_abXb))
+  (==) (Fp32Lit'   a1_abXc) (Fp32Lit'   b1_abXd) = ((a1_abXc == b1_abXd))
+  (==) (FpUnExpr' a1_abXe a2_abXf) (FpUnExpr' b1_abXg b2_abXh) =
     (((a1_abXe == b1_abXg)) && ((a2_abXf == b2_abXh)))
-  (==) (FpBinExpr a1_abXi a2_abXj a3_abXk) (FpBinExpr b1_abXl b2_abXm b3_abXn)
+  (==) (FpBinExpr' a1_abXi a2_abXj a3_abXk) (FpBinExpr' b1_abXl b2_abXm b3_abXn)
     = (  ((a1_abXi == b1_abXl))
       && (((a2_abXj == b2_abXm)) && ((a3_abXk == b3_abXn)))
       )
-  (==) (FpFma a1_abXo a2_abXp a3_abXq) (FpFma b1_abXr b2_abXs b3_abXt) =
+  (==) (FpFma' a1_abXo a2_abXp a3_abXq) (FpFma' b1_abXr b2_abXs b3_abXt) =
     (  ((a1_abXo == b1_abXr))
     && (((a2_abXp == b2_abXs)) && ((a3_abXq == b3_abXt)))
     )
-  (==) (FpBinPred a1_abXu a2_abXv a3_abXw) (FpBinPred b1_abXx b2_abXy b3_abXz)
+  (==) (FpBinPred' a1_abXu a2_abXv a3_abXw) (FpBinPred' b1_abXx b2_abXy b3_abXz)
     = (  ((a1_abXu == b1_abXx))
       && (((a2_abXv `dynEq` b2_abXy)) && ((a3_abXw `dynEq` b3_abXz)))
       )
-  (==) (FpUnPred a1_abXA a2_abXB) (FpUnPred b1_abXC b2_abXD) =
+  (==) (FpUnPred' a1_abXA a2_abXB) (FpUnPred' b1_abXC b2_abXD) =
     (((a1_abXA == b1_abXC)) && ((a2_abXB `dynEq` b2_abXD)))
-  (==) (IntToFp    a1_abXE) (IntToFp    b1_abXF) = ((a1_abXE == b1_abXF))
-  (==) (BvToFp     a1_abXG) (BvToFp     b1_abXH) = ((a1_abXG == b1_abXH))
-  (==) (FpToFp     a1_abXI) (FpToFp     b1_abXJ) = ((a1_abXI `dynEq` b1_abXJ))
-  (==) (DynUbvToFp a1_abXK) (DynUbvToFp b1_abXL) = ((a1_abXK == b1_abXL))
-  (==) (DynSbvToFp a1_abXM) (DynSbvToFp b1_abXN) = ((a1_abXM == b1_abXN))
-  (==) (PfUnExpr a1_abXO a2_abXP) (PfUnExpr b1_abXQ b2_abXR) =
+  (==) (IntToFp'    a1_abXE) (IntToFp'    b1_abXF) = ((a1_abXE == b1_abXF))
+  (==) (BvToFp'     a1_abXG) (BvToFp'     b1_abXH) = ((a1_abXG == b1_abXH))
+  (==) (FpToFp'     a1_abXI) (FpToFp'     b1_abXJ) = ((a1_abXI `dynEq` b1_abXJ))
+  (==) (DynUbvToFp' a1_abXK) (DynUbvToFp' b1_abXL) = ((a1_abXK == b1_abXL))
+  (==) (DynSbvToFp' a1_abXM) (DynSbvToFp' b1_abXN) = ((a1_abXM == b1_abXN))
+  (==) (PfUnExpr' a1_abXO a2_abXP) (PfUnExpr' b1_abXQ b2_abXR) =
     (((a1_abXO == b1_abXQ)) && ((a2_abXP == b2_abXR)))
-  (==) (PfNaryExpr a1_abXS a2_abXT) (PfNaryExpr b1_abXU b2_abXV) =
+  (==) (PfNaryExpr' a1_abXS a2_abXT) (PfNaryExpr' b1_abXU b2_abXV) =
     (((a1_abXS == b1_abXU)) && ((a2_abXT == b2_abXV)))
-  (==) (IntToPf a1_abXW) (IntToPf b1_abXX) = ((a1_abXW == b1_abXX))
-  (==) (Select a1_abXY a2_abXZ) (Select b1_abY0 b2_abY1) =
+  (==) (IntToPf' a1_abXW) (IntToPf' b1_abXX) = ((a1_abXW == b1_abXX))
+  (==) (Select' a1_abXY a2_abXZ) (Select' b1_abY0 b2_abY1) =
     (((a1_abXY `dynEq` b1_abY0)) && ((a2_abXZ `dynEq` b2_abY1)))
-  (==) (Store a1_abY2 a2_abY3 a3_abY4) (Store b1_abY5 b2_abY6 b3_abY7) =
+  (==) (Store' a1_abY2 a2_abY3 a3_abY4) (Store' b1_abY5 b2_abY6 b3_abY7) =
     (  ((a1_abY2 == b1_abY5))
     && (((a2_abY3 == b2_abY6)) && ((a3_abY4 == b3_abY7)))
     )
-  (==) (ConstArray s1 t1) (ConstArray s2 t2) = (s1 == s2) && (t1 == t2)
+  (==) (ConstArray' s1 t1) (ConstArray' s2 t2) = (s1 == s2) && (t1 == t2)
   (==) _                  _                  = False
 -- END (MOSTLY) AUTOGENERATED

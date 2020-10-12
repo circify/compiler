@@ -90,8 +90,10 @@ instance KnownNat n => BaseTerm (WitBaseTerm n) (Prime n) where
     liftInt f (WitBaseTerm a) (WitBaseTerm b) =
       WitBaseTerm $ Smt.IntToPf $ f (Smt.PfToInt a) (Smt.PfToInt b)
     liftBv f = liftInt
-      (\a b -> Smt.BvToInt @(Log2 n + 1)
-        (f (Smt.IntToBv @(Log2 n + 1) a) (Smt.IntToBv @(Log2 n + 1) b))
+      (\a b -> Smt.HC $ Smt.BvToInt' @(Log2 n + 1)
+        (f (Smt.HC $ Smt.IntToBv' @(Log2 n + 1) a)
+           (Smt.HC $ Smt.IntToBv' @(Log2 n + 1) b)
+        )
       )
     liftIntPred f = liftInt (\a b -> Smt.BoolToInt $ f a b)
     liftBool f = liftIntPred
@@ -140,16 +142,12 @@ instance KnownNat n => BaseCtx (WitBaseCtx n) (WitBaseTerm n) (Prime n) where
       keys = Fold.toList $ assignmentSet c
 
       collectSigs :: Smt.SortClass s => Smt.Term s -> Set.Set Sig.Signal
-      collectSigs = Smt.reduceTerm visit Set.empty Set.union
-       where
-        visit :: Smt.Term t -> Maybe (Set.Set Sig.Signal)
-        visit t = case t of
-          Smt.Var v _ ->
-            Just
-              $ Set.singleton
-              $ fromMaybe (error $ "Cannot read signal: " ++ show v)
-              $ readMaybe v
-          _ -> Nothing
+      collectSigs =
+        Set.map
+            (\s -> fromMaybe (error $ "Cannot read signal: " ++ show s)
+              $ readMaybe s
+            )
+          . Smt.vars
 
       asLterm :: Either LTerm Sig.IndexedIdent -> LTerm
       asLterm = either id LTermLocal
