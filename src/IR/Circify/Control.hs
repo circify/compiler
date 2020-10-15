@@ -113,7 +113,7 @@ loopFlatten top = case pullbackLoop top of
                 For dummy (IntLit 1) (IntLit 10000) (
                     If (state ~= 1) (
                         If (i ~< n) (
-                            body1 //
+                            body1 \\
                             j =: 0
                             -- i++
                         ) (state =: 2)
@@ -127,7 +127,7 @@ loopFlatten top = case pullbackLoop top of
                     If (state ~= 3) (
                         body3 \\
                         state =: 1
-                    )
+                    ) Empty
                 )
             (p, Empty, e) -> p \\ e
     where dummy = Var "dummy" IntSort
