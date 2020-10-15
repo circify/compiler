@@ -75,6 +75,8 @@ data CfgState = CfgState { _optR1cs :: Int
                          , _smtOptCfg :: SmtOptCfg
                          , _streams :: [String]
                          , _loopBound :: Int
+                         , _loopFlatten :: Bool
+                         , _loopMaxIteration :: Int
                          , _cCfg :: CCfg
                          , _help :: Bool
                          } deriving (Show)
@@ -85,6 +87,8 @@ defaultCfgState = CfgState { _optR1cs   = 2
                            , _smtOptCfg = defaultSmtOptCfg
                            , _streams   = []
                            , _loopBound = 5
+                           , _loopFlatten = True
+                           , _loopMaxIteration = 10000
                            , _help      = False
                            , _cCfg      = defaultCCfg
                            }
@@ -185,6 +189,16 @@ options =
               "How many iterations loops are unrolled for"
               ""
               "5"
+  , CfgOption (loopFlatten . showReadLens)
+              "loop-flatten"
+              "Enable nested loop flattening optimization"
+              ""
+              "True"
+  , CfgOption (loopMaxIteration . showReadLens)
+              "loop-max-iteration"
+              "Maximum iterator bound for loop flattening optimization"
+              ""
+              "10000"
   , CfgOption (cCfg . printfOutput . showReadLens)
               "c-printf"
               "Handle printf specially"
