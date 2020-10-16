@@ -7,12 +7,18 @@
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE DuplicateRecordFields #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
 module IR.Circify.Control where
 
-import           Data.Natural
-import           IR.SMT.TySmt
-import           Codegen.C
 import           GHC.Generics
+import           Language.C.Syntax.AST
+import           Language.C.Syntax.Constants
+import           Language.C.Data.Node
+import           Language.C.Data.Position
+import           Language.C.Data.Ident
 
 -- Control flow syntax
 data Control term =
@@ -35,23 +41,51 @@ deriving instance Semigroup (Control term)
 deriving instance Monoid (Control term)
 deriving instance Generic term => Generic (Control term)
 
-(\\) :: Control term -> Control term -> Control term
-Empty \\ right = right
-left  \\ Empty = left
-left  \\ right = Seq left right
-infixl 8 \\
+-- In order to do control flow flattening, this is the minimum contract the terms must follow
+-- + Compare to integer
+-- + Compare equality to integer
+-- + Assignment, with re-assignment
+-- + Increment by 1
+-- + Introduce an integer literal
+-- + Introduce an integer variable by name
+class ControlTerm a where
+    (<:)  :: a -> Integer -> a
+    (==:) :: a -> Integer -> a
+    (=:)  :: a -> Integer -> a
+    (++:) :: a -> a
+    lit   :: Integer -> a
+    var   :: String -> a
 
-(~<) :: TermInt -> Integer -> TermBool
-a ~< b = IntBinPred IntLt a (IntLit b)
-infixl 8 ~<
+nosym :: NodeInfo
+nosym = OnlyPos nopos (nopos, 0)
 
-(~=) :: TermInt -> Integer -> TermBool
-a ~= b = Eq a (IntLit b)
-infixl 8 ~=
+instance ControlTerm CExpr where
+    a <: b  = CBinary CLeqOp a (lit b) nosym
+    a ==: b = CBinary CEqOp a (lit b) nosym
+    l =: r  = CAssign CAssignOp l (lit r) nosym
+    (++:) i = CUnary CPostIncOp i nosym
+    lit v   = CConst $ CIntConst (CInteger v DecRepr noFlags) nosym
+    var v   = CVar (Ident v 0 nosym) nosym
 
-(=:) :: TermInt -> Integer -> TermBool
-v =: value = Eq v (IntLit value)
-infixl 8 =:
+-- Syntactic sugar
+class Sequent a b c | b -> c where
+    (\\) :: a -> b -> Control c
+
+instance Sequent CExpr CExpr CExpr where
+    a \\ b = Seq (Term a) (Term b)
+
+instance Sequent CExpr (Control CExpr) CExpr where
+    a \\ b = Seq (Term a) b
+
+instance Sequent (Control t) (Control t) t where
+    Empty \\ right = right
+    left  \\ Empty = left
+    left  \\ right = Seq left right
+
+infixl 6 \\
+infixl 8 <:
+infixl 8 ==:
+infixl 7 =:
 
 -- Take some program and extract the first loop
 -- pullbackLoop (program :: Control term) ->
@@ -102,35 +136,35 @@ pullbackLoop o              = (o, Empty, Empty)
 --     state = 1
 --   }
 -- }
-loopFlatten :: Control (Term s) -> Control (Term s)
+loopFlatten :: ControlTerm t => Control t -> Control t
 loopFlatten top = case pullbackLoop top of
     (op, For { end = n, .. }, oe) ->
         case pullbackLoop body of
             (body1, For { body = body2, end = m }, body3) ->
-                "state" =: 1 \\
+                state =: 1 \\
                 i =: 0 \\
                 j =: 0 \\
-                For dummy (IntLit 1) (IntLit 10000) (
-                    If (state ~= 1) (
-                        If (i ~< n) (
+                For dummy (lit 1) (lit 10000) (
+                    If (state ==: 1) (
+                        If (i <: n) (
                             body1 \\
-                            j =: 0
-                            -- i++
+                            (j =: 0) \\
+                            (i ++:)
                         ) (state =: 2)
                     ) Empty \\
-                    If (state ~= 2) (
-                        If (j ~< m) (
-                            body2
-                            -- j++
+                    If (state ==: 2) (
+                        If (j <: m) (
+                            body2 \\
+                            (j ++:)
                         ) (state =: 3)
                     ) Empty \\
-                    If (state ~= 3) (
+                    If (state ==: 3) (
                         body3 \\
                         state =: 1
                     ) Empty
                 )
             (p, Empty, e) -> p \\ e
-    where dummy = Var "dummy" IntSort
-          state = Var "state" IntSort
-          i = Var "i" IntSort
-          j = Var "j" IntSort
+    where dummy = var "dummy"
+          state = var "state"
+          i = var "i"
+          j = var "j"
