@@ -13,6 +13,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 module IR.Circify.Control where
 
+import           Control.Monad.Reader (asks)
 import           GHC.Generics
 import           Language.C.Syntax.AST
 import           Language.C.Syntax.Constants
@@ -155,4 +156,3 @@ loopFlatten top = do
     maxIteration <- asks (Util.Cfg._loopMaxIteration)
     return $ case pullbackLoop top of
         (op, loop, ep) -> op <> loopFlatten' maxIteration loop <> ep
-
