@@ -90,42 +90,35 @@ pullbackLoop Seq     { .. } = case (pullbackLoop left, pullbackLoop right) of
 pullbackLoop o              = (o, Empty, Empty)
 
 -- Main loop flattening transformation
---
--- For i in (1,N) {
---    <body 1>
---    For j in (1,M) {
---      <body 2>
---    }
---    <body 3>
--- }
--- ------------------------
--- state = 1
--- i = j = 0
--- For dummy in (1, N*M) {
---   if (state == 1) {
---     if (i < N) {
---       <body 1>
---       i++;
---       j = 0
---     } else {
---       state = 2
---     }
---   }
---   if (state == 2) {
---     if (j < M) {
---       <body 2>
---       j++;
---     } else {
---       state = 3
---     }
---   }
---   if (state == 3) {
---     <body 3>
---     state = 1
---   }
--- }
-
+--   Wahby et al. "Efficient RAM and control flow in verifiable outsourced computation"
 loopFlatten' :: ControlTerm t => Integer -> Control t -> Control t
+loopFlatten' maxIteration While { .. } =
+    case pullbackLoop body of
+       (body1, For { body = body2, end = m }, body3) ->
+            state =: 1 <>
+            For dummy (lit 1) (lit maxIteration) (
+                If (state ==: lit 1) (
+                    If (cond) (
+                        body1 <>
+                        i =: 0 <>
+                        state =: 2
+                    ) (state =: 3)
+                ) Empty <>
+                If (state ==: lit 2) (
+                    If (i <: m) (
+                        body2 <>
+                        (i ++:)
+                    ) (state =: 2)
+                ) Empty <>
+                If (state ==: lit 3) (
+                    body3 <>
+                    state =: 1
+                ) Empty
+            )
+       (p, Empty, e) -> p <> e
+       where dummy = var "dummy"
+             state = var "state"
+             i = var "i"
 loopFlatten' maxIteration For { end = n, .. } =
     case pullbackLoop body of
         (body1, For { body = body2, end = m }, body3) ->
