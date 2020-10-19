@@ -19,6 +19,7 @@ import           Language.C.Syntax.Constants
 import           Language.C.Data.Node
 import           Language.C.Data.Position
 import           Language.C.Data.Ident
+import           Util.Cfg
 
 -- Control flow syntax
 data Control term =
@@ -31,14 +32,17 @@ data Control term =
     | Empty {}
 
 deriving instance Functor Control
-deriving instance Applicative Control
-deriving instance Monad Control
 deriving instance Foldable Control
 deriving instance Traversable Control
 deriving instance Eq term => Eq (Control term)
 deriving instance Show term => Show (Control term)
-deriving instance Semigroup (Control term)
-deriving instance Monoid (Control term)
+instance Semigroup (Control term) where
+    Empty <> right = right
+    left <> Empty = left
+    left <> right = Seq left right
+
+instance Monoid (Control term) where
+    mempty = Empty
 deriving instance Generic term => Generic (Control term)
 
 -- In order to do control flow flattening, this is the minimum contract the terms must follow
@@ -49,10 +53,10 @@ deriving instance Generic term => Generic (Control term)
 -- + Introduce an integer literal
 -- + Introduce an integer variable by name
 class ControlTerm a where
-    (<:)  :: a -> Integer -> a
-    (==:) :: a -> Integer -> a
-    (=:)  :: a -> Integer -> a
-    (++:) :: a -> a
+    (<:)  :: a -> a -> a
+    (==:) :: a -> a -> a
+    (=:)  :: a -> Integer -> Control a
+    (++:) :: a -> Control a
     lit   :: Integer -> a
     var   :: String -> a
 
@@ -60,29 +64,13 @@ nosym :: NodeInfo
 nosym = OnlyPos nopos (nopos, 0)
 
 instance ControlTerm CExpr where
-    a <: b  = CBinary CLeqOp a (lit b) nosym
-    a ==: b = CBinary CEqOp a (lit b) nosym
-    l =: r  = CAssign CAssignOp l (lit r) nosym
-    (++:) i = CUnary CPostIncOp i nosym
+    a <: b  = CBinary CLeqOp a b nosym
+    a ==: b = CBinary CEqOp a b nosym
+    l =: r  = Term $ CAssign CAssignOp l (lit r) nosym
+    (++:) i = Term $ CUnary CPostIncOp i nosym
     lit v   = CConst $ CIntConst (CInteger v DecRepr noFlags) nosym
     var v   = CVar (Ident v 0 nosym) nosym
 
--- Syntactic sugar
-class Sequent a b c | b -> c where
-    (\\) :: a -> b -> Control c
-
-instance Sequent CExpr CExpr CExpr where
-    a \\ b = Seq (Term a) (Term b)
-
-instance Sequent CExpr (Control CExpr) CExpr where
-    a \\ b = Seq (Term a) b
-
-instance Sequent (Control t) (Control t) t where
-    Empty \\ right = right
-    left  \\ Empty = left
-    left  \\ right = Seq left right
-
-infixl 6 \\
 infixl 8 <:
 infixl 8 ==:
 infixl 7 =:
@@ -96,9 +84,9 @@ pullbackLoop :: Control t -> (Control t, Control t, Control t)
 pullbackLoop l@While { .. } = (Empty, l, Empty)
 pullbackLoop l@For   { .. } = (Empty, l, Empty)
 pullbackLoop Seq     { .. } = case (pullbackLoop left, pullbackLoop right) of
-    ((p, l, e), (p', Empty, e'))     -> (p, l, e \\ p' \\ e')              -- Loop on the left subsequence
-    ((p, Empty, e), (p', l', e'))    -> (p \\ e \\ p', l', e')             -- Loop on the right subsequence
-    ((p, Empty, e), (p', Empty, e')) -> (p \\ e \\ p' \\ e', Empty, Empty) -- No loop
+    ((p, l, e), (p', Empty, e'))     -> (p, l, e <> p' <> e')              -- Loop on the left subsequence
+    ((p, Empty, e), (p', l', e'))    -> (p <> e <> p', l', e')             -- Loop on the right subsequence
+    ((p, Empty, e), (p', Empty, e')) -> (p <> e <> p' <> e', Empty, Empty) -- No loop
 pullbackLoop o              = (o, Empty, Empty)
 
 -- Main loop flattening transformation
@@ -136,35 +124,42 @@ pullbackLoop o              = (o, Empty, Empty)
 --     state = 1
 --   }
 -- }
-loopFlatten :: ControlTerm t => Control t -> Control t
-loopFlatten top = case pullbackLoop top of
-    (op, For { end = n, .. }, oe) ->
-        case pullbackLoop body of
-            (body1, For { body = body2, end = m }, body3) ->
-                state =: 1 \\
-                i =: 0 \\
-                j =: 0 \\
-                For dummy (lit 1) (lit 10000) (
-                    If (state ==: 1) (
-                        If (i <: n) (
-                            body1 \\
-                            (j =: 0) \\
-                            (i ++:)
-                        ) (state =: 2)
-                    ) Empty \\
-                    If (state ==: 2) (
-                        If (j <: m) (
-                            body2 \\
-                            (j ++:)
-                        ) (state =: 3)
-                    ) Empty \\
-                    If (state ==: 3) (
-                        body3 \\
-                        state =: 1
-                    ) Empty
-                )
-            (p, Empty, e) -> p \\ e
+
+loopFlatten' :: ControlTerm t => Integer -> Control t -> Control t
+loopFlatten' maxIteration For { end = n, .. } =
+    case pullbackLoop body of
+        (body1, For { body = body2, end = m }, body3) ->
+            state =: 1 <>
+            i =: 0 <>
+            j =: 0 <>
+            For dummy (lit 1) (lit maxIteration) (
+                If (state ==: lit 1) (
+                    If (i <: n) (
+                        body1 <>
+                        j =: 0 <>
+                        (i ++:)
+                    ) (state =: 2)
+                ) Empty <>
+                If (state ==: lit 2) (
+                    If (j <: m) (
+                        body2 <>
+                        (j ++:)
+                    ) (state =: 3)
+                ) Empty <>
+                If (state ==: lit 3) (
+                    body3 <>
+                    state =: 1
+                ) Empty
+            )
+        (p, Empty, e) -> p <> e
     where dummy = var "dummy"
           state = var "state"
           i = var "i"
           j = var "j"
+
+loopFlatten :: ControlTerm t => Control t -> Cfg (Control t)
+loopFlatten top = do
+    maxIteration <- asks (Util.Cfg._loopMaxIteration)
+    return $ case pullbackLoop top of
+        (op, loop, ep) -> op <> loopFlatten' maxIteration loop <> ep
+
