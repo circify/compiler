@@ -32,12 +32,12 @@ deriving instance Traversable Control
 deriving instance Eq term => Eq (Control term)
 deriving instance Show term => Show (Control term)
 instance Semigroup (Control term) where
-    Empty <> right = right
-    left <> Empty = left
-    left <> right = Seq left right
+  Empty <> right = right
+  left  <> Empty = left
+  left  <> right = Seq left right
 
 instance Monoid (Control term) where
-    mempty = Empty
+  mempty = Empty
 deriving instance Generic term => Generic (Control term)
 
 -- In order to do control flow flattening, this is the minimum contract the terms must follow
@@ -61,12 +61,12 @@ nosym :: NodeInfo
 nosym = OnlyPos nopos (nopos, 0)
 
 instance ControlTerm CExpr where
-    a <: b  = CBinary CLeqOp a b nosym
-    a ==: b = CBinary CEqOp a b nosym
-    a *: b  = CBinary CMulOp a b nosym
-    l =: r  = Term $ CAssign CAssignOp l (lit r) nosym
-    (++:) i = Term $ CUnary CPostIncOp i nosym
-    lit v   = CConst $ CIntConst (CInteger v DecRepr noFlags) nosym
-    var v   = CVar (Ident v 0 nosym) nosym
+  a <: b = CBinary CLeqOp a b nosym
+  a ==: b = CBinary CEqOp a b nosym
+  a *: b = CBinary CMulOp a b nosym
+  l =: r = Term $ CAssign CAssignOp l (lit r) nosym
+  (++:) i = Term $ CUnary CPostIncOp i nosym
+  lit v = CConst $ CIntConst (CInteger v DecRepr noFlags) nosym
+  var v = CVar (Ident v 0 nosym) nosym
 
 infixl 7 =:

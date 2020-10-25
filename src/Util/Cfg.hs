@@ -82,15 +82,15 @@ data CfgState = CfgState { _optR1cs :: Int
                          } deriving (Show)
 
 defaultCfgState :: CfgState
-defaultCfgState = CfgState { _optR1cs   = 2
-                           , _toPfCfg   = defaultToPfCfg
-                           , _smtOptCfg = defaultSmtOptCfg
-                           , _streams   = []
-                           , _loopBound = 5
-                           , _loopFlatten = True
+defaultCfgState = CfgState { _optR1cs          = 2
+                           , _toPfCfg          = defaultToPfCfg
+                           , _smtOptCfg        = defaultSmtOptCfg
+                           , _streams          = []
+                           , _loopBound        = 5
+                           , _loopFlatten      = True
                            , _loopMaxIteration = 10000
-                           , _help      = False
-                           , _cCfg      = defaultCCfg
+                           , _help             = False
+                           , _cCfg             = defaultCCfg
                            }
 
 $(makeLenses ''CfgState)
