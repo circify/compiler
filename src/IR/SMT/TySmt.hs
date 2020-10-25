@@ -56,6 +56,7 @@ module IR.SMT.TySmt
   , vars
   , nChars
   , mkDynBvExtract
+  , mkDynBvExtractBit
   , mkDynBvBinExpr
   , mkDynBvConcat
   , mkDynBvBinPred
@@ -277,7 +278,17 @@ data Sort = SortInt
           | SortPf !Integer
           | SortFp !Int !Int
           | SortArray !Sort !Sort
-          deriving (Show,Ord,Eq,Typeable,Generic,Hashable)
+          deriving (Ord,Eq,Typeable,Generic,Hashable)
+
+instance Show Sort where
+  -- Omit the order for SortPf. It's just ugly.
+  show s = case s of
+    SortInt -> "SortInt"
+    SortBool -> "SortBool"
+    SortBv i -> "(SortBv " ++ show i ++ ")"
+    SortFp i j -> "(SortFp " ++ show i ++ " " ++ show j ++ ")"
+    SortArray i j -> "(SortArray " ++ show i ++ " " ++ show j ++ ")"
+    SortPf _ -> "SortPf"
 
 sortDouble :: Sort
 sortDouble = SortFp 11 53
@@ -409,7 +420,9 @@ data Term s where
     FpToBv    ::(ComputableFp f) => !(Term (FpSort f)) -> Term (BvSort (Size f))
 
     DynamizeBv ::KnownNat n => !Int -> !(TermBv n) -> TermDynBv
+    -- extract start, extraction width
     DynBvExtract :: !Int -> !Int -> !TermDynBv -> TermDynBv
+    DynBvExtractBit :: !Int -> !TermDynBv -> TermBool
     DynBvConcat  :: !Int -> !TermDynBv -> !TermDynBv -> TermDynBv
     DynBvBinExpr :: !BvBinOp -> !Int -> !TermDynBv -> !TermDynBv -> TermDynBv
     DynBvBinPred :: !BvBinPred -> !Int -> !TermDynBv -> !TermDynBv -> TermBool
@@ -420,6 +433,8 @@ data Term s where
     -- width, extension amount, inner
     DynBvSext    :: !Int -> !Int -> !TermDynBv -> TermDynBv
     IntToDynBv   :: !Int -> !TermInt -> TermDynBv
+    PfToDynBv    :: KnownNat n => !Int -> !(TermPf n) -> TermDynBv
+    BoolToDynBv  :: !TermBool -> TermDynBv
     StatifyBv ::KnownNat n => !TermDynBv -> TermBv n
     -- width, signedness, floating point number
     RoundFpToDynBv ::(ComputableFp f) => !Int -> !Bool -> !(Term (FpSort f)) -> TermDynBv
@@ -502,6 +517,19 @@ mkDynBvExtract start width t =
           , show w
           ]
 
+mkDynBvExtractBit :: Int -> TermDynBv -> TermBool
+mkDynBvExtractBit bit t = 
+  let w = dynBvWidth t
+  in  if bit < w
+        then DynBvExtractBit bit t
+        else throw $ SortError $ unwords
+          [ "DynBvExtractBit OOB"
+          , "bit ="
+          , show bit
+          , "width ="
+          , show w
+          ]
+
 mkDynBvBinExpr :: BvBinOp -> TermDynBv -> TermDynBv -> TermDynBv
 mkDynBvBinExpr o a b =
   let aw = dynBvWidth a
@@ -581,6 +609,8 @@ dynBvWidth t = case t of
   DynamizeBv w _       -> w
   RoundFpToDynBv w _ _ -> w
   IntToDynBv w _       -> w
+  PfToDynBv w _        -> w
+  BoolToDynBv _        -> 1
   Ite _ tt _           -> dynBvWidth tt
   Var _ s              -> case s of
     SortBv w -> w
@@ -612,8 +642,11 @@ sort t = case sorted @s of
     DynBvBinExpr _ w _ _ -> SortBv w
     DynBvConcat  w _ _   -> SortBv w
     DynBvExtract _ w _   -> SortBv w
+    DynBvExtractBit {} -> SortBool
     DynamizeBv w _       -> SortBv w
     IntToDynBv w _       -> SortBv w
+    PfToDynBv  w _       -> SortBv w
+    BoolToDynBv  _       -> SortBv 1
     Select     a _       -> case sort a of
       SortArray _ s' -> s'
       _              -> throw $ SortError "Invalid array sort"
@@ -734,12 +767,15 @@ mapTerm f t = case f t of
     DynBvConcat w a b     -> DynBvConcat w (mapTerm f a) (mapTerm f b)
     DynBvBinPred o w a b  -> DynBvBinPred o w (mapTerm f a) (mapTerm f b)
     DynBvExtract s l b    -> DynBvExtract s l (mapTerm f b)
+    DynBvExtractBit i b   -> DynBvExtractBit i (mapTerm f b)
     DynBvUnExpr  o w r    -> DynBvUnExpr o w (mapTerm f r)
     DynBvLit bv           -> DynBvLit bv
     DynBvSext w w' r      -> DynBvSext w w' (mapTerm f r)
     DynBvUext w w' r      -> DynBvUext w w' (mapTerm f r)
     DynamizeBv w b        -> DynamizeBv w (mapTerm f b)
     IntToDynBv w i        -> IntToDynBv w (mapTerm f i)
+    PfToDynBv w p         -> PfToDynBv w (mapTerm f p)
+    BoolToDynBv b         -> BoolToDynBv (mapTerm f b)
 
 
     IntLit{}              -> t
@@ -814,12 +850,15 @@ mapTermM f t = do
       DynBvConcat w a b     -> liftM2 (DynBvConcat w) (rec a) (rec b)
       DynBvBinPred o w a b  -> liftM2 (DynBvBinPred o w) (rec a) (rec b)
       DynBvExtract s l b    -> liftM (DynBvExtract s l) (rec b)
+      DynBvExtractBit i b   -> liftM (DynBvExtractBit i) (rec b)
       DynBvUnExpr  o w r    -> liftM (DynBvUnExpr o w) (rec r)
       DynBvLit bv           -> return $ DynBvLit bv
       DynBvSext w w' r      -> liftM (DynBvSext w w') (rec r)
       DynBvUext w w' r      -> liftM (DynBvUext w w') (rec r)
       DynamizeBv w b        -> liftM (DynamizeBv w) (rec b)
       IntToDynBv w i        -> liftM (IntToDynBv w) (rec i)
+      PfToDynBv w i         -> liftM (PfToDynBv w) (rec i)
+      BoolToDynBv i         -> liftM BoolToDynBv (rec i)
 
 
       IntLit{}              -> return t
@@ -900,12 +939,15 @@ reduceTerm mapF i foldF t = case mapF t of
     DynBvBinPred _ _ a b ->
       foldF (reduceTerm mapF i foldF a) (reduceTerm mapF i foldF b)
     DynBvExtract _ _ b -> reduceTerm mapF i foldF b
+    DynBvExtractBit _ b -> reduceTerm mapF i foldF b
     DynBvUnExpr  _ _ b -> reduceTerm mapF i foldF b
     DynBvLit{}         -> i
     DynBvSext _ _ b    -> reduceTerm mapF i foldF b
     DynBvUext _ _ b    -> reduceTerm mapF i foldF b
     DynamizeBv _ b     -> reduceTerm mapF i foldF b
     IntToDynBv _ i'    -> reduceTerm mapF i foldF i'
+    PfToDynBv _ i'     -> reduceTerm mapF i foldF i'
+    BoolToDynBv i'     -> reduceTerm mapF i foldF i'
 
 
     IntLit{}           -> i
@@ -1180,6 +1222,12 @@ eval e t = case t of
           then ValDynBv $ Bv.extract (s + w - 1) s a'
           else
             throw $ SortError $ "bitwidth mis-match while evaluating " ++ show t
+  DynBvExtractBit i a ->
+    let a' = valAsDynBv $ eval e a
+    in  if i <= Bv.width a'
+          then ValBool $ Bv.testBit a' i
+          else
+            throw $ SortError $ "oob bit mis-match while evaluating " ++ show t
   DynBvBinExpr o w a b ->
     let a' = valAsDynBv $ eval e a
         b' = valAsDynBv $ eval e b
@@ -1203,6 +1251,8 @@ eval e t = case t of
           else
             throw $ SortError $ "bitwidth mis-match while evaluating " ++ show t
   IntToDynBv w i -> ValDynBv $ Bv.bitVec w $ valAsInt $ eval e i
+  PfToDynBv w i -> ValDynBv $ Bv.bitVec w $ valAsPf $ eval e i
+  BoolToDynBv i -> ValDynBv $ Bv.bitVec 1 $ fromEnum $ valAsBool $ eval e i
 
   IntLit i       -> ValInt i
   IntUnExpr o t' -> ValInt $ intUnFn o (valAsInt $ eval e t')
@@ -1317,6 +1367,9 @@ instance SortClass sort => Hashable (Term sort) where
       Select a i -> s # t 50 # a # i
       Store a i v -> s # t 51 # a # i # v
       ConstArray ks v -> s # t 52 # ks # v
+      DynBvExtractBit i b -> s # t 53 # i # b
+      PfToDynBv w b -> s # t 54 # w # b
+      BoolToDynBv b -> s # t 55 # b
    where
     -- Hash tags
     t :: Int -> Int
@@ -1377,6 +1430,7 @@ instance Eq (Term s) where
     = (  ((a1_abVO == b1_abVR))
       && (((a2_abVP == b2_abVS)) && ((a3_abVQ == b3_abVT)))
       )
+  (==) (DynBvExtractBit a0 a1) (DynBvExtractBit b0 b1) = (a0 == b0) && (a1 == b1)
   (==) (DynBvConcat a1_abVU a2_abVV a3_abVW) (DynBvConcat b1_abVX b2_abVY b3_abVZ)
     = (  ((a1_abVU == b1_abVX))
       && (((a2_abVV == b2_abVY)) && ((a3_abVW == b3_abVZ)))
@@ -1404,6 +1458,9 @@ instance Eq (Term s) where
     (((a1_abWq == b1_abWs)) && ((a2_abWr == b2_abWt)) && (a == b))
   (==) (IntToDynBv a1_abWu a2_abWv) (IntToDynBv b1_abWw b2_abWx) =
     (((a1_abWu == b1_abWw)) && ((a2_abWv == b2_abWx)))
+  (==) (PfToDynBv a1_abWu a2_abWv) (PfToDynBv b1_abWw b2_abWx) =
+    (((a1_abWu == b1_abWw)) && ((a2_abWv `dynEq` b2_abWx)))
+  (==) (BoolToDynBv a1_abWy) (BoolToDynBv b1_abWz) = ((a1_abWy == b1_abWz))
   (==) (StatifyBv a1_abWy) (StatifyBv b1_abWz) = ((a1_abWy == b1_abWz))
   (==) (RoundFpToDynBv a1_abWA a2_abWB a3_abWC) (RoundFpToDynBv b1_abWD b2_abWE b3_abWF)
     = (  ((a1_abWA == b1_abWD))

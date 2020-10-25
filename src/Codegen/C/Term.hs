@@ -82,6 +82,7 @@ module Codegen.C.Term
   -- input parsing
   , parseToMap
   , InMap
+  , setInputFromMap
   )
 where
 
@@ -281,7 +282,7 @@ alias trackUndef name t = do
       let sort = Ty.SortBool
       v <- Assert.newVar name sort
       Assert.assign v b
-      return $ CBool b
+      return $ CBool v
     CInt isNeg width val -> do
       let sort = Ty.SortBv width
       v <- Assert.newVar name sort
@@ -418,18 +419,14 @@ cDeclVar inMap trackUndef ty smtName mUserName = do
     $ Assert.publicize smtName
   return $ mkCTerm t u
  where
-  getBaseInput
+  getBaseInput 
     :: Ty.SortClass s
     => (Integer -> Ty.Value s)
     -> Ty.Value s
     -> String
     -> Maybe String
     -> Assert.Assert ()
-  getBaseInput f d s mS = whenJust inMap $ \iM ->
-    let v   = f <$> ((iM Map.!?) =<< mS)
-        v'  = f <$> (iM Map.!? s)
-        v'' = d
-    in  Assert.setValue s $ fromMaybe v'' (v <|> v')
+  getBaseInput = setInputFromMap inMap
 
 cIntLit :: Type.Type -> Integer -> CTerm
 cIntLit t v =
@@ -1066,3 +1063,17 @@ modelMapToExtMap m = Map.fromList $ map f $ Map.toList m
           ToZ3.IVal i -> toInteger i
           _           -> error $ "Unhandled model entry value: " ++ show v
     in  (k, i)
+
+setInputFromMap
+  :: Ty.SortClass s
+  => Maybe InMap -- ^ An optional map of inputs
+  -> (Integer -> Ty.Value s) -- ^ A function from integers to values
+  -> Ty.Value s -- ^ A default value
+  -> String -- ^ An smtName to lookup in the inputs
+  -> Maybe String -- ^ An optional user name to lookup in the inputs
+  -> Assert.Assert ()
+setInputFromMap inMap f d s mS = whenJust inMap $ \iM ->
+  let v   = f <$> ((iM Map.!?) =<< mS)
+      v'  = f <$> (iM Map.!? s)
+      v'' = d
+  in  Assert.setValue s $ fromMaybe v'' (v <|> v')

@@ -54,6 +54,7 @@ import           Data.Maybe                     ( isNothing
                                                 , fromJust
                                                 )
 import qualified Data.Map.Strict               as Map
+import           Data.List                      ( foldl' )
 import           Data.Proxy                     ( Proxy(..) )
 import qualified Data.Set                      as Set
 import           Data.Typeable                  ( cast )
@@ -83,6 +84,7 @@ data ToPfState n = ToPfState
   { r1cs       :: R1CS PfVar n
   , bools      :: AliasMap TermBool (LSig n)
   , ints       :: AliasMap TermDynBv (BvEntry n)
+  , pfs        :: AliasMap (TermPf n) (LSig n)
   , next       :: Int
   , cfg        :: ToPfConfig
   , arraySizes :: ArraySizes
@@ -97,6 +99,7 @@ emptyState = ToPfState
   { r1cs       = emptyR1cs
   , bools      = AMap.empty
   , ints       = AMap.empty
+  , pfs        = AMap.empty
   , next       = 0
   , cfg        = ToPfConfig { assumeNoBvOverflow  = False
                             , optEq               = False
@@ -143,7 +146,7 @@ enforceCheck ((a, av), (b, bv), (c, cv)) = do
 
 enforceNonzero :: KnownNat n => LSig n -> ToPf n ()
 enforceNonzero l = do
-  inv <- nextVar "inv" (recip <$> snd l)
+  inv <- nextVar "nonzero" (recip <$> snd l)
   enforceCheck (l, inv, lcOne)
 
 enforceTrue :: KnownNat n => LSig n -> ToPf n ()
@@ -206,11 +209,20 @@ lcOne = lcConst 1
 lcAdd :: KnownNat n => LSig n -> LSig n -> LSig n
 lcAdd (a, av) (b, bv) = (LD.lcAdd a b, liftA2 (+) av bv)
 
+lcSum :: KnownNat n => [LSig n] -> LSig n
+lcSum = foldl' lcAdd lcZero
+
 lcMul :: KnownNat n => String -> LSig n -> LSig n -> ToPf n (LSig n)
 lcMul name (a, av) (b, bv) = do
   prod <- nextVar name $ liftA2 (*) av bv
   enforceCheck ((a, av), (b, bv), prod)
   return prod
+
+lcRecip :: KnownNat n => String -> LSig n -> ToPf n (LSig n)
+lcRecip name (a, av) = do
+  inv <- nextVar name $ fmap recip av
+  enforceCheck ((a, av), inv, lcOne)
+  return inv
 
 lcZero :: KnownNat n => LSig n
 lcZero = ((Map.empty, toP 0), Just $ toP 0)
@@ -229,6 +241,47 @@ lcSub x y = lcAdd x $ lcNeg y
 
 lcNot :: KnownNat n => LSig n -> LSig n
 lcNot = lcSub lcOne
+
+
+pfToPf
+  :: forall n . KnownNat n => Maybe SmtVals -> TermPf n -> ToPf n (LSig n)
+pfToPf env term = do
+  entry <- gets (AMap.lookup term . pfs)
+  case entry of
+    Just s  -> return s
+    Nothing -> do
+      p <- pfToPfUncached term
+      modify $ \s -> s { pfs = AMap.insert term p $ pfs s }
+      return p
+ where
+  -- recurse
+  rec = pfToPf env
+  lookupPfVal :: KnownNat n => String -> Maybe (Prime n)
+  lookupPfVal name =
+    toP
+      .   valAsPf @n
+      .   flip fromDyn (error $ name ++ " has wrong type")
+      <$> (env >>= (Map.!? name))
+  -- Uncached
+  pfToPfUncached :: KnownNat n => TermPf n -> ToPf n (LSig n)
+  pfToPfUncached t = do
+    case t of
+      Var        name    _  -> asVar name (lookupPfVal name)
+      PfUnExpr   PfNeg   i  -> lcNeg <$> rec i
+      PfUnExpr   PfRecip i  -> rec i >>= lcRecip "recip"
+      PfNaryExpr PfAdd   is -> lcSum <$> mapM rec is
+      IntToPf (IntLit i)    -> return $ lcConst i
+      Ite c a b             -> do
+        c' <- boolToPf env c
+        a' <- rec a
+        b' <- rec b
+        ite c' a' b'
+      PfNaryExpr PfMul is -> do
+        is' <- mapM rec is
+        if null is
+          then return lcOne
+          else foldM (lcMul "pfMul") (head is') (tail is')
+      _ -> error $ "Unlowerable prime-field term: " ++ show t
 
 boolToPf
   :: forall n . KnownNat n => Maybe SmtVals -> TermBool -> ToPf n (LSig n)
@@ -264,12 +317,19 @@ boolToPf env term = do
           a' <- boolToPf env abool
           bitEq a' b'
         -- Bv
-        Nothing -> do
-          let abv = fromJust $ cast a
-              bbv = fromJust $ cast b
-          b' <- bvToPf env bbv >> getInt bbv
-          a' <- bvToPf env abv >> getInt abv
-          binEq a' b'
+        Nothing -> case cast a of
+          Just abv -> do
+            let bbv = fromJust $ cast b
+            b' <- bvToPf env bbv >> getInt bbv
+            a' <- bvToPf env abv >> getInt abv
+            binEq a' b'
+          Nothing -> case cast a of
+            Just apf -> do
+              let bpf = fromJust $ cast b
+              b' <- pfToPf env bpf
+              a' <- pfToPf env apf
+              binEq a' b'
+            Nothing -> error $ "Cannot lower " ++ show a
       BoolLit b  -> return $ lcShift (toP $ fromIntegral $ fromEnum b) lcZero
       Not     a  -> lcNot <$> boolToPf env a
       Var name _ -> do
@@ -292,16 +352,12 @@ boolToPf env term = do
         c' <- boolToPf env c
         t' <- boolToPf env t_
         f' <- boolToPf env f
-        v  <- nextVar "ite"
-          $ liftA3 (?) ((/= toP 0) <$> snd c') (snd t') (snd f')
-        enforceCheck (c', lcSub v t', lcZero)
-        enforceCheck (lcNot c', lcSub v f', lcZero)
-        return v
+        ite c' t' f'
+      DynBvExtractBit i b -> do
+        bvToPf env b
+        head . drop i <$> getIntBits b
       DynBvBinPred p w l r -> bvPredToPf env p w l r
       _                    -> unhandled "in boolToPf" t
-
-(?) :: Bool -> a -> a -> a
-(?) c t f = if c then t else f
 
 opId :: BoolNaryOp -> Bool
 opId o = case o of
@@ -364,8 +420,8 @@ naryXor xs = do
   bs <- bitify "xorSum" s n
   -- Could trim a constraint here?
   case bs of
-    h:_ -> return h
-    [] -> error "naryXor of no bits"
+    h : _ -> return h
+    []    -> error "naryXor of no bits"
 
 binXor :: KnownNat n => LSig n -> LSig n -> ToPf n (LSig n)
 binXor a b = naryXor [a, b]
@@ -417,8 +473,12 @@ saveInt term sig = initIntEntry term >> modify
 saveIntBits :: TermDynBv -> [LSig n] -> ToPf n ()
 saveIntBits term bits_ = do
   initIntEntry term
-  unless (length bits_ == dynBvWidth term) $ error "width mismatch in saveIntBits"
-  modify (\s -> s { ints = AMap.adjust (\e -> e { bits = Just bits_ }) term $ ints s })
+  unless (length bits_ == dynBvWidth term)
+    $ error "width mismatch in saveIntBits"
+  modify
+    (\s ->
+      s { ints = AMap.adjust (\e -> e { bits = Just bits_ }) term $ ints s }
+    )
 
 -- Fetching transalations
 getInt :: KnownNat n => TermDynBv -> ToPf n (LSig n)
@@ -498,6 +558,16 @@ inBits signed w number = do
   bs <- nbits "inBits" $ asBits w $ snd number
   binEq number $ deBitify signed bs
 
+(?) :: Bool -> a -> a -> a
+(?) c t f = if c then t else f
+
+ite :: KnownNat n => LSig n -> LSig n -> LSig n -> ToPf n (LSig n)
+ite c t f = do
+  v <- nextVar "ite" $ liftA3 (?) ((/= toP 0) <$> snd c) (snd t) (snd f)
+  enforceCheck (c, lcSub v t, lcZero)
+  enforceCheck (lcNot c, lcSub v f, lcZero)
+  return v
+
 deBitify :: KnownNat n => Bool -> [LSig n] -> LSig n
 deBitify signed bs =
   let lowBits =
@@ -564,10 +634,7 @@ bvToPf env term = do
         t' <- getInt t_
         bvToPf env f
         f' <- getInt f
-        v  <- nextVar "ite"
-          $ liftA3 (?) ((/= toP 0) <$> snd c') (snd t') (snd f')
-        enforceCheck (c', lcSub v t', lcZero)
-        enforceCheck (lcNot c', lcSub v f', lcZero)
+        v  <- ite c' t' f'
         saveInt bv (v, dynBvWidth t_)
       DynBvUnExpr BvNeg w x -> do
         bvToPf env x
@@ -596,6 +663,15 @@ bvToPf env term = do
         high' <- getIntBits high
         low'  <- getIntBits low
         saveIntBits bv $ low' ++ high'
+      PfToDynBv w p -> do
+        case cast p of
+          Just pn -> do
+            p' <- pfToPf @n env pn
+            saveInt bv (p', w)
+          Nothing -> error $ "Bad modulus PfToDynBv: " ++ show bv
+      BoolToDynBv b -> do
+        b' <- boolToPf env b
+        saveIntBits bv [b']
       DynBvBinExpr op w l r -> do
         bvToPf env l
         bvToPf env r
@@ -754,9 +830,8 @@ handleAlias env a = case a of
             logIf "toPf" $ "Alias " ++ show boolV ++ " to " ++ show rBool
             modify $ \st -> st { bools = AMap.alias boolV rBool $ bools st }
             return True
-        Nothing ->
-          let intV = fromMaybe (error $ "Not int: " ++ show t) $ cast v
-          in  if AMap.memberOrAlias intV (ints s)
+        Nothing -> case cast v of
+          Just intV -> if AMap.memberOrAlias intV (ints s)
                 then return False
                 else do
                   let rInt = fromMaybe (error $ "Not int: " ++ show t) $ cast t
@@ -764,6 +839,16 @@ handleAlias env a = case a of
                   logIf "toPf" $ "Alias " ++ show intV ++ " to " ++ show rInt
                   modify $ \st -> st { ints = AMap.alias intV rInt $ ints st }
                   return True
+          Nothing -> case cast v of
+            Just pfV -> if AMap.memberOrAlias pfV (pfs s)
+                then return False
+                else do
+                  let rPf = fromMaybe (error $ "Not pf: " ++ show t) $ cast t
+                  _ <- pfToPf env rPf
+                  logIf "toPf" $ "Alias " ++ show pfV ++ " to " ++ show rPf
+                  modify $ \st -> st { pfs = AMap.alias pfV rPf $ pfs st }
+                  return True
+            Nothing -> error "Bad alias type"
   _ -> return False
 
 -- # Top Level

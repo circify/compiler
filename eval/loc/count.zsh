@@ -6,6 +6,7 @@ components=(
     circom "../../src/Codegen/Circom"
     z3 "../../src/Targets/SMT/TySmtToZ3.hs"
     r1cs "../../src/IR/R1cs.hs ../../src/IR/R1cs/ ../../src/IR/SMT/ToPf.hs"
+    zokrates "../../src/Codegen/Zokrates"
 )
 
 for c in ${(k)components}

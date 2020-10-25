@@ -25,12 +25,17 @@ import qualified Codegen.Circom.CompTypes.WitComp
                                                as Wit
 import qualified Codegen.Circom.CompTypes      as CompT
 import qualified Codegen.Circom.Linking        as Link
+import qualified Codegen.Zokrates.Main         as ZGen
 import           Control.Monad
 import           Control.Monad.IO.Class
 import qualified Targets.SMT.TySmtToZ3         as ToZ3
 import qualified IR.R1cs                       as R1cs
-import qualified IR.R1cs.Opt                   as Opt
+import qualified IR.R1cs.Opt                   as R1csOpt
+import qualified IR.SMT.Opt                    as SmtOpt
+import qualified IR.SMT.Opt.Assert             as OptAssert
+import qualified IR.SMT.ToPf                   as ToPf
 import qualified Parser.Circom.Inputs          as Parse
+import qualified Parser.Zokrates               as ZParse
 import           Data.Field.Galois              ( toP
                                                 , Prime
                                                 )
@@ -60,6 +65,8 @@ import qualified Util.Cfg                      as Cfg
                                                 , evalCfg
                                                 , defaultCfgState
                                                 )
+import           Util.Show
+import qualified Util.ShowMap                  as SMap
 
 openFile :: FilePath -> IOMode -> IO Handle
 openFile path mode =
@@ -86,6 +93,8 @@ Usage:
   compiler [options] c-eval <fn-name> <path>
   compiler [options] c-check-setup <fn-name> <path>
   compiler [options] c-check-prove <fn-name> <path>
+  compiler [options] zokrates-parse <path>
+  compiler [options] zokrates-emit-r1cs <fn-name> <path>
 
 Options:
   -h, --help         Display this message
@@ -177,7 +186,7 @@ cmdEmitR1cs :: Bool -> FilePath -> FilePath -> Cfg ()
 cmdEmitR1cs asJson circomPath r1csPath = do
   liftIO $ print "Loading circuit"
   m    <- liftIO $ loadMain circomPath
-  r1cs <- evalLog $ (Link.linkMain @Order m >>= Opt.opt)
+  r1cs <- evalLog $ (Link.linkMain @Order m >>= R1csOpt.opt)
   liftIO $ do
     putStrLn $ R1cs.r1csStats r1cs
     --putStrLn $ R1cs.r1csShow r1cs
@@ -213,7 +222,7 @@ cmdProve libsnark pkPath vkPath inPath xPath wPath pfPath circomPath = do
   inputFile     <- liftIO $ openFile inPath ReadMode
   inputsSignals <- liftIO $ Parse.parseSignalsFromFile (Proxy @Order) inputFile
   allSignals <- evalLog $ Link.computeWitnesses (Proxy @Order) m inputsSignals
-  r1cs          <- evalLog (Link.linkMain @Order m >>= Opt.opt)
+  r1cs          <- evalLog (Link.linkMain @Order m >>= R1csOpt.opt)
   let getOr m_ k =
         Maybe.fromMaybe (error $ "Missing sig: " ++ show k) $ m_ Map.!? k
   let getOrI m_ k =
@@ -326,6 +335,28 @@ cmdCCheckProve libsnark pkPath vkPath _inPath xPath wPath pfPath fnName cPath =
       R1cs.r1csWriteAssignments r1cs xPath wPath
       runProve libsnark pkPath vkPath xPath wPath pfPath
 
+cmdZokratesParse :: FilePath -> Cfg ()
+cmdZokratesParse path = do
+  ast <- liftIO $ ZParse.loadFilesRecursively path
+  liftIO $ putStrLn $ pShow ast
+
+cmdZokratesEmitR1cs :: FilePath -> String -> Bool -> FilePath -> Cfg ()
+cmdZokratesEmitR1cs path fnName asJson r1csPath = do
+  files <- liftIO $ ZParse.loadFilesRecursively path
+  r1cs  <- evalLog $ do
+    assertState <- ZGen.run @Order path fnName files
+    --liftIO $ putStrLn $ pShow assertState
+    newSmt <- SmtOpt.opt SMap.empty assertState
+    r      <- ToPf.toPf @Order (OptAssert._vals newSmt)
+                               (OptAssert._public newSmt)
+                               SMap.empty
+                               (OptAssert.listAssertions newSmt)
+    R1csOpt.opt r
+  liftIO $ do
+    putStrLn $ R1cs.r1csStats r1cs
+    R1cs.writeToR1csFile asJson r1cs r1csPath
+
+
 defaultR1cs :: String
 defaultR1cs = "C"
 
@@ -425,6 +456,15 @@ main = do
                        pfPath
                        fnName
                        cPath
+      _ | args `isPresent` command "zokrates-parse" -> do
+        path <- args `getExistingFilePath` argument "path"
+        cmdZokratesParse path
+      _ | args `isPresent` command "zokrates-emit-r1cs" -> do
+        fnName   <- args `getArgOrExit` argument "fn-name"
+        path     <- args `getExistingFilePath` argument "path"
+        r1csPath <- args `getArgOrExit` shortOption 'C'
+        let asJson = args `isPresent` longOption "json"
+        cmdZokratesEmitR1cs path fnName asJson r1csPath
       _ -> liftIO $ exitWithUsageMessage patterns "Missing command!"
   cfg <- Cfg.setFromEnv Cfg.defaultCfgState
   Cfg.evalCfg cmd cfg

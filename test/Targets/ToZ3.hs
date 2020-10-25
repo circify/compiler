@@ -112,6 +112,8 @@ tySmtToZ3Tests = benchTestGroup
       ]
     )
     Z3.Sat
+  , genZ3Test False "bit extract sat"   (Smt.DynBvExtractBit 0 $ bv3 5) Z3.Sat
+  , genZ3Test False "bit extract unsat" (Smt.DynBvExtractBit 1 $ bv3 5) Z3.Unsat
   , genOverflowTest "smult overflow"     Smt.BvSmulo 4 (-4) (-2) True
   , genOverflowTest "smult no overflow"  Smt.BvSmulo 4 (-7) (-1) False
   , genOverflowTest "smult no overflow+" Smt.BvSmulo 4 7    1    False

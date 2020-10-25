@@ -132,10 +132,14 @@ toZ3 t = case t of
   DynBvConcat _ l      r -> tyBinZ3Bin Z.mkConcat l r
   DynBvBinPred o w l r   -> tyBinZ3Bin (bvBinPredToZ3 o w) l r
   DynBvExtract s w i     -> toZ3 i >>= Z.mkExtract (w + s - 1) s
-  IntToDynBv w i         -> toZ3 i >>= Z.mkInt2bv w
+  DynBvExtractBit i b    -> toZ3 $ mkIte
+    (mkEq (mkDynBvExtract i 1 b) (DynBvLit $ Bv.ones 1))
+    (BoolLit True)
+    (BoolLit False)
+  IntToDynBv w i -> toZ3 i >>= Z.mkInt2bv w
 
-  IntLit i               -> Z.mkInteger i
-  IntUnExpr o t'         -> case o of
+  IntLit i       -> Z.mkInteger i
+  IntUnExpr o t' -> case o of
     IntNeg -> toZ3 t' >>= Z.mkUnaryMinus
     IntAbs -> nyi o
   IntBinExpr o l r -> case o of
@@ -160,6 +164,7 @@ toZ3 t = case t of
   SignedBvToInt tt -> toZ3 tt >>= flip Z.mkBv2int True
   BoolToInt     t' -> toZ3 $ Ite t' (IntLit 1) (IntLit 0)
   PfToInt{}        -> nyi "Prime fields"
+  PfToDynBv{}      -> nyi "Prime fields"
 
   Fp64Lit d        -> Z.mkDoubleSort >>= Z.mkFpFromDouble d
   Fp32Lit d        -> Z.mkFloatSort >>= Z.mkFpFromFloat d
@@ -371,7 +376,11 @@ instance Show Val where
   show NegZ     = "-0"
   show NaN      = "NaN"
 
-data Z3Result = Z3Result { time :: Double, sat :: Bool, model :: Map String Val}
+data Z3Result = Z3Result
+  { time  :: Double
+  , sat   :: Bool
+  , model :: Map String Val
+  }
 
 -- | Returns Nothing if UNSAT, or an association between variables and string if SAT
 evalZ3Model :: TermBool -> Log Z3Result

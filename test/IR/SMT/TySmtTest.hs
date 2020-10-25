@@ -36,6 +36,17 @@ tySmtTests = benchTestGroup
     )
     (Smt.ValPf @5 1)
   , genEvalTest
+    "field to bv"
+    Map.empty
+    (Smt.PfToDynBv
+      8
+      (Smt.PfNaryExpr
+        Smt.PfMul
+        [Smt.IntToPf @101 (Smt.IntLit 3), Smt.IntToPf @101 (Smt.IntLit 5)]
+      )
+    )
+    (Smt.ValDynBv $ Bv.bitVec 8 15)
+  , genEvalTest
     "bv expression"
     Map.empty
     (Smt.BvBinExpr Smt.BvAnd

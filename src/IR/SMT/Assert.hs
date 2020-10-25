@@ -28,6 +28,7 @@ data AssertState = AssertState { vars         :: !(M.Map String Dyn.Dynamic)
                                , asserted     :: !(Seq (Ty.Term Ty.BoolSort))
                                , vals         :: !(Maybe (M.Map String Dyn.Dynamic))
                                , public       :: !(S.Set String)
+                               , nextVarN     :: !Int
                                }
                                deriving (Show)
 
@@ -50,6 +51,7 @@ emptyAssertState = AssertState { vars     = M.empty
                                , asserted = Seq.empty
                                , vals     = Nothing
                                , public   = S.empty
+                               , nextVarN = 0
                                }
 
 initValues :: Assert ()
@@ -71,7 +73,9 @@ setValue variable value = do
   modify $ \s -> s { vals = M.insert variable (Dyn.toDyn value) <$> vals s }
 
 publicize :: String -> Assert ()
-publicize n = modify $ \s -> s { public = S.insert n $ public s }
+publicize n = do
+  logIf "publicize" $ "Publicize: " ++ n
+  modify $ \s -> s { public = S.insert n $ public s }
 
 runAssert :: Assert a -> Cfg (a, AssertState)
 runAssert (Assert act) = evalLog $ runStateT act emptyAssertState
@@ -107,6 +111,13 @@ newVar name sort = do
       (error $ unwords
         ["Already created variable", name, "with wrong sort:", show v]
       )
+
+freshVar :: forall s . Ty.SortClass s => String -> Ty.Sort -> Assert (Ty.Term s)
+freshVar name sort = do
+  i <- gets nextVarN
+  modify $ \s -> s { nextVarN = 1 + nextVarN s}
+  let name' = "fresh_" ++ show i ++ "_" ++ name
+  newVar name' sort
 
 check :: AssertState -> Either String ()
 check s = forM_ (F.toList $ asserted s) $ \c -> case vals s of
