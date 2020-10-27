@@ -36,9 +36,9 @@ instance Semigroup (Control term) where
   left  <> Empty = left
   left  <> right = Seq left right
 
-instance Monoid (Control term) where
+instance Monoid (Control t) where
   mempty = Empty
-deriving instance Generic term => Generic (Control term)
+deriving instance Generic t => Generic (Control t)
 
 -- In order to do control flow flattening, this is the minimum contract the terms must follow
 -- + Compare to integer
