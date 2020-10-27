@@ -558,15 +558,18 @@ inBits signed w number = do
   bs <- nbits "inBits" $ asBits w $ snd number
   binEq number $ deBitify signed bs
 
-(?) :: Bool -> a -> a -> a
-(?) c t f = if c then t else f
-
+-- | Return a signal equivalent to c ? t : f.
+-- Implemented by introducing fresh variables:
+--  * i = c * t
+--  * j = (1 - c) * f
+--  return i + j
 ite :: KnownNat n => LSig n -> LSig n -> LSig n -> ToPf n (LSig n)
 ite c t f = do
-  v <- nextVar "ite" $ liftA3 (?) ((/= toP 0) <$> snd c) (snd t) (snd f)
-  enforceCheck (c, lcSub v t, lcZero)
-  enforceCheck (lcNot c, lcSub v f, lcZero)
-  return v
+  i <- nextVar "ite_t"  $ liftA2 (*) (snd c) (snd t)
+  j <- nextVar "ite_f"  $ liftA2 (*) (snd $ lcNot c) (snd f)
+  enforceCheck (c, t, i)
+  enforceCheck (lcNot c, t, j)
+  return $ lcAdd i j
 
 deBitify :: KnownNat n => Bool -> [LSig n] -> LSig n
 deBitify signed bs =

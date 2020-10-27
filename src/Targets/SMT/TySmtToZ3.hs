@@ -165,6 +165,7 @@ toZ3 t = case t of
   BoolToInt     t' -> toZ3 $ Ite t' (IntLit 1) (IntLit 0)
   PfToInt{}        -> nyi "Prime fields"
   PfToDynBv{}      -> nyi "Prime fields"
+  BoolToDynBv b    -> toZ3 $ Ite b (DynBvLit $ Bv.ones 1) (DynBvLit $ Bv.zeros 1)
 
   Fp64Lit d        -> Z.mkDoubleSort >>= Z.mkFpFromDouble d
   Fp32Lit d        -> Z.mkFloatSort >>= Z.mkFpFromFloat d

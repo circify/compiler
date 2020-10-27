@@ -175,7 +175,7 @@ instance forall s n. (Show s, KnownNat n) => ToJSON (R1CS s n) where
     sigOne :: Value
     sigOne = object ["names" .= ["one" :: String]]
     sigToJson :: (Int, [s]) -> Value
-    sigToJson (_, ss) = object ["names" .= map show ss]
+    sigToJson (i, ss) = object ["idx".= (i - 1), "names" .= map show ss]
     qeqToJson (a, b, c) = map lcToJson [a, b, c]
     lcToJson (m, c) =
       let back = map (\(k, v) -> Text.pack (show (k - 1)) .= (primeShow v))
