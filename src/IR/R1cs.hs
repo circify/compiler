@@ -21,6 +21,7 @@ module IR.R1cs
   , sigNumLookup
   , r1csAddSignal
   , r1csSetSignalVal
+  , r1csInitSigVals
   , r1csEnsureSignal
   , r1csAddSignals
   , r1csPublicizeSignal
@@ -127,24 +128,25 @@ qeqLcAdd :: (Ord s, GaloisField k) => QEQ s k -> LC s k -> QEQ s k
 qeqLcAdd (a1, b1, c1) l = (a1, b1, lcAdd c1 l)
 
 qeqScale :: GaloisField k => k -> QEQ s k -> QEQ s k
-qeqScale k (a2, b2, c2) = (lcScale k a2, lcScale k b2, lcScale k c2)
+qeqScale k (a2, b2, c2) = (lcScale k a2, b2, lcScale k c2)
 
 qeqShift :: GaloisField k => k -> QEQ s k -> QEQ s k
-qeqShift k (a2, b2, c2) = (lcShift k a2, lcShift k b2, lcShift k c2)
+qeqShift k (a2, b2, c2) = (a2, b2, lcShift k c2)
 
 
-data R1CS s n = R1CS { sigNums :: !(Map.Map s Int)
-                     , numSigs :: !(IntMap.IntMap [s])
-                     , constraints :: !(Seq.Seq (QEQ Int (Prime n)))
-                     , nextSigNum :: !Int
-                     , publicInputs :: !IntSet.IntSet
-                     , values :: !(IntMap.IntMap (Prime n))
-                     }
+data R1CS s n = R1CS
+  { sigNums      :: !(Map.Map s Int)
+  , numSigs      :: !(IntMap.IntMap [s])
+  , constraints  :: !(Seq.Seq (QEQ Int (Prime n)))
+  , nextSigNum   :: !Int
+  , publicInputs :: !IntSet.IntSet
+  , values       :: !(Maybe (IntMap.IntMap (Prime n)))
+  }
 
 instance {-# OVERLAPS #-} forall s n. (Show s, KnownNat n) => ToJSON (LC s (Prime n)) where
   toJSON (m, c) =
     let back =
-            map (\(k, v) -> Text.pack (show k) .= show (fromP v)) (Map.toList m)
+          map (\(k, v) -> Text.pack (show k) .= show (fromP v)) (Map.toList m)
     in
       object
         [ "type" .= Text.pack "LINEARCOMBINATION"
@@ -175,7 +177,7 @@ instance forall s n. (Show s, KnownNat n) => ToJSON (R1CS s n) where
     sigOne :: Value
     sigOne = object ["names" .= ["one" :: String]]
     sigToJson :: (Int, [s]) -> Value
-    sigToJson (i, ss) = object ["idx".= (i - 1), "names" .= map show ss]
+    sigToJson (i, ss) = object ["idx" .= (i - 1), "names" .= map show ss]
     qeqToJson (a, b, c) = map lcToJson [a, b, c]
     lcToJson (m, c) =
       let back = map (\(k, v) -> Text.pack (show (k - 1)) .= (primeShow v))
@@ -214,8 +216,8 @@ qeqShow (a, b, c) =
 lcShow :: (KnownNat n, Show s) => LC s (Prime n) -> String
 lcShow (m, c) =
   let list =
-          map (\(x, v) -> primeShow v ++ " " ++ show x) (Map.toList m)
-            ++ [ primeShow c | c /= toP 0 ]
+        map (\(x, v) -> primeShow v ++ " " ++ show x) (Map.toList m)
+          ++ [ primeShow c | c /= toP 0 ]
   in  List.intercalate " + " (if null list then ["0"] else list)
 
 lcSigs :: LC s k -> [s]
@@ -265,7 +267,7 @@ r1csSetSignalVal :: Ord s => s -> Prime n -> R1CS s n -> R1CS s n
 r1csSetSignalVal sig val r1cs =
   let r1cs' = r1csEnsureSignal sig r1cs
   in  r1cs'
-        { values = IntMap.insert (sigNums r1cs' Map.! sig) val $ values r1cs'
+        { values = IntMap.insert (sigNums r1cs' Map.! sig) val <$> values r1cs'
         }
 
 r1csAddSignal :: Ord s => s -> R1CS s n -> R1CS s n
@@ -284,11 +286,11 @@ r1csMergeSignalNums !aN !bN !r1cs =
       numSigs' = IntMap.adjust (++ bSigs) aN (numSigs r1cs)
       sigNums' = foldr (flip Map.insert aN) (sigNums r1cs) bSigs
       constraints' =
-          fmap (sigMapQeq (\i -> if i == bN then aN else i)) (constraints r1cs)
+        fmap (sigMapQeq (\i -> if i == bN then aN else i)) (constraints r1cs)
   in  r1cs { numSigs     = numSigs'
            , sigNums     = sigNums'
            , constraints = constraints'
-           , values      = IntMap.delete bN $ values r1cs
+           , values      = IntMap.delete bN <$> values r1cs
            }
 r1csMergeSignals
   :: (Show s, Ord s, KnownNat n) => s -> s -> R1CS s n -> R1CS s n
@@ -316,7 +318,10 @@ r1csAddConstraints c r1cs = r1cs
   }
 
 emptyR1cs :: R1CS s n
-emptyR1cs = R1CS Map.empty IntMap.empty Seq.empty 2 IntSet.empty IntMap.empty
+emptyR1cs = R1CS Map.empty IntMap.empty Seq.empty 2 IntSet.empty Nothing
+
+r1csInitSigVals :: R1CS s n -> R1CS s n
+r1csInitSigVals r = r { values = Just IntMap.empty }
 
 nPublicInputs :: R1CS s n -> Int
 nPublicInputs = IntSet.size . publicInputs
@@ -333,7 +338,7 @@ sigMapLc
   -> LC t n
 sigMapLc !f (!m, !c) =
   let m' :: Map.Map t n =
-          Map.filter (/= fromInteger 0) $ Map.mapKeysWith (+) f m
+        Map.filter (/= fromInteger 0) $ Map.mapKeysWith (+) f m
   in  m' `deepseq` (m', c)
 
 sigMapQeq
@@ -362,7 +367,8 @@ r1csAsLines r1cs =
   in  [nPubIns, nWit, nConstraints] : constraintLines
 
 -- Todo: implement this using a better IO system.
-writeToR1csFile :: (Show s, KnownNat n) => Bool -> R1CS s n -> FilePath -> IO ()
+writeToR1csFile
+  :: (Show s, KnownNat n) => Bool -> R1CS s n -> FilePath -> IO ()
 writeToR1csFile asJson r1cs path = if asJson
   then ByteString.writeFile path $ encode r1cs
   else writeFile path $ unlines $ map (unwords . map show) $ r1csAsLines r1cs
@@ -376,20 +382,32 @@ writeToR1csFile asJson r1cs path = if asJson
 
 r1csCheck
   :: forall s n . (Show s, Ord s, KnownNat n) => R1CS s n -> Either String ()
-r1csCheck r1cs = forM_ (constraints r1cs) $ \c ->
-  let v = qeqEval c
-  in  if 0 == fromP v
-        then Right ()
-        else Left $ unwords
-          ["The constraint", qeqShow c, "evaluated to", primeShow v, "not 0"]
+r1csCheck r1cs = if (null $ values r1cs)
+  then Right ()
+  else forM_ (constraints r1cs) $ \c ->
+    let v = qeqEval r1cs c
+    in  if 0 == fromP v
+          then Right ()
+          else Left $ unwords
+            [ "The constraint"
+            , qeqShow $ r1csExternQeq r1cs c
+            , "evaluated to"
+            , primeShow v
+            , "not 0"
+            ]
  where
 
+qeqEval
+  :: forall s n
+   . (Show s, Ord s, KnownNat n)
+  => R1CS s n
+  -> QEQ Int (Prime n)
+  -> Prime n
+qeqEval r1cs (a, b, c) = lcEval a * lcEval b - lcEval c
+ where
   lcEval :: LC Int (Prime n) -> Prime n
   lcEval (m, c) =
     c + sum (map (\(k, v) -> v * r1csNumValue r1cs k) $ Map.toList m)
-
-  qeqEval :: QEQ Int (Prime n) -> Prime n
-  qeqEval (a, b, c) = lcEval a * lcEval b - lcEval c
 
 r1csNumValue :: (KnownNat n, Show s) => R1CS s n -> Int -> Prime n
 r1csNumValue r1cs i =
@@ -397,7 +415,7 @@ r1csNumValue r1cs i =
       (error $ "Could not find r1cs var: " ++ show i ++ ": " ++ show
         (numSigs r1cs IntMap.!? i)
       )
-    $         values r1cs
+    $         fromMaybe (error "No r1cs values!") (values r1cs)
     IntMap.!? i
 
 r1csWriteAssignments

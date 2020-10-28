@@ -20,6 +20,7 @@ import           Data.Dynamic                   ( Dynamic
                                                 , toDyn
                                                 , fromDyn
                                                 )
+import Data.Either (partitionEithers)
 import           Data.Field.Galois              ( Prime
                                                 , toP
                                                 , fromP
@@ -127,23 +128,15 @@ constantFold = mapTerm visit
       bvizeIntOp f x y = Bv.bitVec (Bv.size x) $ f (Bv.uint x) (Bv.uint y)
       -- Operator applied to two contants inputs
       opConstConst = case op of
-        BvAdd  -> bvizeIntOp (+)
         BvSub  -> bvizeIntOp (-)
-        BvMul  -> bvizeIntOp (*)
         BvUdiv -> bvizeIntOp div
         BvUrem -> bvizeIntOp rem
         BvShl  -> Bv.shl
         BvAshr -> Bv.ashr
         BvLshr -> Bv.shr
-        BvOr   -> (Bv..|.)
-        BvAnd  -> (Bv..&.)
-        BvXor  -> Bv.xor
       opTermConst :: TermDynBv -> Bv.BV -> Maybe TermDynBv
       opTermConst l r = case op of
-        BvAdd | r == 0 -> Just l
         BvSub | r == 0 -> Just l
-        BvMul | r == 0 -> Just (DynBvLit r)
-        BvMul | r == 1 -> Just l
         BvLshr         -> if rNat < toInteger w
           then Just $ mkDynBvConcat (DynBvLit $ Bv.zeros rInt)
                                     (mkDynBvExtract rInt (w - rInt) l)
@@ -167,10 +160,32 @@ constantFold = mapTerm visit
             ++ " by "
             ++ show r
             ++ " is an overshift"
-      opConstTerm l r = case op of
-        BvAdd -> opTermConst r l
-        BvMul -> opTermConst r l
-        _     -> Nothing
+      opConstTerm _l _r = Nothing
+    DynBvNaryExpr op w a ->
+      let a' = map constantFold a
+          (ls, consts) = partitionEithers $ map (\case
+              DynBvLit l -> Right l
+              e -> Left e
+            ) a'
+          c = nOpConsts consts
+      in  if null ls then Just $ DynBvLit $ c else nOpTermsConst ls c
+     where
+      nOpConsts :: [Bv.BV] -> Bv.BV
+      nOpConsts = case op of
+        BvOr   -> foldl' (Bv..|.) (Bv.zeros w)
+        BvAnd  -> foldl' (Bv..&.) (Bv.ones w)
+        BvXor  -> foldl' Bv.xor (Bv.zeros w)
+        BvAdd  -> foldl' (bvizeIntOp (+)) (Bv.zeros w)
+        BvMul  -> foldl' (bvizeIntOp (*)) (Bv.bitVec w (1 :: Integer))
+      bvizeIntOp f x y = Bv.bitVec (Bv.size x) $ f (Bv.uint x) (Bv.uint y)
+      safeNary ls = if length ls > 1 then DynBvNaryExpr op w ls else head ls
+      nOpTermsConst :: [TermDynBv] -> Bv.BV -> Maybe TermDynBv
+      nOpTermsConst l r = case op of
+        BvAdd | r == 0 -> Just $ safeNary l
+        BvMul | r == 0 -> Just (DynBvLit r)
+        BvMul | r == 1 -> Just $ safeNary l
+        _ -> Nothing
+
 
     DynBvBinPred op w a b ->
       let a' = constantFold a

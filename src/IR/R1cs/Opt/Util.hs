@@ -21,8 +21,8 @@ data Eliminatable s k = Const s k
 
 normalize :: (Ord s, GaloisField k) => QEQ s k -> QEQ s k
 normalize (a, b, c) = case (constantLc a, constantLc b) of
-  (Just a', _      ) -> (lcZero, lcZero, lcAdd c $ lcScale a' b)
-  (_      , Just b') -> (lcZero, lcZero, lcAdd c $ lcScale b' a)
+  (Just a', _      ) -> (lcZero, lcZero, lcAdd c $ lcScale (negate a') b)
+  (_      , Just b') -> (lcZero, lcZero, lcAdd c $ lcScale (negate b') a)
   (_      , _      ) -> (a, b, c)
 
 

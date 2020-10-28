@@ -45,13 +45,13 @@ tySmtTests = benchTestGroup
         [Smt.IntToPf @101 (Smt.IntLit 3), Smt.IntToPf @101 (Smt.IntLit 5)]
       )
     )
-    (Smt.ValDynBv $ Bv.bitVec 8 15)
+    (Smt.ValDynBv $ Bv.bitVec 8 (15 :: Int))
   , genEvalTest
     "bv expression"
     Map.empty
-    (Smt.BvBinExpr Smt.BvAnd
-                   (Smt.IntToBv @4 (Smt.IntLit 9))
-                   (Smt.IntToBv @4 (Smt.IntLit 10))
+    (Smt.BvNaryExpr
+      Smt.BvAnd
+      [Smt.IntToBv @4 (Smt.IntLit 9), Smt.IntToBv @4 (Smt.IntLit 10)]
     )
     (Smt.ValBv @4 (Bv.bitVec 4 (8 :: Int)))
   , genEvalTest

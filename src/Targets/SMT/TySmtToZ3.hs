@@ -108,6 +108,7 @@ toZ3 t = case t of
       end     = start + newSize - 1
       newSize = fromInteger $ natVal (Proxy :: Proxy i)
   BvBinExpr o l r -> tyBinZ3Bin (bvBinOpToZ3 o) l r
+  BvNaryExpr o l  -> tyNaryZ3Bin (bvNaryOpToZ3 o) l
   BvBinPred o l r -> tyBinZ3Bin (bvBinPredToZ3 o $ bvWidth l) l r
   IntToBv i       -> toZ3 i >>= Z.mkInt2bv (width t)
    where
@@ -123,6 +124,7 @@ toZ3 t = case t of
     rm <- Z.mkFpRoundToNearestTiesToEven
     if s then Z.mkFpToBv rm i' w' else Z.mkFpToUbv rm i' w'
   DynBvBinExpr o _ l r -> tyBinZ3Bin (bvBinOpToZ3 o) l r
+  DynBvNaryExpr o _ l  -> tyNaryZ3Bin (bvNaryOpToZ3 o) l
   DynBvUnExpr o _ b    -> toZ3 b >>= case o of
     BvNeg -> Z.mkBvneg
     BvNot -> Z.mkBvnot
@@ -288,9 +290,10 @@ toZ3 t = case t of
     BvAshr -> Z.mkBvashr
     BvUrem -> Z.mkBvurem
     BvUdiv -> Z.mkBvudiv
+    BvSub  -> Z.mkBvsub
+  bvNaryOpToZ3 o = case o of
     BvAdd  -> Z.mkBvadd
     BvMul  -> Z.mkBvmul
-    BvSub  -> Z.mkBvsub
     BvOr   -> Z.mkBvor
     BvAnd  -> Z.mkBvand
     BvXor  -> Z.mkBvxor

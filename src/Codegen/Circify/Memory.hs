@@ -96,7 +96,7 @@ setBits element structure index =
               structMask   = Ty.mkDynBvUnExpr Ty.BvNot elemMask
 
               -- And the struct with the mask
-              res          = Ty.mkDynBvBinExpr Ty.BvAnd structMask structure
+              res          = Ty.mkDynBvNaryExpr Ty.BvAnd [structMask, structure]
 
               -- Construct the *padded elemnt*:
               -- (0) Make [element][0 repeat width(structure - element)]
@@ -105,7 +105,7 @@ setBits element structure index =
               shiftedElem  = Ty.mkDynBvBinExpr Ty.BvShl preShiftElem castIndex
 
        -- Or the two together!
-          in  Ty.mkDynBvBinExpr Ty.BvOr shiftedElem res
+          in  Ty.mkDynBvNaryExpr Ty.BvOr [shiftedElem, res]
         _ ->
           error
             $  "In setBits, the destination has width "

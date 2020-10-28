@@ -545,7 +545,7 @@ intResize fromSign toWidth from =
 -- 4. Scale the int, do the op.
 cWrapBinArith
   :: String
-  -> (Bool -> Ty.BvBinOp)
+  -> (Bool -> Either Ty.BvBinOp Ty.BvNaryOp)
   -> (  forall f
       . Ty.ComputableFp f
      => Ty.Term (Ty.FpSort f)
@@ -563,6 +563,8 @@ cWrapBinArith name bvOp doubleF ubF allowDouble mergeWidths a b = convert
   (integralPromotion a)
   (integralPromotion b)
  where
+  bvBinExpr (Left o) = Ty.mkDynBvBinExpr o
+  bvBinExpr (Right o) = \x y -> Ty.mkDynBvNaryExpr o [x, y]
   convert a b =
     let
       cannot with = error $ unwords ["Cannot do", name, "with", with]
@@ -570,7 +572,7 @@ cWrapBinArith name bvOp doubleF ubF allowDouble mergeWidths a b = convert
       -- TODO: check bounds!
       cPtrPlusInt :: Type.Type -> Bv -> Bool -> Bv -> Bv
       cPtrPlusInt pTy ptr signed int =
-        Ty.mkDynBvBinExpr Ty.BvAdd ptr $ intResize signed (Type.numBits pTy) int
+        bvBinExpr (Right Ty.BvAdd) ptr $ intResize signed (Type.numBits pTy) int
 
       (t, u) = case (term a, term b) of
         (CDouble d, _) -> if allowDouble
@@ -594,21 +596,21 @@ cWrapBinArith name bvOp doubleF ubF allowDouble mergeWidths a b = convert
             (CFloat $ doubleF d $ asFloat $ term $ cCast Type.Float a, Nothing)
           else cannot "a double"
         (CStackPtr ty off id, CInt s _ i) ->
-          if bvOp s == Ty.BvAdd || bvOp s == Ty.BvSub
+          if bvOp s == Right Ty.BvAdd || bvOp s == Left Ty.BvSub
             then (CStackPtr ty (cPtrPlusInt ty off s i) id, Nothing)
             else cannot "a pointer on the left"
         (CStackPtr ty off id, CStackPtr ty' off' id') ->
-          if bvOp False == Ty.BvSub && ty == ty' && id == id'
+          if bvOp False == Left Ty.BvSub && ty == ty' && id == id'
             then -- TODO: ptrdiff_t?
               ( CInt True
                      (Type.numBits ty)
-                     (Ty.mkDynBvBinExpr (bvOp False) off off')
+                     (bvBinExpr (bvOp False) off off')
               , ubF >>= (\f -> f True off True off')
               )
             else
               cannot
                 "two pointers, or two pointers of different types, or pointers to different allocations"
-        (CInt s _ i, CStackPtr ty addr id) -> if bvOp s == Ty.BvAdd
+        (CInt s _ i, CStackPtr ty addr id) -> if bvOp s == Right Ty.BvAdd
           then (CStackPtr ty (cPtrPlusInt ty addr s i) id, Nothing)
           else cannot "a pointer on the right"
         -- Ptr diff
@@ -617,7 +619,7 @@ cWrapBinArith name bvOp doubleF ubF allowDouble mergeWidths a b = convert
               sign  = max s s'
               l     = intResize s width i
               r     = intResize s' width i'
-          in  ( CInt sign width $ Ty.mkDynBvBinExpr (bvOp sign) l r
+          in  ( CInt sign width $ bvBinExpr (bvOp sign) l r
               , ubF >>= (\f -> f s l s' r)
               )
         (_, _) -> cannot $ unwords [show a, "and", show b]
@@ -628,7 +630,7 @@ cWrapBinArith name bvOp doubleF ubF allowDouble mergeWidths a b = convert
 cBitOr, cBitXor, cBitAnd, cSub, cMul, cAdd, cMin, cMax, cDiv, cRem, cShl, cShr
   :: CTerm -> CTerm -> CTerm
 cAdd = cWrapBinArith "+"
-                     (const Ty.BvAdd)
+                     (const $ Right Ty.BvAdd)
                      (Ty.FpBinExpr Ty.FpAdd)
                      (Just overflow)
                      True
@@ -637,7 +639,7 @@ cAdd = cWrapBinArith "+"
   overflow s i s' i' =
     if s && s' then Just $ Ty.mkDynBvBinPred Ty.BvSaddo i i' else Nothing
 cSub = cWrapBinArith "-"
-                     (const Ty.BvSub)
+                     (const $ Left Ty.BvSub)
                      (Ty.FpBinExpr Ty.FpSub)
                      (Just overflow)
                      True
@@ -646,7 +648,7 @@ cSub = cWrapBinArith "-"
   overflow s i s' i' =
     if s && s' then Just $ Ty.mkDynBvBinPred Ty.BvSsubo i i' else Nothing
 cMul = cWrapBinArith "*"
-                     (const Ty.BvMul)
+                     (const $ Right Ty.BvMul)
                      (Ty.FpBinExpr Ty.FpMul)
                      (Just overflow)
                      True
@@ -656,7 +658,7 @@ cMul = cWrapBinArith "*"
     if s && s' then Just $ Ty.mkDynBvBinPred Ty.BvSmulo i i' else Nothing
 -- TODO: div overflow
 cDiv = cWrapBinArith "/"
-                     (const Ty.BvUdiv)
+                     (const $ Left Ty.BvUdiv)
                      (Ty.FpBinExpr Ty.FpDiv)
                      (Just overflow)
                      True
@@ -681,7 +683,7 @@ isDivZero _s _i _s' i' =
 
 -- TODO: CPP reference says that % requires integral arguments
 cRem = cWrapBinArith "%"
-                     (const Ty.BvUrem)
+                     (const $ Left Ty.BvUrem)
                      (Ty.FpBinExpr Ty.FpRem)
                      (Just isDivZero)
                      False
@@ -695,11 +697,11 @@ noFpError
   -> Ty.Term (Ty.FpSort f)
   -> Ty.Term (Ty.FpSort f)
 noFpError = const $ const $ error "Invalid FP op"
-cBitOr = cWrapBinArith "|" (const Ty.BvOr) noFpError Nothing False True
-cBitAnd = cWrapBinArith "&" (const Ty.BvAnd) noFpError Nothing False True
-cBitXor = cWrapBinArith "^" (const Ty.BvXor) noFpError Nothing False True
+cBitOr = cWrapBinArith "|" (const $ Right Ty.BvOr) noFpError Nothing False True
+cBitAnd = cWrapBinArith "&" (const $ Right Ty.BvAnd) noFpError Nothing False True
+cBitXor = cWrapBinArith "^" (const $ Right Ty.BvXor) noFpError Nothing False True
 -- Not quite right, since we're gonna force these to be equal in size
-cShl = cWrapBinArith "<<" (const Ty.BvShl) noFpError (Just overflow) False True
+cShl = cWrapBinArith "<<" (const $ Left Ty.BvShl) noFpError (Just overflow) False True
  where
   overflow s i _s' i' =
     let baseNeg =
@@ -718,7 +720,7 @@ cShl = cWrapBinArith "<<" (const Ty.BvShl) noFpError (Just overflow) False True
     in  Just $ Ty.BoolNaryExpr Ty.Or $ baseNeg ++ shftBig
 -- Not quite right, since we're gonna force these to be equal in size
 cShr = cWrapBinArith ">>"
-                     (\s -> if s then Ty.BvAshr else Ty.BvLshr)
+                     (\s -> Left $ if s then Ty.BvAshr else Ty.BvLshr)
                      noFpError
                      (Just overflow)
                      False

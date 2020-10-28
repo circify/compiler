@@ -78,13 +78,14 @@ instance KnownNat n => BaseTerm (WitBaseTerm n) (Prime n) where
     Ne     -> liftIntPred (\a b -> Smt.Not $ Smt.Eq a b)
     And    -> liftBool (\a b -> Smt.BoolNaryExpr Smt.And [a, b])
     Or     -> liftBool (\a b -> Smt.BoolNaryExpr Smt.Or [a, b])
-    BitAnd -> liftBv (Smt.BvBinExpr Smt.BvAnd)
-    BitOr  -> liftBv (Smt.BvBinExpr Smt.BvOr)
-    BitXor -> liftBv (Smt.BvBinExpr Smt.BvXor)
+    BitAnd -> liftBv (binBv $ Smt.BvNaryExpr Smt.BvAnd)
+    BitOr  -> liftBv (binBv $ Smt.BvNaryExpr Smt.BvOr)
+    BitXor -> liftBv (binBv $ Smt.BvNaryExpr Smt.BvXor)
     Pow    -> liftInt (Smt.IntBinExpr Smt.IntPow)
     Shl    -> liftBv (Smt.BvBinExpr Smt.BvShl)
     Shr    -> liftBv (Smt.BvBinExpr Smt.BvLshr)
    where
+    binBv f x y = f [x, y]
     liftPfUn f = WitBaseTerm . f . coerce
     liftPf f (WitBaseTerm a) (WitBaseTerm b) = WitBaseTerm (f a b)
     liftInt f (WitBaseTerm a) (WitBaseTerm b) =

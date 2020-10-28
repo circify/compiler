@@ -4,6 +4,7 @@ module IR.R1cs.Opt
 where
 
 import           Control.Monad.Reader           ( asks )
+import           Control.Monad.State.Strict
 import           GHC.TypeLits                   ( KnownNat )
 import qualified Data.IntMap.Strict            as IntMap
 import qualified Data.IntSet                   as IntSet
@@ -14,26 +15,36 @@ import qualified Data.Sequence                 as Seq
 import           IR.R1cs
 import           IR.R1cs.Opt.RedLin             ( reduceLinearities )
 import           IR.R1cs.Opt.Fold               ( foldEqs )
-import           Util.Cfg                       ( MonadCfg(..)
-                                                , _optR1cs
-                                                )
+import qualified Util.Cfg                       as Cfg
 import           Util.Log
 
+runOpt :: (Show s, Ord s, KnownNat n) => String -> (R1CS s n -> Log (R1CS s n)) -> Int -> R1CS s n -> Log (R1CS s n)
+runOpt n f l r1cs = do
+  optLevel <- Cfg.liftCfg $ asks (Cfg._optLevel . Cfg._r1csCfg)
+  if optLevel >= l
+    then do
+      r1cs' <- f r1cs
+      forM_ (values r1cs') $ \_ -> do
+        check <- Cfg.liftCfg $ asks (Cfg._checkR1csOpts . Cfg._r1csCfg)
+        when check $ do
+          case r1csCheck r1cs' of
+            Left e -> error $ "After " ++ n ++ ": " ++ e
+            Right _ -> pure ()
+      return r1cs'
+    else return r1cs
 
 opt :: (KnownNat n, Ord s, Show s) => R1CS s n -> Log (R1CS s n)
 opt r1cs = do
   logIf "r1csOpt" $ "Constraints before r1csOpt: " ++ show
     (Seq.length $ constraints r1cs)
   logIf "r1csOpt" $ "Public inputs: " ++ show (publicInputs r1cs)
-  optLevel <- liftCfg $ asks _optR1cs
-  r1cs     <- (if optLevel >= 1 then foldEqs else pure) r1cs
-  r1cs     <- (if optLevel >= 2 then reduceLinearities else pure) r1cs
-  let r1cs' =
-        (if optLevel >= 1 then compactifySigNums . removeDeadSignals else id)
-          r1cs
+  r1cs <- runOpt "foldEqs" foldEqs 1 r1cs
+  r1cs <- runOpt "reduceLin" reduceLinearities 2 r1cs
+  r1cs <- runOpt "remove dead" (return . removeDeadSignals) 1 r1cs
+  r1cs <- runOpt "compactify" (return . compactifySigNums) 1 r1cs
   logIf "r1csOpt" $ "Constraints after r1csOpt: " ++ show
-    (Seq.length $ constraints r1cs')
-  return r1cs'
+    (Seq.length $ constraints r1cs)
+  return r1cs
 
 -- Remove signals not involved in constraints
 removeDeadSignals :: R1CS s n -> R1CS s n
@@ -46,7 +57,7 @@ removeDeadSignals r1cs =
       , sigNums    = Map.filter (`IntSet.member` liveSigs) $ sigNums r1cs
       , nextSigNum = 2 + IntSet.size liveSigs
       , values     = IntMap.filterWithKey (\k _ -> IntSet.member k liveSigs)
-                       $ values r1cs
+                       <$> values r1cs
       }
  where
   liveSignalIntsLc (m, _) = IntSet.fromDistinctAscList $ Map.keys m
@@ -79,6 +90,6 @@ compactifySigNums r1cs =
         , numSigs = IntMap.mapKeysMonotonic (remap "numSigs") $ numSigs r1cs
         , constraints  = sigMapQeq (remap "constraints") <$> constraints r1cs
         , publicInputs = IntSet.map (remap "publicInputs") $ publicInputs r1cs
-        , values       = IntMap.mapKeysMonotonic (remap "values") $ values r1cs
+        , values       = IntMap.mapKeysMonotonic (remap "values") <$> values r1cs
         , nextSigNum   = 2 + IntMap.size numMap
         }

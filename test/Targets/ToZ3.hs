@@ -60,9 +60,9 @@ tySmtToZ3Tests = benchTestGroup
     False
     "bv unsat"
     (Smt.mkEq
-      (Smt.BvBinExpr @4 Smt.BvAdd
-                        (Smt.mkVar "a" (Smt.SortBv 4))
-                        (Smt.IntToBv (Smt.IntLit 1))
+      (Smt.BvNaryExpr @4
+        Smt.BvAdd
+        [Smt.mkVar "a" (Smt.SortBv 4), Smt.IntToBv (Smt.IntLit 1)]
       )
       (Smt.mkVar "a" (Smt.SortBv 4))
     )
@@ -71,9 +71,9 @@ tySmtToZ3Tests = benchTestGroup
     False
     "bv sat"
     (Smt.mkEq
-      (Smt.BvBinExpr @3 Smt.BvOr
-                        (Smt.mkVar "a" (Smt.SortBv 3))
-                        (Smt.IntToBv (Smt.IntLit 7))
+      (Smt.BvNaryExpr @3
+        Smt.BvOr
+        [Smt.mkVar "a" (Smt.SortBv 3), Smt.IntToBv (Smt.IntLit 7)]
       )
       (Smt.mkVar "a" (Smt.SortBv 3))
     )

@@ -31,23 +31,25 @@ import           Lens.Simple                    ( makeLenses
                                                 , set
                                                 , view
                                                 )
+import qualified Util.Cfg                      as Cfg
 import           Util.Control
 import           Util.Log
 
 -- A constraint, together with its set of variables.
 type Constraint n = (QEQ Int (Prime n), IntSet)
 type ConstrId = Int
-data RedLinState n = RedLinState { _cs :: IntMap (Constraint n)
-                                 , _uses :: IntMap IntSet
-                                 , _queue :: Seq Int
-                                 , _queued :: IntSet
-                                 }
+data RedLinState n = RedLinState
+  { _cs     :: IntMap (Constraint n)
+  , _uses   :: IntMap IntSet
+  , _queue  :: Seq Int
+  , _queued :: IntSet
+  }
 
 
 $(makeLenses ''RedLinState)
 
 newtype RedLin n a = RedLin (StateT (RedLinState n) Log a)
-  deriving (Functor, Applicative, Monad, MonadState (RedLinState n), MonadIO, MonadLog)
+  deriving (Functor, Applicative, Monad, MonadState (RedLinState n), MonadIO, MonadLog, Cfg.MonadCfg)
 
 shouldVisit :: KnownNat n => Constraint n -> Bool
 shouldVisit ((a, b, _), _) = a == lcZero || b == lcZero
@@ -90,7 +92,7 @@ popFromQueue = do
       modify (over queued $ IntSet.delete h)
       return (Just h)
 
-run :: (Show s, KnownNat n) => R1CS s n -> RedLin n ()
+run :: (Ord s, Show s, KnownNat n) => R1CS s n -> RedLin n ()
 run r1cs = do
   ids <- gets (IntMap.keys . view cs)
   forM_ ids $ \id' -> do
@@ -120,7 +122,7 @@ qSigs (a, b, c) = IntSet.union (lSigs a) (IntSet.union (lSigs b) (lSigs c))
 lSigs (m, _) = IntSet.fromDistinctAscList $ Map.keys m
 attachSigs qeq = (qeq, qSigs qeq)
 
-initRedLinState :: KnownNat n => R1CS s n -> RedLinState n
+initRedLinState :: (Show s, Ord s, KnownNat n) => R1CS s n -> RedLinState n
 initRedLinState r1cs =
   let
     cs' =
@@ -131,8 +133,8 @@ initRedLinState r1cs =
         $ constraints r1cs
     usePairs =
       [ (v, id') | (id', (_, vs)) <- IntMap.toList cs', v <- IntSet.toList vs ]
-    uses' =
-      IntMap.fromListWith IntSet.union $ map (second IntSet.singleton) usePairs
+    uses' = IntMap.fromListWith IntSet.union
+      $ map (second IntSet.singleton) usePairs
   in
     RedLinState { _cs     = cs'
                 , _uses   = uses'

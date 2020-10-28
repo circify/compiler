@@ -33,6 +33,7 @@ module IR.SMT.TySmt
   , BoolNaryOp(..)
   , boolNaryId
   , BvBinOp(..)
+  , BvNaryOp(..)
   , BvBinPred(..)
   , BvUnOp(..)
   , IntBinOp(..)
@@ -58,6 +59,7 @@ module IR.SMT.TySmt
   , mkDynBvExtract
   , mkDynBvExtractBit
   , mkDynBvBinExpr
+  , mkDynBvNaryExpr
   , mkDynBvConcat
   , mkDynBvBinPred
   , mkEq
@@ -110,6 +112,7 @@ import           Data.Dynamic                   ( Dynamic
                                                 )
 import           Data.Fixed                     ( mod' )
 import           Data.Hashable  ( Hashable(hashWithSalt))
+import           Data.List                      ( group, foldl' )
 import           Data.Map                       ( Map )
 import qualified Data.Map                      as Map
 import qualified Data.Maybe                    as Maybe
@@ -319,22 +322,19 @@ data BvUnOp = BvNeg
             | BvNot
             deriving (Show, Ord, Eq, Typeable, Generic, Hashable)
 
--- TODO: Some of these (Or,And,Xor,Add,Mul) are actually n-ary.
--- Representing them as such would enable high-arity optimizations for all of
--- the above operators.
--- This might make a big difference for some programs. For example, the SHA-1
--- hash function has a 4-ary bit-vector XOR, which might benefit.
+data BvNaryOp = BvAdd
+              | BvMul
+              | BvOr
+              | BvAnd
+              | BvXor
+              deriving (Show, Ord, Eq, Typeable, Generic, Hashable)
+
 data BvBinOp = BvShl
              | BvLshr
              | BvAshr
              | BvUrem
              | BvUdiv
-             | BvAdd
-             | BvMul
              | BvSub
-             | BvOr
-             | BvAnd
-             | BvXor
              deriving (Show, Ord, Eq, Typeable, Generic, Hashable)
 
 data BvBinPred = BvUgt
@@ -414,6 +414,7 @@ data Term s where
     BvConcat  ::(KnownNat n, KnownNat m) => !(TermBv n) -> !(TermBv m) -> TermBv (n + m)
     BvExtract ::(KnownNat n, KnownNat i, i <= n) => !Int -> !(TermBv n) -> TermBv i
     BvBinExpr ::KnownNat n => !BvBinOp -> !(TermBv n) -> !(TermBv n) -> TermBv n
+    BvNaryExpr::KnownNat n => !BvNaryOp -> ![TermBv n] -> TermBv n
     BvUnExpr  ::KnownNat n => !BvUnOp -> !(TermBv n) -> TermBv n
     BvBinPred ::KnownNat n => !BvBinPred -> !(TermBv n) -> TermBv n -> TermBool
     IntToBv   ::KnownNat n => !TermInt -> TermBv n
@@ -425,6 +426,7 @@ data Term s where
     DynBvExtractBit :: !Int -> !TermDynBv -> TermBool
     DynBvConcat  :: !Int -> !TermDynBv -> !TermDynBv -> TermDynBv
     DynBvBinExpr :: !BvBinOp -> !Int -> !TermDynBv -> !TermDynBv -> TermDynBv
+    DynBvNaryExpr :: !BvNaryOp -> !Int -> ![TermDynBv] -> TermDynBv
     DynBvBinPred :: !BvBinPred -> !Int -> !TermDynBv -> !TermDynBv -> TermBool
     DynBvUnExpr  :: !BvUnOp -> !Int -> !TermDynBv -> TermDynBv
     DynBvLit     :: !Bv.BV -> TermDynBv
@@ -530,6 +532,13 @@ mkDynBvExtractBit bit t =
           , show w
           ]
 
+mkDynBvNaryExpr :: BvNaryOp -> [TermDynBv] -> TermDynBv
+mkDynBvNaryExpr o bs =
+  let ws = map dynBvWidth bs
+  in  if length (group ws) == 1
+        then DynBvNaryExpr o (head ws) bs
+        else widthErr (DynBvNaryExpr o (head ws) bs) Nothing (head ws) (head $ tail ws)
+
 mkDynBvBinExpr :: BvBinOp -> TermDynBv -> TermDynBv -> TermDynBv
 mkDynBvBinExpr o a b =
   let aw = dynBvWidth a
@@ -602,6 +611,7 @@ dynBvWidth t = case t of
   DynBvConcat  w _ _   -> w
   DynBvExtract _ w _   -> w
   DynBvBinExpr _ w _ _ -> w
+  DynBvNaryExpr _ w _  -> w
   DynBvUnExpr _ w _    -> w
   DynBvLit l           -> Bv.size l
   DynBvSext w _ _      -> w
@@ -640,6 +650,7 @@ sort t = case sorted @s of
     DynBvSext w _ _      -> SortBv w
     DynBvUext w _ _      -> SortBv w
     DynBvBinExpr _ w _ _ -> SortBv w
+    DynBvNaryExpr _ w _  -> SortBv w
     DynBvConcat  w _ _   -> SortBv w
     DynBvExtract _ w _   -> SortBv w
     DynBvExtractBit {} -> SortBool
@@ -757,6 +768,7 @@ mapTerm f t = case f t of
     BvExtract i s         -> BvExtract i (mapTerm f s)
     BvBinExpr o l r       -> BvBinExpr o (mapTerm f l) (mapTerm f r)
     BvBinPred o l r       -> BvBinPred o (mapTerm f l) (mapTerm f r)
+    BvNaryExpr o a        -> BvNaryExpr o (map (mapTerm f) a)
     BvUnExpr o r          -> BvUnExpr o (mapTerm f r)
     IntToBv   tt          -> IntToBv (mapTerm f tt)
     FpToBv    tt          -> FpToBv (mapTerm f tt)
@@ -764,6 +776,7 @@ mapTerm f t = case f t of
     StatifyBv t'          -> StatifyBv (mapTerm f t')
     RoundFpToDynBv w s t' -> RoundFpToDynBv w s (mapTerm f t')
     DynBvBinExpr o w a b  -> DynBvBinExpr o w (mapTerm f a) (mapTerm f b)
+    DynBvNaryExpr o w a   -> DynBvNaryExpr o w (map (mapTerm f) a)
     DynBvConcat w a b     -> DynBvConcat w (mapTerm f a) (mapTerm f b)
     DynBvBinPred o w a b  -> DynBvBinPred o w (mapTerm f a) (mapTerm f b)
     DynBvExtract s l b    -> DynBvExtract s l (mapTerm f b)
@@ -839,6 +852,7 @@ mapTermM f t = do
       BvConcat  a b         -> liftM2 BvConcat (rec a) (rec b)
       BvExtract i s         -> liftM (BvExtract i) (rec s)
       BvBinExpr o l r       -> liftM2 (BvBinExpr o) (rec l) (rec r)
+      BvNaryExpr o l        -> liftM (BvNaryExpr o) (mapM rec l)
       BvBinPred o l r       -> liftM2 (BvBinPred o) (rec l) (rec r)
       BvUnExpr o r          -> liftM (BvUnExpr o) (rec r)
       IntToBv   tt          -> liftM IntToBv (rec tt)
@@ -847,6 +861,7 @@ mapTermM f t = do
       StatifyBv t'          -> liftM StatifyBv (rec t')
       RoundFpToDynBv w s t' -> liftM (RoundFpToDynBv w s) (rec t')
       DynBvBinExpr o w a b  -> liftM2 (DynBvBinExpr o w) (rec a) (rec b)
+      DynBvNaryExpr o w a   -> liftM (DynBvNaryExpr o w) (mapM rec a)
       DynBvConcat w a b     -> liftM2 (DynBvConcat w) (rec a) (rec b)
       DynBvBinPred o w a b  -> liftM2 (DynBvBinPred o w) (rec a) (rec b)
       DynBvExtract s l b    -> liftM (DynBvExtract s l) (rec b)
@@ -925,6 +940,8 @@ reduceTerm mapF i foldF t = case mapF t of
     BvExtract _ s -> reduceTerm mapF i foldF s
     BvBinExpr _ l r ->
       foldF (reduceTerm mapF i foldF l) (reduceTerm mapF i foldF r)
+    BvNaryExpr _ a ->
+      foldr foldF i (map (reduceTerm mapF i foldF) a)
     BvBinPred _ l r ->
       foldF (reduceTerm mapF i foldF l) (reduceTerm mapF i foldF r)
     IntToBv   tt          -> reduceTerm mapF i foldF tt
@@ -934,6 +951,8 @@ reduceTerm mapF i foldF t = case mapF t of
     RoundFpToDynBv _ _ t' -> reduceTerm mapF i foldF t'
     DynBvBinExpr _ _ a b ->
       foldF (reduceTerm mapF i foldF a) (reduceTerm mapF i foldF b)
+    DynBvNaryExpr _ _ a ->
+      foldr foldF i (map (reduceTerm mapF i foldF) a)
     DynBvConcat _ a b ->
       foldF (reduceTerm mapF i foldF a) (reduceTerm mapF i foldF b)
     DynBvBinPred _ _ a b ->
@@ -1086,12 +1105,31 @@ bvBinFn op = case op of
   BvAshr -> Bv.ashr
   BvUrem -> rem
   BvUdiv -> div
-  BvAdd  -> (+)
-  BvMul  -> (*)
   BvSub  -> (-)
-  BvOr   -> (Bv..|.)
-  BvAnd  -> (Bv..&.)
-  BvXor  -> Bv.xor
+
+bvNaryFn :: BvNaryOp -> Bv.BV -> [Bv.BV] -> Bv.BV
+bvNaryFn op = case op of
+  BvAdd  -> foldl' (+)
+  BvMul  -> foldl' (*)
+  BvOr   -> foldl' (Bv..|.)
+  BvAnd  -> foldl' (Bv..&.)
+  BvXor  -> foldl' Bv.xor
+
+bvNaryId :: forall n. KnownNat n => [TermBv n] -> BvNaryOp -> Bv.BV
+bvNaryId _bs op = case op of
+  BvAdd  -> Bv.zeros (fromIntegral $ natVal $ Proxy @n)
+  BvMul  -> Bv.bitVec (fromIntegral $ natVal $ Proxy @n) (1 :: Integer)
+  BvOr   -> Bv.zeros (fromIntegral $ natVal $ Proxy @n)
+  BvAnd  -> Bv.ones (fromIntegral $ natVal $ Proxy @n)
+  BvXor  -> Bv.zeros (fromIntegral $ natVal $ Proxy @n)
+
+dynBvNaryId :: Int -> BvNaryOp -> Bv.BV
+dynBvNaryId w op = case op of
+  BvAdd  -> Bv.zeros w
+  BvMul  -> Bv.bitVec w (1 :: Integer)
+  BvOr   -> Bv.zeros w
+  BvAnd  -> Bv.ones w
+  BvXor  -> Bv.zeros w
 
 bvBinPredFn :: BvBinPred -> Bv.BV -> Bv.BV -> Bool
 bvBinPredFn op = case op of
@@ -1190,6 +1228,8 @@ eval e t = case t of
       newSize = fromInteger $ natVal (Proxy :: Proxy i)
   BvBinExpr o l r ->
     ValBv $ bvBinFn o (valAsBv $ eval e l) (valAsBv $ eval e r)
+  BvNaryExpr o rs ->
+    ValBv $ bvNaryFn o (bvNaryId rs o) (map (valAsBv . eval e) rs)
   BvBinPred o l r ->
     ValBool $ bvBinPredFn o (valAsBv $ eval e l) (valAsBv $ eval e r)
   IntToBv i  -> ValBv $ Bv.bitVec (size t) $ valAsInt $ eval e i
@@ -1235,6 +1275,8 @@ eval e t = case t of
           then ValDynBv $ bvBinFn o a' b'
           else
             throw $ SortError $ "bitwidth mis-match while evaluating " ++ show t
+  DynBvNaryExpr o w rs ->
+    ValDynBv $ bvNaryFn o (dynBvNaryId w o) (map (valAsDynBv . eval e) rs)
   DynBvConcat _ a b ->
     ValDynBv $ Bv.concat [valAsDynBv $ eval e a, valAsDynBv $ eval e b]
   DynBvBinPred o w a b ->
@@ -1370,6 +1412,8 @@ instance SortClass sort => Hashable (Term sort) where
       DynBvExtractBit i b -> s # t 53 # i # b
       PfToDynBv w b -> s # t 54 # w # b
       BoolToDynBv b -> s # t 55 # b
+      BvNaryExpr o b -> s # t 55 # o # b
+      DynBvNaryExpr o w b -> s # t 55 # o # w # b
    where
     -- Hash tags
     t :: Int -> Int
@@ -1416,6 +1460,7 @@ instance Eq (Term s) where
     = (  ((a1_abVq == b1_abVt))
       && (((a2_abVr == b2_abVu)) && ((a3_abVs == b3_abVv)))
       )
+  BvNaryExpr o1 x1 == BvNaryExpr o2 x2 = (o1 == o2) && (x1 == x2)
   (==) (BvUnExpr a1_abVw a2_abVx) (BvUnExpr b1_abVy b2_abVz) =
     (((a1_abVw == b1_abVy)) && ((a2_abVx == b2_abVz)))
   (==) (BvBinPred a1_abVA a2_abVB a3_abVC) (BvBinPred b1_abVD b2_abVE b3_abVF)
@@ -1441,6 +1486,7 @@ instance Eq (Term s) where
          && (((a3_abW2 == b3_abW6)) && ((a4_abW3 == b4_abW7)))
          )
       )
+  DynBvNaryExpr o1 w1 x1 == DynBvNaryExpr o2 w2 x2 = (o1 == o2) && (w1 == w2) && (x1 == x2)
   (==) (DynBvBinPred a1_abW8 a2_abW9 a3_abWa a4_abWb) (DynBvBinPred b1_abWc b2_abWd b3_abWe b4_abWf)
     = (  ((a1_abW8 == b1_abWc))
       && (  ((a2_abW9 == b2_abWd))

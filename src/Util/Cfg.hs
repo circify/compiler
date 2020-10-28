@@ -11,6 +11,7 @@ module Util.Cfg
   , SmtOptCfg(..)
   , CCfg(..)
   , ToPfCfg(..)
+  , R1csCfg(..)
   , MonadCfg(..)
   , setFromEnv
   , defaultCfgState
@@ -91,8 +92,17 @@ defaultCCfg = CCfg { _printfOutput  = True
 
 $(makeLenses ''CCfg)
 
+data R1csCfg = R1csCfg { _optLevel :: Int
+                       , _checkR1csOpts:: Bool
+                       } deriving Show
 
-data CfgState = CfgState { _optR1cs :: Int
+$(makeLenses ''R1csCfg)
+
+defaultR1csCfg = R1csCfg { _optLevel = 2
+                         , _checkR1csOpts = False}
+                
+
+data CfgState = CfgState { _r1csCfg :: R1csCfg
                          , _toPfCfg :: ToPfCfg
                          , _smtOptCfg :: SmtOptCfg
                          , _streams :: [String]
@@ -104,7 +114,7 @@ data CfgState = CfgState { _optR1cs :: Int
                          } deriving (Show)
 
 defaultCfgState :: CfgState
-defaultCfgState = CfgState { _optR1cs          = 2
+defaultCfgState = CfgState { _r1csCfg          = defaultR1csCfg
                            , _toPfCfg          = defaultToPfCfg
                            , _smtOptCfg        = defaultSmtOptCfg
                            , _streams          = []
@@ -162,11 +172,17 @@ cfgEnvName o = replace '-' '_' $ "C_" ++ optName o
 options :: [CfgOption]
 options =
   [ CfgOption
-    (optR1cs . showReadLens)
+    (r1csCfg . optLevel . showReadLens)
     "opt-r1cs"
     "Level of optimization to apply to the R1CS"
     "0: None (not recommended), 1: eliminate equalities, 2: eliminate all linear constraints"
     "2"
+  , CfgOption
+    (r1csCfg . checkR1csOpts . showReadLens)
+    "check-opt-r1cs"
+    "Check each R1cs optimization"
+    ""
+    "False"
   , CfgOption
     (toPfCfg . assumeNoOverflow . showReadLens)
     "no-overflow"

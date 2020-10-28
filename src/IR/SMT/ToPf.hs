@@ -27,6 +27,7 @@ import           IR.R1cs                        ( R1CS
                                                 , r1csAddConstraint
                                                 , r1csStats
                                                 , r1csSetSignalVal
+                                                , r1csInitSigVals
                                                 , r1csEnsureSignal
                                                 , r1csAddSignals
                                                 , r1csPublicizeSignal
@@ -54,7 +55,9 @@ import           Data.Maybe                     ( isNothing
                                                 , fromJust
                                                 )
 import qualified Data.Map.Strict               as Map
-import           Data.List                      ( foldl' )
+import           Data.List                      ( foldl'
+                                                , transpose
+                                                )
 import           Data.Proxy                     ( Proxy(..) )
 import qualified Data.Set                      as Set
 import           Data.Typeable                  ( cast )
@@ -384,9 +387,6 @@ naryOr xs = if length xs <= 3
           enforceNonzero $ lcSub (lcAdd lcOne s) or'
           return or'
 
-binOr :: KnownNat n => LSig n -> LSig n -> ToPf n (LSig n)
-binOr a b = naryOr [a, b]
-
 impl :: KnownNat n => LSig n -> LSig n -> ToPf n (LSig n)
 impl a b = do
   -- Could implement this with lcMul, but then the new variable would be the
@@ -414,14 +414,16 @@ binEq a b = do
 
 -- Strategy: we add the bits, and decompose the sum. The LSB is the answer.
 naryXor :: KnownNat n => [LSig n] -> ToPf n (LSig n)
-naryXor xs = do
-  let n = bitsize $ length xs
-  let s = foldr lcAdd lcZero xs
-  bs <- bitify "xorSum" s n
-  -- Could trim a constraint here?
-  case bs of
-    h : _ -> return h
-    []    -> error "naryXor of no bits"
+naryXor xs = if length xs > 2
+  then do
+    let n = bitsize $ length xs
+    let s = foldr lcAdd lcZero xs
+    bs <- bitify "xorSum" s n
+    -- Could trim a constraint here?
+    case bs of
+      h : _ -> return h
+      []    -> error "naryXor of no bits"
+  else foldM binXor (head xs) (tail xs)
 
 binXor :: KnownNat n => LSig n -> LSig n -> ToPf n (LSig n)
 binXor a b = lcSub (lcAdd a b) <$> lcMul "binxor" a b
@@ -466,12 +468,15 @@ saveConstBv term bv = do
         $ ints s
     }
 
-saveInt :: TermDynBv -> (LSig n, Int) -> ToPf n ()
-saveInt term sig = initIntEntry term >> modify
-  (\s -> s { ints = AMap.adjust (\e -> e { int = Just sig }) term $ ints s })
+saveInt :: KnownNat n => TermDynBv -> (LSig n, Int) -> ToPf n ()
+saveInt term sig = do
+  logIf "toPf::saveInt" $ "Saving int: " ++ show term ++ " -> " ++ show sig
+  initIntEntry term
+  modify (\s -> s { ints = AMap.adjust (\e -> e { int = Just sig }) term $ ints s })
 
-saveIntBits :: TermDynBv -> [LSig n] -> ToPf n ()
+saveIntBits :: KnownNat n => TermDynBv -> [LSig n] -> ToPf n ()
 saveIntBits term bits_ = do
+  logIf "toPf::saveInt" $ "Saving bits: " ++ show term ++ " -> " ++ show bits_
   initIntEntry term
   unless (length bits_ == dynBvWidth term)
     $ error "width mismatch in saveIntBits"
@@ -565,10 +570,10 @@ inBits signed w number = do
 --  return i + j
 ite :: KnownNat n => LSig n -> LSig n -> LSig n -> ToPf n (LSig n)
 ite c t f = do
-  i <- nextVar "ite_t"  $ liftA2 (*) (snd c) (snd t)
-  j <- nextVar "ite_f"  $ liftA2 (*) (snd $ lcNot c) (snd f)
+  i <- nextVar "ite_t" $ liftA2 (*) (snd c) (snd t)
+  j <- nextVar "ite_f" $ liftA2 (*) (snd $ lcNot c) (snd f)
   enforceCheck (c, t, i)
-  enforceCheck (lcNot c, t, j)
+  enforceCheck (lcNot c, f, j)
   return $ lcAdd i j
 
 deBitify :: KnownNat n => Bool -> [LSig n] -> LSig n
@@ -579,7 +584,7 @@ deBitify signed bs =
       highBit    = if signed then lcNeg highBitPos else highBitPos
   in  lcAdd lowBits highBit
 
-data BvOpKind = Division | Arith | Bit | Shift
+data BvOpKind = Division | Arith | Shift
 
 bvToPf :: forall n . KnownNat n => Maybe SmtVals -> TermDynBv -> ToPf n ()
 bvToPf env term = do
@@ -591,20 +596,23 @@ bvToPf env term = do
     bvToPfUncached term
   unless (isNothing entry) $ logIf "toPf" $ "Cache hit " ++ show term
  where
+  unhandledOp :: Show a => a -> b
   unhandledOp = unhandled "bv operator in bvToPf"
   bvOpKind :: BvBinOp -> BvOpKind
   bvOpKind o = case o of
-    BvAdd  -> Arith
-    BvMul  -> Arith
     BvSub  -> Arith
     BvUrem -> Division
     BvUdiv -> Division
-    BvOr   -> Bit
-    BvAnd  -> Bit
-    BvXor  -> Bit
     BvShl  -> Shift
     BvLshr -> Shift
     BvAshr -> Shift
+  bvNaryNeedsBits :: BvNaryOp -> Bool
+  bvNaryNeedsBits o = case o of
+    BvAdd -> False
+    BvMul -> False
+    BvOr  -> True
+    BvAnd -> True
+    BvXor -> True
 
   lookupIntVal :: String -> Maybe (Prime n)
   lookupIntVal name =
@@ -698,26 +706,15 @@ bvToPf env term = do
             l'        <- getInt l
             r'        <- getInt r
             (res, w') <- case op of
-              BvAdd -> pure (lcAdd l' r', w + 1)
               BvSub ->
                 pure (lcShift (twoPow $ fromIntegral w) $ lcSub l' r', w + 1)
-              BvMul -> (, 2 * w) <$> lcMul "mul" l' r'
-              _     -> unhandledOp op
+              _ -> unhandledOp op
             lazy <- lazyInt
             if lazy
               then saveInt bv (res, w)
               else do
                 bs <- bitify ("arith" ++ show op) res w'
                 saveIntBits bv (take w bs)
-          Bit -> do
-            l' <- getIntBits l
-            r' <- getIntBits r
-            bs <- case op of
-              BvOr  -> traverse id $ zipWith binOr l' r'
-              BvAnd -> traverse id $ zipWith binAnd l' r'
-              BvXor -> traverse id $ zipWith binXor l' r'
-              _     -> unhandledOp op
-            saveIntBits bv bs
           Shift -> do
             rightInt  <- getInt r
             rightBits <- getIntBits r
@@ -763,6 +760,35 @@ bvToPf env term = do
                   <$> shiftInt (Just $ last l') (deBitify False $ reverse l')
               _ -> unhandledOp op
             saveIntBits bv bs
+      DynBvNaryExpr op w ls -> do
+        forM_ ls $ bvToPf env
+        if bvNaryNeedsBits op
+          then do
+            ls' <- mapM getIntBits ls
+            let ls'' = transpose ls'
+            bs <- case op of
+              BvOr  -> mapM naryOr ls''
+              BvAnd -> mapM naryAnd ls''
+              BvXor -> mapM naryXor ls''
+              _     -> unhandledOp op
+            saveIntBits bv bs
+          else do
+            let l2 :: Int -> Int =
+                  ceiling . logBase (2.0 :: Double) . fromIntegral
+            ls'       <- mapM getInt ls
+            (res, w') <- case op of
+              BvAdd -> pure (foldl' lcAdd lcZero ls', w + l2 (length ls'))
+              BvMul -> if length ls' * w < 240
+                then (, length ls' * w)
+                  <$> foldM (lcMul "mul") (head ls') (tail ls')
+                else error "overflow"
+              _ -> unhandledOp op
+            lazy <- lazyInt
+            if lazy
+              then saveInt bv (res, w)
+              else do
+                bs <- bitify ("arith" ++ show op) res w'
+                saveIntBits bv (take w bs)
       _ -> error $ unwords ["Cannot translate", show bv]
 
 -- Embed this (dynamic) bit-vector predicate in the constraint system,
@@ -835,22 +861,22 @@ handleAlias env a = case a of
             return True
         Nothing -> case cast v of
           Just intV -> if AMap.memberOrAlias intV (ints s)
-                then return False
-                else do
-                  let rInt = fromMaybe (error $ "Not int: " ++ show t) $ cast t
-                  bvToPf env rInt
-                  logIf "toPf" $ "Alias " ++ show intV ++ " to " ++ show rInt
-                  modify $ \st -> st { ints = AMap.alias intV rInt $ ints st }
-                  return True
+            then return False
+            else do
+              let rInt = fromMaybe (error $ "Not int: " ++ show t) $ cast t
+              bvToPf env rInt
+              logIf "toPf" $ "Alias " ++ show intV ++ " to " ++ show rInt
+              modify $ \st -> st { ints = AMap.alias intV rInt $ ints st }
+              return True
           Nothing -> case cast v of
             Just pfV -> if AMap.memberOrAlias pfV (pfs s)
-                then return False
-                else do
-                  let rPf = fromMaybe (error $ "Not pf: " ++ show t) $ cast t
-                  _ <- pfToPf env rPf
-                  logIf "toPf" $ "Alias " ++ show pfV ++ " to " ++ show rPf
-                  modify $ \st -> st { pfs = AMap.alias pfV rPf $ pfs st }
-                  return True
+              then return False
+              else do
+                let rPf = fromMaybe (error $ "Not pf: " ++ show t) $ cast t
+                _ <- pfToPf env rPf
+                logIf "toPf" $ "Alias " ++ show pfV ++ " to " ++ show rPf
+                modify $ \st -> st { pfs = AMap.alias pfV rPf $ pfs st }
+                return True
             Nothing -> error "Bad alias type"
   _ -> return False
 
@@ -897,6 +923,7 @@ toPf
   -> Log (R1CS PfVar n)
 toPf env inputs arraySizes' bs = do
   let ToPf a = do
+        forM_ env $ \_ -> modify $ \s -> s { r1cs = r1csInitSigVals $ r1cs s }
         configureFromEnv
         publicizeInputs inputs
         forM_ bs (enforceAsPf env)

@@ -125,8 +125,12 @@ bin f a b = f [a, b]
 ne :: S.SortClass s => S.Term s -> S.Term s -> S.TermBool
 ne = ((.) . (.)) S.Not S.mkEq
 
+
+bvNToBin :: ([a] -> t) -> a -> a -> t
+bvNToBin f x y = f [x, y]
+
 zAdd = wrapBin "+"
-               (Just $ S.mkDynBvBinExpr S.BvAdd)
+               (Just $ bvNToBin $ S.mkDynBvNaryExpr S.BvAdd)
                (Just $ bin (S.PfNaryExpr S.PfAdd))
                Nothing
 zSub = wrapBin
@@ -135,7 +139,7 @@ zSub = wrapBin
   (Just $ \a b -> S.PfNaryExpr S.PfAdd [a, S.PfUnExpr S.PfNeg b])
   Nothing
 zMul = wrapBin "*"
-               (Just $ S.mkDynBvBinExpr S.BvMul)
+               (Just $ bvNToBin $ S.mkDynBvNaryExpr S.BvMul)
                (Just $ bin (S.PfNaryExpr S.PfMul))
                Nothing
 zDiv = wrapBin
@@ -144,9 +148,9 @@ zDiv = wrapBin
   (Just $ \a b -> S.PfNaryExpr S.PfMul [a, S.PfUnExpr S.PfRecip b])
   Nothing
 zPow = wrapBin "**" Nothing (Just undefined) Nothing
-zBitAnd = wrapBin "&" (Just $ S.mkDynBvBinExpr S.BvAnd) Nothing Nothing
-zBitOr = wrapBin "|" (Just $ S.mkDynBvBinExpr S.BvOr) Nothing Nothing
-zBitXor = wrapBin "^" (Just $ S.mkDynBvBinExpr S.BvXor) Nothing Nothing
+zBitAnd = wrapBin "&" (Just $ bvNToBin $ S.mkDynBvNaryExpr S.BvAnd) Nothing Nothing
+zBitOr = wrapBin "|"  (Just $ bvNToBin $ S.mkDynBvNaryExpr S.BvOr) Nothing Nothing
+zBitXor = wrapBin "^" (Just $ bvNToBin $ S.mkDynBvNaryExpr S.BvXor) Nothing Nothing
 zAnd = wrapBin "&&" Nothing Nothing (Just $ bin (S.BoolNaryExpr S.And))
 zOr = wrapBin "||" Nothing Nothing (Just $ bin (S.BoolNaryExpr S.Or))
 zEq = wrapBinPred "==" (Just S.mkEq) (Just S.mkEq) (Just S.mkEq)
