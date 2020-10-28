@@ -34,7 +34,7 @@ class BenesNetworkBase(object):
 
     def route(self, inputs):
         assert self.sw is not None
-        assert len(inputs) == num_inputs
+        assert len(inputs) == self.num_inputs
         return [ inputs[idx] for idx in self.ord_out ]
 
 class BenesNetwork2x2(BenesNetworkBase):
@@ -72,21 +72,23 @@ class BenesNetwork3x3(BenesNetworkBase):
         if self.ord_out[2] != 2:
             sw_m = True
             sw_i = self.ord_out[2] == 0
-            sw_o = self.ord_out[1] == 2
+            sw_o = self.ord_out[1] != 2
         else:
             sw_m = False
             sw_i = False
-            sw_o = self.ord_out[0] == 0
+            sw_o = self.ord_out[0] == 1
 
         self.sw = [sw_i, sw_m, sw_o]
 
     def route(self, inputs):
         r_exp = super().route(inputs)
         r = [None] * 3
+        (sw_i, sw_m, sw_o) = self.sw
 
-        (t0, m) = inputs[1::-1] if self.sw_i else inputs[:2]
-        (t1, r[2]) = (inputs[2], m) if self.sw_m else (m, inputs[2])
-        (r[0], r[1]) = (t1, t0) if self.sw_o else (t0, t1)
+        (t0, m) = inputs[1::-1] if sw_i else inputs[:2]
+        (t1, r[2]) = (inputs[2], m) if sw_m else (m, inputs[2])
+        (r[0], r[1]) = (t1, t0) if sw_o else (t0, t1)
+        assert None not in r
         assert r_exp == r
         return r
 
@@ -205,6 +207,39 @@ class BenesNetwork(BenesNetworkBase):
         self.top.set_switches(top_i, top_o)
         self.bot.set_switches(bot_i, bot_o)
 
+    def route(self, inputs):
+        r_exp = super().route(inputs)
+
+        top_i = [None] * self.top.num_inputs
+        bot_i = [None] * self.bot.num_inputs
+
+        iolen = self.num_inputs // 2
+        is_odd = self.num_inputs % 2 == 1
+        sw = self.sw + [False]
+        sw_o = sw[iolen:]
+        sw_i = sw[:iolen]
+        assert sw == sw_i + sw_o
+
+        if is_odd:
+            bot_i[-1] = inputs[-1]
+        for idx in range(0, iolen):
+            (i0, i1) = (inputs[2 * idx], inputs[2 * idx + 1])
+            (top_i[idx], bot_i[idx]) = (i1, i0) if sw_i[idx] else (i0, i1)
+        assert None not in top_i and None not in bot_i
+
+        top_o = self.top.route(top_i)
+        bot_o = self.bot.route(bot_i)
+
+        r = [None] * self.num_inputs
+        if is_odd:
+            r[-1] = bot_o[-1]
+        for idx in range(0, iolen):
+            (o0, o1) = (top_o[idx], bot_o[idx])
+            (r[2 * idx], r[2 * idx + 1]) = (o1, o0) if sw_o[idx] else (o0, o1)
+        assert None not in r
+        assert r == r_exp
+        return r
+
 if __name__ == "__main__":
     import random
     for _ in range(0, 32):
@@ -217,3 +252,6 @@ if __name__ == "__main__":
             random.shuffle(bar)
             quux.reset()
             quux.set_switches(foo, bar)
+
+            baz = quux.route(foo)
+            assert baz == bar
