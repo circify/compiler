@@ -49,6 +49,8 @@ defaultSmtOptCfg = SmtOptCfg
   , _cFoldInSub     = True
   , _smtOpts        = [ "cfee"
                       , "ee"
+                      , "nary"
+                      , "cfee"
                       , "arrayElim"
                       , "flattenAnds"
                       , "cfee"
@@ -216,7 +218,7 @@ options =
     "smt-opts"
     "Optimizations to perform over the Smt formula"
     "A comma-separated list. Options: {cfee, ee, cf, arrayElim, flattenAnds, mem}"
-    "cfee,ee,arrayElim,flattenAnds,cfee,ee,mem,flattenAnds,cfee,ee"
+    "cfee,ee,nary,cfee,arrayElim,flattenAnds,cfee,ee,mem,flattenAnds,cfee,ee"
   , CfgOption (smtOptCfg . optForZ3 . showReadLens)
               "opt-z3"
               "Optimize the z3 inputs"

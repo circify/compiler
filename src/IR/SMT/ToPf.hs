@@ -570,11 +570,10 @@ inBits signed w number = do
 --  return i + j
 ite :: KnownNat n => LSig n -> LSig n -> LSig n -> ToPf n (LSig n)
 ite c t f = do
-  i <- nextVar "ite_t" $ liftA2 (*) (snd c) (snd t)
-  j <- nextVar "ite_f" $ liftA2 (*) (snd $ lcNot c) (snd f)
-  enforceCheck (c, t, i)
-  enforceCheck (lcNot c, f, j)
-  return $ lcAdd i j
+  r <- nextVar "ite" $ liftA3 (?) (snd c) (snd t) (snd f)
+  enforceCheck (lcSub t f, c, lcSub r f)
+  return r
+ where (?) x y z = if (x /= 0) then y else z
 
 deBitify :: KnownNat n => Bool -> [LSig n] -> LSig n
 deBitify signed bs =

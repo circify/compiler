@@ -106,7 +106,7 @@ toPfTests = benchTestGroup
     , constraintCountTest "and4 3 repeats"
                           [BoolNaryExpr And [bv "a", bv "b", bv "a", bv "a"]]
                           4
-    , constraintCountTest "ite" [mkIte (bv "a") (bv "b") (bv "c")] 3
+    , constraintCountTest "ite" [mkIte (bv "a") (bv "b") (bv "c")] 2
     -- two for EQ, one to force
     , constraintCountTest "eq"  [mkEq (bv "a") (bv "b")]           3
     ]
