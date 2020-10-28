@@ -1,9 +1,9 @@
 benchmark,compiler,constraints
 mm5,circify,125
-ptrs-benes,circify,2058
-ptrs,circify,280
-u32sqrt,circify,607
-u32log2,circify,243
+ptrs-benes,circify,2042
+ptrs,circify,224
+u32sqrt,circify,575
+u32log2,circify,167
 mm5,pequin,125
 u32log2,pequin,124
 ptrs,pequin,1993
@@ -11,4 +11,4 @@ ptrs-benes,pequin,1993
 u32sqrt,pequin,703
 sha1,pequin,17339
 bounded_loop,pequin,1049
-sha1,circify,29553
+sha1,circify,21246
