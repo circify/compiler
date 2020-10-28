@@ -424,7 +424,7 @@ naryXor xs = do
     []    -> error "naryXor of no bits"
 
 binXor :: KnownNat n => LSig n -> LSig n -> ToPf n (LSig n)
-binXor a b = naryXor [a, b]
+binXor a b = lcSub (lcAdd a b) <$> lcMul "binxor" a b
 
 bitsize :: Int -> Int
 bitsize x = if x == 0 then 0 else 1 + bitsize (x `div` 2)
