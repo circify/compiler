@@ -55,6 +55,7 @@ import           Data.Maybe                     ( isNothing
                                                 , fromJust
                                                 )
 import qualified Data.Map.Strict               as Map
+import qualified Data.HashSet                  as HSet
 import           Data.List                      ( foldl'
                                                 , transpose
                                                 )
@@ -472,7 +473,8 @@ saveInt :: KnownNat n => TermDynBv -> (LSig n, Int) -> ToPf n ()
 saveInt term sig = do
   logIf "toPf::saveInt" $ "Saving int: " ++ show term ++ " -> " ++ show sig
   initIntEntry term
-  modify (\s -> s { ints = AMap.adjust (\e -> e { int = Just sig }) term $ ints s })
+  modify
+    (\s -> s { ints = AMap.adjust (\e -> e { int = Just sig }) term $ ints s })
 
 saveIntBits :: KnownNat n => TermDynBv -> [LSig n] -> ToPf n ()
 saveIntBits term bits_ = do
@@ -573,7 +575,7 @@ ite c t f = do
   r <- nextVar "ite" $ liftA3 (?) (snd c) (snd t) (snd f)
   enforceCheck (lcSub t f, c, lcSub r f)
   return r
- where (?) x y z = if (x /= 0) then y else z
+  where (?) x y z = if (x /= 0) then y else z
 
 deBitify :: KnownNat n => Bool -> [LSig n] -> LSig n
 deBitify signed bs =
@@ -759,6 +761,57 @@ bvToPf env term = do
                   <$> shiftInt (Just $ last l') (deBitify False $ reverse l')
               _ -> unhandledOp op
             saveIntBits bv bs
+      -- Bit-vector ITE, used in SHA
+      DynBvNaryExpr o _ [DynBvNaryExpr BvAnd _ [a, b], DynBvNaryExpr BvAnd _ [DynBvUnExpr BvNot _ c, d]]
+        | (o == BvOr || o == BvXor) && a == c
+        -> do
+          logIf "toPf::sha" $ "bit-vector ite: " ++ show bv
+          bvToPf env a
+          bvToPf env b
+          bvToPf env d
+          a'      <- getIntBits a
+          b'      <- getIntBits b
+          d'      <- getIntBits d
+          iteBits <- sequence $ zipWith3 ite a' b' d'
+          saveIntBits bv iteBits
+      DynBvNaryExpr o _ [DynBvNaryExpr BvAnd _ l1@[_, _], DynBvNaryExpr BvAnd _ l2@[_, _], DynBvNaryExpr BvAnd _ l3@[_, _]]
+        | let s1 = HSet.fromList l1
+              s2 = HSet.fromList l2
+              s3 = HSet.fromList l3
+          in  (o == BvXor || o == BvOr)
+                && (HSet.size s1 == 2)
+                && (HSet.size s2 == 2)
+                && (HSet.size s3 == 2)
+                && (s1 /= s2)
+                && (s2 /= s3)
+                && (s1 /= s3)
+                && (HSet.size (HSet.fromList $ l1 ++ l2 ++ l3) == 3)
+        -> do
+          logIf "toPf::sha" $ "bit-vector majority: " ++ show bv
+          let es = HSet.toList $ HSet.fromList $ l1 ++ l2 ++ l3
+          mapM_ (bvToPf env) es
+          l <- mapM getIntBits es
+          case l of
+            [a, b, c] -> do
+              bs <- sequence $ zipWith3 maj a b c
+              saveIntBits bv bs
+             where
+              majF x y z = toP $ toInteger $ fromEnum $ fromP (x + y + z) >= 2
+              maj x y z = do
+                 -- Derivation:
+                 -- r = xy | xz | yz
+                 -- r = xy + xz + yz - 2xyz
+                 -- r = x(y + z - 2yz) + yz
+                 -- r = x(y + z - 2m) + m    // define m = yz
+                 -- Two constraints:
+                 -- yz = r
+                 -- x(y + z - 2m) = r - m
+                r <- nextVar "maj" $ liftA3 majF (snd x) (snd y) (snd z)
+                m <- lcMul "maj_mul" y z
+                enforceCheck (x, lcSub (lcAdd y z) (lcScale 2 m), lcSub r m)
+                return r
+            _ -> error
+              "Unreachable error in bvToPf: pattern guard should guarantee"
       DynBvNaryExpr op w ls -> do
         forM_ ls $ bvToPf env
         if bvNaryNeedsBits op
