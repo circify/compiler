@@ -398,6 +398,7 @@ evalZ3Model term = do
   (m, sat') <- case model of
     Nothing  -> return (Map.empty, False)
     Just str -> (, True) <$> do
+      logIf "z3::model" $ "Model: " ++ str
       let modelLines = splitOn "\n" str
       vs <- forM (init modelLines) $ \line ->
         return $ case splitOn " -> " line of
