@@ -63,7 +63,7 @@ registerImport srcPath mSrcName mDstName = do
       dstName =
         fromMaybe (fst $ splitExtension $ snd $ splitFileName srcPath) mDstName
   curPath    <- currentPath
-  absSrcPath <- if ("EMBED" `isInfixOf` srcPath)
+  absSrcPath <- if "EMBED" `isInfixOf` srcPath
     then return "EMBED"
     else liftIO $ absolutePath curPath srcPath
   logIf "import" $ show (curPath, dstName) ++ " -> " ++ show
@@ -81,7 +81,7 @@ getFunc s p n = fromMaybe (errSpan s $ "Cannot find function: " ++ show n)
 
 inFile :: FilePath -> Z n a -> Z n a
 inFile f a =
-  (modify $ over fileStack $ (f :)) *> a <* (modify $ over fileStack $ tail)
+  modify (over fileStack (f :)) *> a <* modify (over fileStack tail)
 
 registerStruct :: String -> T.Type -> Z n ()
 registerStruct name s = do
@@ -204,12 +204,12 @@ genBounds b = case ast b of
 genStmt :: forall n . KnownNat n => A.SStmt -> Z n ()
 genStmt s = case ast s of
   A.For ty v bnds body -> do
-    let boundOr = maybe (errSpan (ann bnds) "Must have bounds for loop") id
+    let boundOr = fromMaybe (errSpan (ann bnds) "Must have bounds for loop")
         v'      = ast v
         fpConst = Base . Field . S.IntToPf @n . S.IntLit . toInteger
     (start, end) <- bimap boundOr boundOr <$> genBounds bnds
     ty'          <- genType ty
-    unless (ty' == T.Field) $ errSpan (ann s) $ "Loop idx must be field"
+    unless (ty' == T.Field) $ errSpan (ann s) "Loop idx must be field"
     scoped $ do
       liftCircify $ declareInitVar v' ty' (fpConst start)
       forM_ [start .. (end - 1)] $ \i -> do
@@ -271,7 +271,7 @@ genBlock b = case ast b of
 genItem :: KnownNat n => A.SItem -> Z n ()
 genItem i = case ast i of
   A.SDef name fields -> do
-    tys <- (forM fields $ \(ty, fName) -> (ast fName, ) <$> genType ty)
+    tys <- forM fields $ \(ty, fName) -> (ast fName, ) <$> genType ty
     registerStruct (ast name) (T.Struct (ast name) $ Map.fromList tys)
   A.Import path srcN dstN ->
     registerImport (ast path) (ast <$> srcN) (ast <$> dstN)
@@ -313,14 +313,12 @@ run
   -> A.SFiles
   -> Log Assert.AssertState
 run path fnName files = do
-  let Z act = do
-        inFile path $ do
-          genFiles @n files
-          f <- getFunc nullSpan path fnName
-          genEntryFunc f
+  let Z act = inFile path $ do
+        genFiles @n files
+        f <- getFunc nullSpan path fnName
+        genEntryFunc f
   (_, assertState) <-
     Cfg.liftCfg $ Assert.runAssert $ runCircify (zLangDef Nothing) $ runStateT
       act
       emptyZState
   return assertState
-
