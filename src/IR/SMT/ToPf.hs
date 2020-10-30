@@ -833,7 +833,7 @@ bvToPf env term = do
               BvMul -> if length ls' * w < 240
                 then (, length ls' * w)
                   <$> foldM (lcMul "mul") (head ls') (tail ls')
-                else error "overflow"
+                else (,w) <$> foldM (binMul w) (head ls') (tail ls')
               _ -> unhandledOp op
             lazy <- lazyInt
             if lazy
@@ -842,6 +842,11 @@ bvToPf env term = do
                 bs <- bitify ("arith" ++ show op) res w'
                 saveIntBits bv (take w bs)
       _ -> error $ unwords ["Cannot translate", show bv]
+
+binMul :: KnownNat n => Int -> LSig n -> LSig n -> ToPf n (LSig n)
+binMul w a b = do
+  p <- lcMul "mul" a b
+  deBitify False . take w <$> bitify "binMul" p (2 * w)
 
 -- Embed this (dynamic) bit-vector predicate in the constraint system,
 -- returning a signal which is 1 if the predicate is satisfied, and 0
