@@ -92,6 +92,7 @@ module IR.SMT.TySmt
   , valAsBool
   , valAsDynBv
   , SortError(..)
+  , checkSortDeep
   )
 where
 
@@ -101,6 +102,7 @@ import           Control.Exception              ( Exception
 import           Control.Monad                  ( liftM
                                                 , liftM2
                                                 , liftM3
+                                                , forM_
                                                 )
 import qualified Data.Binary.IEEE754           as IEEE754
 import           Data.Bits                     as Bits
@@ -125,6 +127,8 @@ import           GHC.Generics (Generic)
 import           Prelude                 hiding ( exp )
 import qualified IR.SMT.TySmt.DefaultMap       as DMap
 import           IR.SMT.TySmt.DefaultMap        ( DefaultMap )
+--import           Text.ParserCombinators.ReadP
+import           Text.Read
 
 data IntSort = IntSort deriving (Show,Ord,Eq,Typeable,Generic,Hashable)
 data BoolSort = BoolSort deriving (Show,Ord,Eq,Typeable,Generic,Hashable)
@@ -281,17 +285,17 @@ data Sort = SortInt
           | SortPf !Integer
           | SortFp !Int !Int
           | SortArray !Sort !Sort
-          deriving (Ord,Eq,Typeable,Generic,Hashable)
+          deriving (Show,Read,Ord,Eq,Typeable,Generic,Hashable)
 
-instance Show Sort where
-  -- Omit the order for SortPf. It's just ugly.
-  show s = case s of
-    SortInt -> "SortInt"
-    SortBool -> "SortBool"
-    SortBv i -> "(SortBv " ++ show i ++ ")"
-    SortFp i j -> "(SortFp " ++ show i ++ " " ++ show j ++ ")"
-    SortArray i j -> "(SortArray " ++ show i ++ " " ++ show j ++ ")"
-    SortPf _ -> "SortPf"
+--instance Show Sort where
+--  -- Omit the order for SortPf. It's just ugly.
+--  show s = case s of
+--    SortInt -> "SortInt"
+--    SortBool -> "SortBool"
+--    SortBv i -> "(SortBv " ++ show i ++ ")"
+--    SortFp i j -> "(SortFp " ++ show i ++ " " ++ show j ++ ")"
+--    SortArray i j -> "(SortArray " ++ show i ++ " " ++ show j ++ ")"
+--    SortPf _ -> "SortPf"
 
 sortDouble :: Sort
 sortDouble = SortFp 11 53
@@ -310,24 +314,24 @@ boolNaryId o = case o of
 
 data BoolBinOp = Implies deriving (Show,Ord,Eq,Typeable,Generic,Hashable)
 
-data IntNaryOp = IntAdd | IntMul deriving (Show, Ord, Eq, Typeable, Generic, Hashable)
+data IntNaryOp = IntAdd | IntMul deriving (Show, Read, Ord, Eq, Typeable, Generic, Hashable)
 data IntBinOp = IntSub | IntDiv | IntMod | IntShl | IntShr | IntPow
-              deriving (Show, Ord, Eq, Typeable, Generic, Hashable)
+              deriving (Show, Read, Ord, Eq, Typeable, Generic, Hashable)
 data IntUnOp = IntNeg | IntAbs
-             deriving (Show, Ord, Eq, Typeable, Generic, Hashable)
+             deriving (Show, Read, Ord, Eq, Typeable, Generic, Hashable)
 data IntBinPred = IntLt | IntLe | IntGt | IntGe
-                deriving (Show, Ord, Eq, Typeable, Generic, Hashable)
+                deriving (Show, Read, Ord, Eq, Typeable, Generic, Hashable)
 
 data BvUnOp = BvNeg
             | BvNot
-            deriving (Show, Ord, Eq, Typeable, Generic, Hashable)
+            deriving (Show, Read, Ord, Eq, Typeable, Generic, Hashable)
 
 data BvNaryOp = BvAdd
               | BvMul
               | BvOr
               | BvAnd
               | BvXor
-              deriving (Show, Ord, Eq, Typeable, Generic, Hashable)
+              deriving (Show, Read, Ord, Eq, Typeable, Generic, Hashable)
 
 data BvBinOp = BvShl
              | BvLshr
@@ -335,7 +339,7 @@ data BvBinOp = BvShl
              | BvUrem
              | BvUdiv
              | BvSub
-             deriving (Show, Ord, Eq, Typeable, Generic, Hashable)
+             deriving (Show, Read, Ord, Eq, Typeable, Generic, Hashable)
 
 data BvBinPred = BvUgt
                | BvUlt
@@ -348,11 +352,11 @@ data BvBinPred = BvUgt
                | BvSaddo
                | BvSsubo
                | BvSmulo
-               deriving (Show, Ord, Eq, Typeable, Generic, Hashable)
+               deriving (Show, Read, Ord, Eq, Typeable, Generic, Hashable)
 
-data PfNaryOp = PfAdd | PfMul deriving (Show, Ord, Eq, Typeable, Generic, Hashable)
-data PfUnOp = PfNeg | PfRecip deriving (Show, Ord, Eq, Typeable, Generic, Hashable)
-data PfBinPred = PfEq | PfNe deriving (Show, Ord, Eq, Typeable, Generic, Hashable)
+data PfNaryOp = PfAdd | PfMul deriving (Show, Read, Ord, Eq, Typeable, Generic, Hashable)
+data PfUnOp = PfNeg | PfRecip deriving (Show, Read, Ord, Eq, Typeable, Generic, Hashable)
+data PfBinPred = PfEq | PfNe deriving (Show, Read, Ord, Eq, Typeable, Generic, Hashable)
 
 data FpBinOp = FpAdd
              | FpSub
@@ -361,20 +365,20 @@ data FpBinOp = FpAdd
              | FpRem
              | FpMax
              | FpMin
-             deriving (Show, Ord, Eq, Typeable, Generic, Hashable)
+             deriving (Show, Read, Ord, Eq, Typeable, Generic, Hashable)
 
 data FpUnOp = FpNeg
             | FpAbs
             | FpSqrt
             | FpRound
-            deriving (Show, Ord, Eq, Typeable, Generic, Hashable)
+            deriving (Show, Read, Ord, Eq, Typeable, Generic, Hashable)
 
 data FpBinPred = FpLe
                | FpLt
                | FpEq
                | FpGe
                | FpGt
-               deriving (Show, Ord, Eq, Typeable, Generic, Hashable)
+               deriving (Show, Read, Ord, Eq, Typeable, Generic, Hashable)
 
 data FpUnPred = FpIsNormal
               | FpIsSubnormal
@@ -383,7 +387,7 @@ data FpUnPred = FpIsNormal
               | FpIsNaN
               | FpIsNegative
               | FpIsPositive
-              deriving (Show, Ord, Eq, Typeable, Generic, Hashable)
+              deriving (Show, Read, Ord, Eq, Typeable, Generic, Hashable)
 
 
 type TermBv n = Term (BvSort n)
@@ -477,9 +481,72 @@ data Term s where
     -- domain, value
     ConstArray ::(SortClass k, SortClass v) => !Sort -> !(Term v) -> TermArray k v
 
+-- | Traverse a term, sort-checking as you go.
+-- Incomplete.
+checkSortDeep :: SortClass s => Term s -> Either String (Term s)
+checkSortDeep = mapTermM visit
+ where
+  visit :: SortClass s => Term s -> Either String (Maybe (Term s))
+  visit t = case t of
+    Eq a b ->
+      let as = sort a
+          bs = sort b
+      in  if as == bs then Right Nothing else e
+    DynBvConcat w a b ->
+      if dynBvWidth a + dynBvWidth b == w then Right Nothing else e
+    DynBvNaryExpr _o w xs ->
+      forM_ xs (\x -> if dynBvWidth x == w then Right Nothing else e) >> return Nothing
+    DynBvUext w dw x ->
+      if dynBvWidth x + dw == w then Right Nothing else e
+    -- TODO: finish
+    _ -> Right Nothing
+   where
+    e :: Either String a
+    e = Left $ "sort mismatch in " ++ show t
 
 deriving instance Show (Term s)
 deriving instance Typeable (Term s)
+
+instance Read TermDynBv where
+  readPrec = parens $ (appPrec $ do
+                         Ident "Var" <- lexP
+                         n :: String <- readPrec
+                         s :: Sort <- readPrec
+                         return $ Var n s) +++
+                      (appPrec $ do
+                         Ident "DynBvConcat" <- lexP
+                         w :: Int <- readPrec
+                         a :: TermDynBv <- readPrec
+                         b :: TermDynBv <- readPrec
+                         return $ DynBvConcat w a b) +++
+                      (appPrec $ do
+                         Ident "DynBvLit" <- lexP
+                         b :: Bv.BV <- readPrec
+                         return $ DynBvLit b) +++
+                      (appPrec $ do
+                         Ident "DynBvUext" <- lexP
+                         w :: Int <- readPrec
+                         dw :: Int <- readPrec
+                         a :: TermDynBv <- readPrec
+                         return $ DynBvUext w dw a) +++
+                      (appPrec $ do
+                         Ident "DynBvNaryExpr" <- lexP
+                         o :: BvNaryOp <- readPrec
+                         w :: Int <- readPrec
+                         a :: [TermDynBv] <- readPrec
+                         return $ DynBvNaryExpr o w a)
+
+   where
+    appPrec = prec 10
+
+instance Read TermBool where
+  readPrec = parens $ (appPrec $ do
+                         Ident "Eq" <- lexP
+                         a :: TermDynBv <- readPrec
+                         b :: TermDynBv <- readPrec
+                         return $ Eq a b)
+   where
+    appPrec = prec 10
 
 widthErr :: Term s -> Maybe String -> Int -> Int -> a
 widthErr term width expected actual = throw $ SortError $ unwords

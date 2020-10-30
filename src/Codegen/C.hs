@@ -220,9 +220,31 @@ genConst c = case c of
       'f' -> return $ cFloatLit (read $ init str)
       'l' -> return $ cDoubleLit (read $ init str)
       _   -> return $ cDoubleLit (read str)
-  CStrConst (CString str _) _ -> liftMem $ cArrayLit
-    S8
-    (map (cIntLit S8 . toInteger . Char.ord) str ++ [cIntLit S8 0])
+  CStrConst (CString str _) _ -> do
+    svExtensions <- Cfg.liftCfg $ asks (Cfg._svExtensions . Cfg._cCfg)
+    let p = "__SMT_assert:"
+    when (svExtensions && List.isPrefixOf p str) $ do
+      let t = either error id $ Ty.checkSortDeep (read (drop (length p) str) :: Ty.TermBool)
+      logIf "SMT_assert" $ "User assertion: " ++ show t
+      t' <- localizeVars t
+      logIf "SMT_assert" $ "SMT  assertion: " ++ show t'
+      whenM (gets findUB) $ bugIf $ Ty.Not t'
+    liftMem $ cArrayLit
+      S8
+      (map (cIntLit S8 . toInteger . Char.ord) str ++ [cIntLit S8 0])
+
+-- | Given a term with user-visible variables in it, replaces them with their
+-- (current version) names
+localizeVars :: Ty.SortClass s => Ty.Term s -> C (Ty.Term s)
+localizeVars = Ty.mapTermM visit
+ where
+  visit :: Ty.SortClass s => Ty.Term s -> C (Maybe (Ty.Term s))
+  visit (Ty.Var n s) = do
+    t <- liftCircify $ ssaValAsTerm "localize" <$> getTerm (SLVar n)
+    vs <- liftMem $ ctermGetVars n t
+    let v = head $ Set.toList $ vs
+    return $ Just $ Ty.Var v s
+  visit _ = return Nothing
 
 type CSsaVal = SsaVal CTerm
 
@@ -355,6 +377,7 @@ genExpr expr = do
   case expr of
     CVar id _            -> genVar id
     CConst c             -> Base <$> genConst c
+    CStatExpr s _        -> genStmt s >> return (Base (cIntLit U32 1))
     CAssign op lhs rhs _ -> do
       lval <- genLValue lhs
       rval <- genExpr rhs
