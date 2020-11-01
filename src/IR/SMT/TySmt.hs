@@ -127,7 +127,6 @@ import           GHC.Generics (Generic)
 import           Prelude                 hiding ( exp )
 import qualified IR.SMT.TySmt.DefaultMap       as DMap
 import           IR.SMT.TySmt.DefaultMap        ( DefaultMap )
---import           Text.ParserCombinators.ReadP
 import           Text.Read
 
 data IntSort = IntSort deriving (Show,Ord,Eq,Typeable,Generic,Hashable)
