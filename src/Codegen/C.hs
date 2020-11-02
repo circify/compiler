@@ -374,14 +374,14 @@ genExpr expr = do
     CCall fn args _ -> case fn of
       CVar fnIdent _ -> do
         let fnName = identToVarName fnIdent
-        actualArgs <- traverse genExpr args
+        actualArgs <- traverse genExpr args --make args values, not c expr
         s          <- genSpecialFunction fnName actualArgs
         case s of
           Just r  -> return r
-          Nothing -> do
+          Nothing -> do --not special function
             f     <- getFunction fnName
             retTy <- liftCircify $ unwrap <$> fnRetTy f
-            let (_, args, body) = fnInfo f
+            let (_, args, body) = fnInfo f -- get args from the Call declr?
             liftCircify $ pushFunction fnName (noneIfVoid retTy)
             forM_ args (genDecl FnArg)
             formalArgs <-
@@ -394,7 +394,7 @@ genExpr expr = do
               $  error
               $  "Wrong arg count: "
               ++ show expr
-            liftCircify $ forM_ (zip formalArgs actualArgs) (uncurry argAssign)
+            liftCircify $ forM_ (zip formalArgs actualArgs) (uncurry argAssign) -- gold
             genStmt body
             returnValue <- liftCircify popFunction
             return $ Base $ fromMaybe
