@@ -83,6 +83,7 @@ import           System.IO                      ( hPutStr
                                                 , IOMode(WriteMode)
                                                 , hClose
                                                 )
+import           Util.Cfg                       ( R1CSOutput(..) )
 -- Faster IO?
 -- import qualified Data.Text.IO                  as TextIO
 -- import           System.IO                      ( openFile
@@ -362,10 +363,12 @@ r1csAsLines r1cs =
   in  [nPubIns, nWit, nConstraints] : constraintLines
 
 -- Todo: implement this using a better IO system.
-writeToR1csFile :: (Show s, KnownNat n) => Bool -> R1CS s n -> FilePath -> IO ()
-writeToR1csFile asJson r1cs path = if asJson
-  then ByteString.writeFile path $ encode r1cs
-  else writeFile path $ unlines $ map (unwords . map show) $ r1csAsLines r1cs
+writeToR1csFile
+  :: (Show s, KnownNat n) => R1CSOutput -> R1CS s n -> FilePath -> IO ()
+writeToR1csFile Json       r1cs path = ByteString.writeFile path $ encode r1cs
+writeToR1csFile FlatBuffer r1cs path = undefined -- TODO when we get the schema from SGA
+writeToR1csFile Legacy r1cs path =
+  writeFile path $ unlines $ map (unwords . map show) $ r1csAsLines r1cs
 --  else do
 --    h <- openFile path WriteMode
 --    forM_ (r1csAsLines r1cs) $ \line -> do

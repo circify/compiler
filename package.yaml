@@ -39,6 +39,7 @@ library:
   - language-c >= 0.8.3 && < 0.9
   - array >= 0.5
   - filepath >= 1.4
+  - flatbuffers >= 0.2.0
   - ghc >= 8.3
   - bv >= 0.5
   - ghc-typelits-knownnat >= 0.7

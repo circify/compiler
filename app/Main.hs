@@ -59,6 +59,7 @@ import qualified Util.Cfg                      as Cfg
                                                 ( setFromEnv
                                                 , evalCfg
                                                 , defaultCfgState
+                                                , R1CSOutput(..)
                                                 )
 
 openFile :: FilePath -> IOMode -> IO Handle
@@ -173,15 +174,15 @@ type Order
 -- type Order = 17
 -- type OrderCtx = Ctx Order
 
-cmdEmitR1cs :: Bool -> FilePath -> FilePath -> Cfg ()
-cmdEmitR1cs asJson circomPath r1csPath = do
+cmdEmitR1cs :: Cfg.R1CSOutput -> FilePath -> FilePath -> Cfg ()
+cmdEmitR1cs r1csOutputType circomPath r1csPath = do
   liftIO $ print "Loading circuit"
   m    <- liftIO $ loadMain circomPath
   r1cs <- evalLog $ (Link.linkMain @Order m >>= Opt.opt)
   liftIO $ do
     putStrLn $ R1cs.r1csStats r1cs
     --putStrLn $ R1cs.r1csShow r1cs
-    R1cs.writeToR1csFile asJson r1cs r1csPath
+    R1cs.writeToR1csFile r1csOutputType r1cs r1csPath
 
 cmdCountTerms :: FilePath -> Cfg ()
 cmdCountTerms circomPath = do
@@ -195,7 +196,7 @@ cmdCountTerms circomPath = do
 
 cmdSetup :: FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> Cfg ()
 cmdSetup libsnark circomPath r1csPath pkPath vkPath = do
-  cmdEmitR1cs False circomPath r1csPath
+  cmdEmitR1cs Cfg.Legacy circomPath r1csPath
   liftIO $ runSetup libsnark r1csPath pkPath vkPath
 
 cmdProve
@@ -253,11 +254,11 @@ cmdCEval name path = do
   r  <- evalLog $ evalFn False tu name
   forM_ (Map.toList r) $ \(k, v) -> liftIO $ putStrLn $ unwords [k, ":", show v]
 
-cmdCEmitR1cs :: Bool -> Bool -> String -> FilePath -> FilePath -> Cfg ()
-cmdCEmitR1cs findBugs asJson fnName cPath r1csPath = do
+cmdCEmitR1cs :: Bool -> Cfg.R1CSOutput -> String -> FilePath -> FilePath -> Cfg ()
+cmdCEmitR1cs findBugs r1csOutputType fnName cPath r1csPath = do
   tu   <- liftIO $ parseC cPath
   r1cs <- evalLog $ fnToR1cs @Order findBugs Nothing tu fnName
-  liftIO $ R1cs.writeToR1csFile asJson r1cs r1csPath
+  liftIO $ R1cs.writeToR1csFile r1csOutputType r1cs r1csPath
 
 cmdCSetup
   :: Bool
@@ -269,7 +270,7 @@ cmdCSetup
   -> FilePath
   -> Cfg ()
 cmdCSetup findBugs libsnark fnName cPath r1csPath pkPath vkPath = do
-  cmdCEmitR1cs findBugs False fnName cPath r1csPath
+  cmdCEmitR1cs findBugs Cfg.Legacy fnName cPath r1csPath
   liftIO $ runSetup libsnark r1csPath pkPath vkPath
 
 cmdCProve
@@ -336,9 +337,9 @@ main = do
     cmd :: Cfg () = case True of
       _ | args `isPresent` command "emit-r1cs" -> do
         circomPath <- args `getExistingFilePath` longOption "circom"
-        let asJson = args `isPresent` longOption "json"
+        let r1csOutputType = parseR1CSOutputFromArgs args
         r1csPath <- args `getArgOrExit` shortOption 'C'
-        cmdEmitR1cs asJson circomPath r1csPath
+        cmdEmitR1cs r1csOutputType circomPath r1csPath
       _ | args `isPresent` command "count-terms" -> do
         circomPath <- args `getExistingFilePath` longOption "circom"
         cmdCountTerms circomPath
@@ -374,11 +375,11 @@ main = do
         path   <- args `getExistingFilePath` argument "path"
         cmdCEval fnName path
       _ | args `isPresent` command "c-emit-r1cs" -> do
-        let asJson = args `isPresent` longOption "json"
+        let r1csOutputType = parseR1CSOutputFromArgs args
         fnName   <- args `getArgOrExit` argument "fn-name"
         path     <- args `getExistingFilePath` argument "path"
         r1csPath <- args `getArgOrExit` shortOption 'C'
-        cmdCEmitR1cs False asJson fnName path r1csPath
+        cmdCEmitR1cs False r1csOutputType fnName path r1csPath
       _ | args `isPresent` command "c-setup" -> do
         libsnark <- args `getExistingFilePath` longOption "libsnark"
         fnName   <- args `getArgOrExit` argument "fn-name"
@@ -428,3 +429,8 @@ main = do
       _ -> liftIO $ exitWithUsageMessage patterns "Missing command!"
   cfg <- Cfg.setFromEnv Cfg.defaultCfgState
   Cfg.evalCfg cmd cfg
+ where
+  parseR1CSOutputFromArgs m | m `isPresent` longOption "json"       = Cfg.Json
+                            | m `isPresent` longOption "flatbuffer" = Cfg.FlatBuffer
+                            | otherwise                             = Cfg.Legacy
+
