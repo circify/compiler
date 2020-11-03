@@ -16,6 +16,7 @@ module Util.Cfg
   , defaultCfgState
   , evalCfg
   , evalCfgDefault
+  , R1CSOutput(..)
   )
 where
 
@@ -41,6 +42,8 @@ data SmtOptCfg = SmtOptCfg { _allowSubBlowup :: Bool
                            , _checkOpts      :: Bool
                            , _benesThresh    :: Int
                            } deriving (Show)
+
+data R1CSOutput = Json | Legacy | FlatBuffer deriving (Show, Eq)
 
 defaultSmtOptCfg :: SmtOptCfg
 defaultSmtOptCfg = SmtOptCfg
