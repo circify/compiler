@@ -3,7 +3,7 @@ module Parser.Zokrates.Parser where
 
 import AST.Zokrates             as A
 import AST.Util
-import Parser.Zokrates.Lexer    as L (Token(..),AlexPosn(AlexPn),start,end,str)
+import Parser.Zokrates.Lexer    as L (Posnd(..),Token(..),AlexPosn(AlexPn),start,end,str)
 
 }
 
@@ -12,73 +12,73 @@ import Parser.Zokrates.Lexer    as L (Token(..),AlexPosn(AlexPn),start,end,str)
 %name parseZokratesBlock block
 %name parseZokratesItem item
 %name parseZokratesFile items
-%tokentype { Token }
+%tokentype { Posnd Token }
 %error { parseError }
 
 --%expect 0
 
 %token
-bool { L.Bool _ }
-truelit { L.TrueLit _ }
-falselit { L.FalseLit _ }
-tintlit { L.IntLit _ _ }
-tstrlit { L.StrLit _ _ }
-hexlit { L.HexLit _ _ }
-u8 { L.U8 _ }
-u16 { L.U16 _ }
-u32 { L.U32 _ }
-field { L.Field _ }
-import { L.Import _ }
-struct { L.Struct _ }
-from { L.From _ }
-private { L.Private _ }
-if { L.If _ }
-then { L.Then _ }
-else { L.Else _ }
-fi { L.Fi _ }
-for { L.For _ }
-in { L.In _ }
-do { L.Do _ }
-endfor { L.EndFor _ }
-assert { L.Assert _ }
-def { L.Def _ }
-return { L.Return _ }
-as { L.As _ }
-tident { L.Ident _ _ }
-'...' { L.DotDotDot _ }
-'..' { L.DotDot _ }
-'.' { L.Dot _ }
-';' { L.SemiColon _ }
-':' { L.Colon _ }
-',' { L.Comma _ }
-'(' { L.BeginParen _ }
-'[' { L.BeginBracket _ }
-'{' { L.BeginBrace _ }
-')' { L.EndParen _ }
-']' { L.EndBracket _ }
-'}' { L.EndBrace _ }
-nl { L.Newline _ }
-'->'            { L.Symbols _ "->"      }
-'='             { L.Symbols _ "="       }
-'&&'            { L.Symbols _ "&&"      }
-'||'            { L.Symbols _ "||"      }
-'=='            { L.Symbols _ "=="      }
-'<='            { L.Symbols _ "<="      }
-'>='            { L.Symbols _ ">="      }
-'!='            { L.Symbols _ "!="      }
-'>>'            { L.Symbols _ ">>"      }
-'<<'            { L.Symbols _ "<<"      }
-'**'            { L.Symbols _ "**"      }
-'+'             { L.Symbols _ "+"       }
-'-'             { L.Symbols _ "-"       }
-'*'             { L.Symbols _ "*"       }
-'/'             { L.Symbols _ "/"       }
-'^'             { L.Symbols _ "^"       }
-'&'             { L.Symbols _ "&"       }
-'|'             { L.Symbols _ "|"       }
-'<'             { L.Symbols _ "<"       }
-'>'             { L.Symbols _ ">"       }
-'!'             { L.Symbols _ "!"       }
+bool { L.Posnd _ L.Bool }
+truelit { L.Posnd _ L.TrueLit }
+falselit { L.Posnd _ L.FalseLit }
+tintlit { L.Posnd _ (L.IntLit _) }
+tstrlit { L.Posnd _ (L.StrLit _) }
+hexlit { L.Posnd _ (L.HexLit _) }
+u8 { L.Posnd _ L.U8 }
+u16 { L.Posnd _ L.U16 }
+u32 { L.Posnd _ L.U32 }
+field { L.Posnd _ L.Field }
+import { L.Posnd _ L.Import }
+struct { L.Posnd _ L.Struct }
+from { L.Posnd _ L.From }
+private { L.Posnd _ L.Private }
+if { L.Posnd _ L.If }
+then { L.Posnd _ L.Then }
+else { L.Posnd _ L.Else }
+fi { L.Posnd _ L.Fi }
+for { L.Posnd _ L.For }
+in { L.Posnd _ L.In }
+do { L.Posnd _ L.Do }
+endfor { L.Posnd _ L.EndFor }
+assert { L.Posnd _ L.Assert }
+def { L.Posnd _ L.Def }
+return { L.Posnd _ L.Return }
+as { L.Posnd _ L.As }
+tident { L.Posnd _ (L.Ident _) }
+'...' { L.Posnd _ L.DotDotDot }
+'..' { L.Posnd _ L.DotDot }
+'.' { L.Posnd _ L.Dot }
+';' { L.Posnd _ L.SemiColon }
+':' { L.Posnd _ L.Colon }
+',' { L.Posnd _ L.Comma }
+'(' { L.Posnd _ L.BeginParen }
+'[' { L.Posnd _ L.BeginBracket }
+'{' { L.Posnd _ L.BeginBrace }
+')' { L.Posnd _ L.EndParen }
+']' { L.Posnd _ L.EndBracket }
+'}' { L.Posnd _ L.EndBrace }
+nl { L.Posnd _ L.Newline }
+'->'            { L.Posnd _ (L.Symbols "->"     ) }
+'='             { L.Posnd _ (L.Symbols "="      ) }
+'&&'            { L.Posnd _ (L.Symbols "&&"     ) }
+'||'            { L.Posnd _ (L.Symbols "||"     ) }
+'=='            { L.Posnd _ (L.Symbols "=="     ) }
+'<='            { L.Posnd _ (L.Symbols "<="     ) }
+'>='            { L.Posnd _ (L.Symbols ">="     ) }
+'!='            { L.Posnd _ (L.Symbols "!="     ) }
+'>>'            { L.Posnd _ (L.Symbols ">>"     ) }
+'<<'            { L.Posnd _ (L.Symbols "<<"     ) }
+'**'            { L.Posnd _ (L.Symbols "**"     ) }
+'+'             { L.Posnd _ (L.Symbols "+"      ) }
+'-'             { L.Posnd _ (L.Symbols "-"      ) }
+'*'             { L.Posnd _ (L.Symbols "*"      ) }
+'/'             { L.Posnd _ (L.Symbols "/"      ) }
+'^'             { L.Posnd _ (L.Symbols "^"      ) }
+'&'             { L.Posnd _ (L.Symbols "&"      ) }
+'|'             { L.Posnd _ (L.Symbols "|"      ) }
+'<'             { L.Posnd _ (L.Symbols "<"      ) }
+'>'             { L.Posnd _ (L.Symbols ">"      ) }
+'!'             { L.Posnd _ (L.Symbols "!"      ) }
 
 %nonassoc LOW
 %left '||'
@@ -160,13 +160,13 @@ lss0(p,s)            : rlss0(p,s)          { reverse $1 }
 lssi0(p,s,i)         : rlssi0(p,s,i)       { reverse $1 }
 
 ident    :: {PString}
-         : tident     { let L.Ident _ s = $1 in pos s (tStart $1) (tEnd $1) }
+         : tident     { let L.Posnd _ (L.Ident s) = $1 in pos s (tStart $1) (tEnd $1) }
 
 intlit :: {PInteger}
-       :  tintlit     { let L.IntLit _ s = $1 in pos (read s) (tStart $1) (tEnd $1) }
+       :  tintlit     { let L.Posnd _ (L.IntLit s) = $1 in pos (read s) (tStart $1) (tEnd $1) }
 
 strlit   :: {PString}
-         : tstrlit    { let L.StrLit _ s = $1 in pos s (tStart $1) (tEnd $1) }
+         : tstrlit    { let L.Posnd _ (L.StrLit s) = $1 in pos s (tStart $1) (tEnd $1) }
 
 cdimension :: {PInteger}
            : '[' intlit ']'                         { pos (ast $2) (tStart $1) (tEnd $3) }
@@ -177,7 +177,7 @@ cdimensions :: {[PInteger]}
 
 lit :: {PLiteral}
     :  intlit     { pos (A.IntLit (ast $1)) (aStart $1) (aEnd $1) }
-    |  hexlit     { let L.HexLit _ s = $1 in pos (A.HexLit ((length s - 2) * 4) (read s)) (tStart $1) (tEnd $1) }
+    |  hexlit     { let L.Posnd _ (L.HexLit s) = $1 in pos (A.HexLit ((length s - 2) * 4) (read s)) (tStart $1) (tEnd $1) }
     |  truelit    { pos (A.BoolLit True) (tStart $1) (tEnd $1) }
     |  falselit   { pos (A.BoolLit False) (tStart $1) (tEnd $1) }
 
@@ -279,7 +279,7 @@ items :: {[PItem]} : lss0(item, nl) { $1 }
 
 {
 
-parseError :: [Token] -> a
+parseError :: [Posnd Token] -> a
 parseError []    = error "Parse error around EOF"
 parseError (t:_) = error $ "Parse error around line " ++ show l ++ ", column " ++ show c ++ " at token `" ++ L.str t ++ "`"
     where (AlexPn _ l c) = L.start t
