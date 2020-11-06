@@ -121,7 +121,9 @@ class BenesNetwork(BenesNetworkBase):
         super().set_switches(ord_in, ord_out)
         ord_out = self.ord_out
 
-        rev_map = dict(zip(ord_out, range(0, self.num_inputs)))
+        rev_map = [None] * self.num_inputs
+        for (idx, val) in enumerate(ord_out):
+            rev_map[val] = idx
         is_odd = self.num_inputs % 2 == 1
         iolen = self.num_inputs // 2
         sw_i = [None] * iolen
