@@ -314,6 +314,8 @@ setFromEnv cfg = do
         ++ optDesc o
         ++ "\n\t"
         ++ optDetail o
+        ++ "\n\tDefault: "
+        ++ optDefault o
     exitSuccess
   return cfg'
  where
