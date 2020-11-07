@@ -22,6 +22,7 @@ import           Codegen.Circom.CompTypes.LowDeg
                                                 )
 import qualified Codegen.Circom.CompTypes.LowDeg
                                                as LD
+import qualified IR.R1cs                       as R1cs
 import           IR.R1cs                        ( R1CS
                                                 , emptyR1cs
                                                 , r1csAddConstraint
@@ -35,7 +36,6 @@ import           IR.R1cs                        ( R1CS
                                                 , qeqShow
                                                 , primeShow
                                                 )
-import qualified IR.R1cs                       as R1cs
 import qualified Util.AliasMap                 as AMap
 import           Util.AliasMap                  ( AliasMap )
 import qualified Util.ShowMap                  as SMap
@@ -60,6 +60,7 @@ import           Data.List                      ( foldl'
                                                 , transpose
                                                 )
 import           Data.Proxy                     ( Proxy(..) )
+import qualified Data.Sequence                 as Seq
 import qualified Data.Set                      as Set
 import           Data.Typeable                  ( cast )
 import           Util.Cfg                       ( MonadCfg(..)
@@ -92,6 +93,9 @@ data ToPfState n = ToPfState
   , next       :: Int
   , cfg        :: ToPfConfig
   , arraySizes :: ArraySizes
+  -- Variables that are assert to be equal to terms.
+  -- These need to be checked to be in range, ever.
+  , aliasVars  :: Set.Set String
   }
 
 
@@ -110,6 +114,7 @@ emptyState = ToPfState
                             , assumeInputsInRange = True
                             }
   , arraySizes = SMap.empty
+  , aliasVars  = Set.empty
   }
 
 configureFromEnv :: ToPf n ()
@@ -311,8 +316,9 @@ boolToPf env term = do
   boolToPfUncached t = do
     r1cs'                <- gets r1cs
     assumeInputsInRange' <- gets (assumeInputsInRange . cfg)
+    aliasVars' <- gets aliasVars
     let omitRangeCheck input =
-          assumeInputsInRange' && R1cs.r1csIsPublicSignal input r1cs'
+          (assumeInputsInRange' && R1cs.r1csIsPublicSignal input r1cs') || Set.member input aliasVars'
     case t of
       Eq a b -> case cast a of
         -- Bool
@@ -415,7 +421,7 @@ binEq a b = do
 
 -- Strategy: we add the bits, and decompose the sum. The LSB is the answer.
 naryXor :: KnownNat n => [LSig n] -> ToPf n (LSig n)
-naryXor xs = if length xs > 2
+naryXor xs = if length xs > 3
   then do
     let n = bitsize $ length xs
     let s = foldr lcAdd lcZero xs
@@ -427,7 +433,9 @@ naryXor xs = if length xs > 2
   else foldM binXor (head xs) (tail xs)
 
 binXor :: KnownNat n => LSig n -> LSig n -> ToPf n (LSig n)
-binXor a b = lcSub (lcAdd a b) <$> lcMul "binxor" a b
+binXor a b = do
+  logIf "toPf" "xor"
+  lcSub (lcAdd a b) <$> lcMul "binxor" a b
 
 bitsize :: Int -> Int
 bitsize x = if x == 0 then 0 else 1 + bitsize (x `div` 2)
@@ -552,7 +560,7 @@ lazyInt = gets (assumeNoBvOverflow . cfg)
 -- The 0th index contains the LSB
 bitify :: KnownNat n => String -> LSig n -> Int -> ToPf n [LSig n]
 bitify ctx x width = do
-  logIf "toPf" $ "bitify: " ++ ctx
+  logIf "toPf" $ "bitify " ++ show width ++  ": " ++ ctx
   sigs <- nbits ctx $ asBits width $ snd x
   let sum' = foldr lcAdd lcZero $ zipWith lcScale (map twoPow [0 ..]) sigs
   enforceCheck (lcZero, lcZero, lcSub sum' x)
@@ -629,8 +637,9 @@ bvToPf env term = do
   bvToPfUncached bv = do
     r1cs'                <- gets r1cs
     assumeInputsInRange' <- gets (assumeInputsInRange . cfg)
+    aliasVars' <- gets aliasVars
     let omitRangeCheck input =
-          assumeInputsInRange' && R1cs.r1csIsPublicSignal input r1cs'
+          (assumeInputsInRange' && R1cs.r1csIsPublicSignal input r1cs') || Set.member input aliasVars'
     case bv of
       IntToDynBv w (IntLit i) -> saveConstBv bv (Bv.bitVec w i)
       DynBvLit l              -> saveConstBv bv l
@@ -904,6 +913,7 @@ lcGt width x y = inBits False width (lcSub x y)
 handleAlias :: KnownNat n => Maybe SmtVals -> TermBool -> ToPf n Bool
 handleAlias env a = case a of
   Eq v@(Var name _s) t -> do
+    modify $ \s -> s { aliasVars = Set.insert name $ aliasVars s }
     s <- get
     if r1csIsPublicSignal name (r1cs s)
       then return False
@@ -941,13 +951,16 @@ handleAlias env a = case a of
 
 enforceAsPf :: KnownNat n => Maybe SmtVals -> TermBool -> ToPf n ()
 enforceAsPf env b = do
+  n <- gets $ Seq.length . R1cs.constraints . r1cs
   logIf "toPf" $ "enforce: " ++ show b
   doOpt    <- gets (optEq . cfg)
   wasAlias <- if doOpt then handleAlias env b else return False
   logIf "toPf" $ "wasAlias: " ++ show wasAlias
   unless wasAlias $ boolToPf env b >>= enforceTrue
+  n' <- gets $ Seq.length . R1cs.constraints . r1cs
   r <- gets $ r1csStats . r1cs
-  logIf "toPf" $ "R1cs: " ++ r
+  logIf "toPf" $ "New constraints: " ++ show (n' - n)
+  logIf "toPf" $ "Net: " ++ r
 
 publicizeInputs :: Set.Set PfVar -> ToPf n ()
 publicizeInputs is = do

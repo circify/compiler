@@ -41,6 +41,7 @@ data SmtOptCfg = SmtOptCfg { _allowSubBlowup :: Bool
                            , _optForZ3       :: Bool
                            , _checkOpts      :: Bool
                            , _benesThresh    :: Int
+                           , _subBvAdd       :: Bool
                            } deriving (Show)
 
 defaultSmtOptCfg :: SmtOptCfg
@@ -63,6 +64,7 @@ defaultSmtOptCfg = SmtOptCfg
   , _optForZ3       = False
   , _checkOpts      = False
   , _benesThresh    = 50
+  , _subBvAdd       = True
   }
 
 $(makeLenses ''SmtOptCfg)
@@ -235,6 +237,12 @@ options =
     "The array size at which a benes network is used instead of a linear scan"
     ""
     "50"
+  , CfgOption
+    (smtOptCfg . subBvAdd . showReadLens)
+    "smt-sub-bv-add"
+    "Always substitute/eliminate variables equal to bit-vector additions"
+    ""
+    "True"
   , CfgOption (streams . commaListLens)
               "streams"
               "Debug streams to emit"
