@@ -1,28 +1,23 @@
-{-# LANGUAGE MagicHash #-}
-
 {-
  - arbitrary-sized Waksman network impl
  -}
 
 import qualified Control.Monad.ST as CmST
+import qualified Data.Array.IO as DaIO
 import qualified Data.Array.ST as DaST
 import Data.Bits (xor)
 import qualified Data.IntSet as DISet
 import qualified Data.STRef as DStR
 
-import Control.Monad (liftM, forM_)
+import Control.Exception (assert)
+import Control.Monad (liftM, forM_, when)
 import qualified Data.List as DLs
 import qualified Data.Map.Strict as DM
 import Data.Maybe (fromJust)
-import qualified Data.Tuple as DT
 import qualified System.Environment as Env
+import qualified System.Random as Rnd
 
-stPlay :: Int -> [Int]
-stPlay ainc = CmST.runST $ do
-    foo <- DaST.newArray (0, 1) 0 :: CmST.ST s (DaST.STUArray s Int Int)
-    a <- DaST.readArray foo 0
-    DaST.writeArray foo 1 $ a + ainc
-    DaST.getElems foo
+import qualified Test.QuickCheck as QC
 
 -- precondition: ins is sorted, outs is a permutation of ins
 -- returns the indices
@@ -32,8 +27,20 @@ toPermOrder ins outs = res
     iomap = DM.fromDistinctAscList $ zip ins [0..]
     res = map ((DM.!) iomap) outs
 
+-- given a set of switches, split input values into top/bottom lists
+benesTopBottom :: [Bool] -> [Int] -> ([Int], [Int])
+benesTopBottom sws vals = (reverse i, reverse o)
+  where
+    bTBHelp (top, bot) [] [] = (top, bot)
+    bTBHelp (top, bot) [] (v:[]) = (top, v : bot)
+    bTBHelp (top, bot) [] (v:w:[]) = (v : top, w : bot)
+    bTBHelp (top, bot) (s:sw) (v:w:xs) =
+        let (tt, bb) = if s then (w : top, v : bot) else (v : top, w : bot)
+        in bTBHelp (tt, bb) sw xs
+    (i, o) = bTBHelp ([], []) sws vals
+
 -- precondition: outp is permutation of inp, inp is sorted
-benesRoute :: [Int] -> [Int] -> [Bool]
+benesRoute :: [Int] -> [Int] -> ([Bool], [Bool])
 benesRoute inp outp = CmST.runST $ do
     -- misc values
     let num_inputs = length inp
@@ -82,61 +89,68 @@ benesRoute inp outp = CmST.runST $ do
                                 -- XXX need to delete from inval here
                                 return (Just (inval_next, inval_next `mod` 2 == 0), [])
                             (Just (h,t), _) -> return (Just h, t)
-        case elm of
-            Nothing -> return () -- all done
-            Just (idx_i, top_i) -> do
-                -- input-side switch constraints
-                let swnum_i = idx_i `div` 2
-                let swval_i = (idx_i `mod` 2 == 0) /= top_i
 
-                -- input-side switch
-                let swnum_i_lim = if swnum_i >= iolen then 0 else swnum_i
-                sw_i_val <- DaST.readArray sw_i swnum_i_lim
-                if swnum_i >= iolen || sw_i_val /= Nothing
-                    then route_loop queue'  -- next iteration
-                    else do
-                        DaST.writeArray sw_i swnum_i $! Just swval_i
+        when (elm /= Nothing) $ do
+            let Just (idx_i, top_i) = elm
+            -- input-side switch constraints
+            let swnum_i = idx_i `div` 2
+            let swval_i = (idx_i `mod` 2 == 0) /= top_i
 
-                        -- output-side switch constraints
-                        let nidx_i = idx_i `xor` 1
-                        DStR.modifySTRef' invals $ DISet.delete nidx_i
-                        idx_o <- DaST.readArray rev_map nidx_i
-                        let swnum_o = idx_o `div` 2
-                        let top_o = not top_i
-                        let swval_o = (idx_o `mod` 2 == 0) /= top_o
+            -- input-side switch
+            let swnum_i_lim = if swnum_i >= iolen then 0 else swnum_i
+            sw_i_val <- DaST.readArray sw_i swnum_i_lim
+            if swnum_i >= iolen || sw_i_val /= Nothing
+                then route_loop queue'  -- next iteration
+                else do
+                    DaST.writeArray sw_i swnum_i $! Just swval_i
 
-                        -- output-side switch
-                        let swnum_o_lim = if swnum_o == swnum_o_max then 0 else swnum_o
-                        sw_o_val <- DaST.readArray sw_o swnum_o_lim
-                        if swnum_o == swnum_o_max || sw_o_val /= Nothing
-                            then route_loop queue'
-                            else do
-                                DaST.writeArray sw_o swnum_o $! Just swval_o
+                    -- output-side switch constraints
+                    let nidx_i = idx_i `xor` 1
+                    DStR.modifySTRef' invals $ DISet.delete nidx_i
+                    idx_o <- DaST.readArray rev_map nidx_i
+                    let swnum_o = idx_o `div` 2
+                    let top_o = not top_i
+                    let swval_o = (idx_o `mod` 2 == 0) /= top_o
 
-                                -- new constraint?
-                                let nidx_o = idx_o `xor` 1
-                                nidx_o_in <- DaST.readArray out_ord nidx_o
-                                update_queue <- liftM (DISet.member nidx_o_in) $ DStR.readSTRef invals
-                                if not update_queue
-                                    then route_loop queue'
-                                    else do
-                                        DStR.modifySTRef' invals $ DISet.delete nidx_o_in
-                                        route_loop $ (nidx_o_in, not top_o) : queue'
+                    -- output-side switch
+                    let swnum_o_lim = if swnum_o == swnum_o_max then 0 else swnum_o
+                    sw_o_val <- DaST.readArray sw_o swnum_o_lim
+                    if swnum_o == swnum_o_max || sw_o_val /= Nothing
+                        then route_loop queue'
+                        else do
+                            DaST.writeArray sw_o swnum_o $! Just swval_o
+
+                            -- new constraint?
+                            let nidx_o = idx_o `xor` 1
+                            nidx_o_in <- DaST.readArray out_ord nidx_o
+                            update_queue <- liftM (DISet.member nidx_o_in) $ DStR.readSTRef invals
+                            if not update_queue
+                                then route_loop queue'
+                                else do
+                                    DStR.modifySTRef' invals $ DISet.delete nidx_o_in
+                                    route_loop $ (nidx_o_in, not top_o) : queue'
 
     -- kick off routing
     route_loop queue
-
     -- return the result
-    sw_i_ls <- DaST.getElems sw_i
-    sw_o_ls <- DaST.getElems sw_o
-    return $ map fromJust (sw_i_ls ++ sw_o_ls)
+    sw_i_ls <- map fromJust <$> DaST.getElems sw_i
+    sw_o_ls <- map fromJust <$> DaST.getElems sw_o
+    return (sw_i_ls, sw_o_ls)
+
+-- *** tests infra ***
+-- check that Benes is OK
+test_benesRoute :: Int -> QC.Gen Bool
+test_benesRoute len = do
+    let ivals = take (4 + len `mod` 1024) [0..]
+    ovals <- QC.shuffle ivals
+    let (sw_i, sw_o) = benesRoute ivals ovals
+        (it, ib) = benesTopBottom sw_i ivals
+        (ot, ob) = benesTopBottom sw_o ovals
+        imatch = it == DLs.sort ot
+        omatch = ib == DLs.sort ob
+    return $ imatch && omatch
 
 main :: IO ()
 main = do
-    args <- liftM (map read) Env.getArgs :: IO [[Int]]
-    print args
-    {-
-    if DLs.sort args /= take (length args) [0..]
-        then print "Error: bad args"
-        else return $ benesRoute args [1]
-    -}
+    max_loops <- liftM read (liftM head $ Env.getArgs)
+    QC.quickCheck $ QC.withMaxSuccess max_loops test_benesRoute
