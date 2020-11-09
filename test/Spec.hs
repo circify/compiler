@@ -5,6 +5,7 @@ import           Codegen.C.Test
 import           Codegen.Circify.MemoryTest
 import           Codegen.CircomTest
 import           IR.R1cs.OptTest
+import           IR.SMT.MemRouteTest
 import           IR.SMT.OptTest
 import           IR.SMT.ToPfTest
 import           IR.SMT.TySmtTest
@@ -28,9 +29,12 @@ generatorTests = benchTestGroup
   , cPequinTests
   ]
 
+benesTests :: BenchTest
+benesTests = benchTestProperty "Routing network" test_benesRoute
+
 irTests :: BenchTest
 irTests =
-  benchTestGroup "IR tests" [tySmtTests, toPfTests, optTests, r1csOptTests]
+  benchTestGroup "IR tests" [tySmtTests, toPfTests, optTests, r1csOptTests, benesTests]
 
 
 allTests :: [BenchTest]

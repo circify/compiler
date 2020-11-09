@@ -95,6 +95,7 @@ import           Lens.Simple                    ( over
                                                 )
 import           IR.SMT.TySmt
 import qualified IR.SMT.Opt.Assert             as A
+import qualified IR.SMT.Opt.Mem.Route          as MemR
 import           IR.SMT.Opt.Mem.Util           as MemU
                                                 ( MemReplacePass(visitSelect)
                                                 , TMem
