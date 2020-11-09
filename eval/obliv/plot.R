@@ -1,14 +1,11 @@
 library(tidyverse)
 library(patchwork)
+source("../theme.R")
 
 d <- read_csv("results.csv") %>% mutate(optimized = ifelse(optimized, "Optimized", "Unoptimized"))
 
 
-t <-   theme(text = element_text(size=8),
-                legend.key.size = unit(2,"mm"),
-             legend.position = "bottom",
-                axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)
-)
+t <-   t + theme(legend.position = "bottom")
 
 smt_plot <-
   ggplot(d) +

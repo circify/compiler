@@ -41,7 +41,7 @@ function count() {
 typeset -A paths
 paths=(
     mm5
-             ~/repos/llcl/compiler/mm_flat_5.c
+             ~/repos/llcl/compiler/test/Code/C/pequin/mm_flat.c
     u32sqrt
              ~/repos/llcl/compiler/test/Code/C/sqrt.c
     u32log2
