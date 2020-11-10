@@ -4,6 +4,7 @@
 
 module IR.SMT.Opt.Mem.Route
   ( benesRoute
+  , benesRoute3
   , benesTopBottom
   )
 where
@@ -29,6 +30,15 @@ toPermOrder ins outs = res
   where
     iomap = DM.fromDistinctAscList $ zip ins [0..]
     res = map ((DM.!) iomap) outs
+
+-- routing for the case of 3 inputs
+benesRoute3 :: [Int] -> [Int] -> [Bool]
+benesRoute3 inp outp = [sw_i, sw_m, sw_o]
+  where
+    [ord0, ord1, ord2] = toPermOrder inp outp
+    (sw_m, sw_i, sw_o) = if ord2 /= 2
+                            then (True, ord2 == 0, ord1 /= 2)
+                            else (False, False, ord0 == 1)
 
 -- given a set of switches, split input values into top/bottom lists
 benesTopBottom :: [Bool] -> [Int] -> ([Int], [Int])
@@ -139,55 +149,3 @@ benesRoute inp outp = CmST.runST $ do
     sw_i_ls <- map fromJust <$> DaST.getElems sw_i
     sw_o_ls <- map fromJust <$> DaST.getElems sw_o
     return (sw_i_ls, sw_o_ls)
-
-benesBuild :: String -> [Int] -> [Int] -> IO ()
-benesBuild name inp outp = do
-    let num_inputs = length inp
-        is_odd = num_inputs `mod` 2 == 1
-        iolen = num_inputs `div` 2
-        (sw_i, sw_o) = benesRoute inp outp
-
-    flip mapM (zip [0..] sw_i) $ \(idx, swval) -> do
-        let nameI0 = name ++ "_wI_" ++ show (2 * idx)
-            nameI1 = name ++ "_wI_" ++ show (2 * idx + 1)
-            nameOT = name ++ "_top_wI_" ++ show idx
-            nameOB = name ++ "_bot_wI_" ++ show idx
-            nbool = name ++ "_swI_" ++ show idx
-        print $ nameOT ++ " = if " ++ nbool ++ " then " ++ nameI1 ++ " else " ++ nameI0
-        print $ nameOB ++ " = if " ++ nbool ++ " then " ++ nameI0 ++ " else " ++ nameI1
-        print $ nbool ++ " = " ++ show swval
-    if is_odd
-        then do
-            let nameI = name ++ "_wI_" ++ show (num_inputs - 1)
-                nameO = name ++ "_bot_wI_" ++ show (length sw_i)
-            print $ nameO ++ " = " ++ nameI
-        else return ()
-
-    flip mapM (zip [0..] sw_o) $ \(idx, swval) -> do
-        let nameIT = name ++ "_top_wO_" ++ show idx
-            nameIB = name ++ "_bot_wO_" ++ show idx
-            nameO0 = name ++ "_wO_" ++ show (2 * idx)
-            nameO1 = name ++ "_wO_" ++ show (2 * idx + 1)
-            nbool = name ++ "_swO_" ++ show idx
-        print $ nameO0 ++ " = if " ++ nbool ++ " then " ++ nameIB ++ " else " ++ nameIT
-        print $ nameO1 ++ " = if " ++ nbool ++ " then " ++ nameIT ++ " else " ++ nameIB
-        print $ nbool ++ " = " ++ show swval
-    if is_odd
-        then do
-            let nameI = name ++ "_bot_wO_" ++ show (length sw_o)
-                nameO = name ++ "_wO_" ++ show (num_inputs - 1)
-            print $ nameO ++ " = " ++ nameI
-        else do
-            let nameI0 = name ++ "_top_wO_" ++ show (length sw_o)
-                nameI1 = name ++ "_bot_wO_" ++ show (length sw_o)
-                nameO0 = name ++ "_wO_" ++ show (num_inputs - 2)
-                nameO1 = name ++ "_wO_" ++ show (num_inputs - 1)
-            print $ nameO0 ++ " = " ++ nameI0
-            print $ nameO1 ++ " = " ++ nameI1
-
-    let (it, ib) = benesTopBottom sw_i inp
-        (ot, ob) = benesTopBottom sw_o outp
-    print (it, ib)
-    print (ot, ob)
-
-    return ()

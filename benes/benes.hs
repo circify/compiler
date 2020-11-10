@@ -137,6 +137,14 @@ benesRoute inp outp = CmST.runST $ do
     sw_o_ls <- map fromJust <$> DaST.getElems sw_o
     return (sw_i_ls, sw_o_ls)
 
+benesRoute3 :: [Int] -> [Int] -> [Bool]
+benesRoute3 inp outp = [sw_i, sw_m, sw_o]
+  where
+    [ord0, ord1, ord2] = toPermOrder inp outp
+    (sw_m, sw_i, sw_o) = if ord2 /= 2
+                            then (True, ord2 == 0, ord1 /= 2)
+                            else (False, False, ord0 == 1)
+
 benesBuild :: String -> [Int] -> [Int] -> IO ()
 benesBuild name inp outp = do
     let num_inputs = length inp

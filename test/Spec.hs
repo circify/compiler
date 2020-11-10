@@ -30,7 +30,10 @@ generatorTests = benchTestGroup
   ]
 
 benesTests :: BenchTest
-benesTests = benchTestProperty "Routing network" test_benesRoute
+benesTests = benchTestGroup "Waksman routing" [rt, r3]
+  where
+    rt = benchTestProperty "Arbitrary-size" test_benesRoute
+    r3 = benchTestProperty "size-3" test_benesRoute3
 
 irTests :: BenchTest
 irTests =
