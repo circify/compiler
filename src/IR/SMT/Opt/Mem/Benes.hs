@@ -361,22 +361,28 @@ type MemAcc = (TermBool, TBv, TBv, TBv)
 -- | Construct a two-input Benes network (i.e., one switch)
 benesLayer2 :: String -> Bool -> [MemAcc] -> Assert [MemAcc]
 benesLayer2 name swap accesses = do
+    logIf "benes" "benesLayer2"
     let [acc0, acc1] = accesses
         name0 = name ++ "_wO_0"
         name1 = name ++ "_wO_1"
         nbool = name ++ "_swI"
         (r0, i0, a0, v0) = acc0
         (r1, i1, a1, v1) = acc1
+        (?) c t f = if c then t else f
     -- XXX need newvar for bool
     -- XXX need ITEs to define these values
-    ro0 <- A.newVar (name0 ++ "_r") (sort r0) r0
-    io0 <- A.newVar (name0 ++ "_i") (sort i0) i0
-    ao0 <- A.newVar (name0 ++ "_a") (sort a0) a0
-    vo0 <- A.newVar (name0 ++ "_v") (sort v0) v0
-    ro1 <- A.newVar (name1 ++ "_r") (sort r1) r1
-    io1 <- A.newVar (name1 ++ "_i") (sort i1) i1
-    ao1 <- A.newVar (name1 ++ "_a") (sort a1) a1
-    vo1 <- A.newVar (name1 ++ "_v") (sort v1) v1
+    swapVar <- A.newVar nbool SortBool (BoolLit swap)
+    let r0ite = Ite swapVar r1 r0
+    ro0 <- A.newVar (name0 ++ "_r") (sort r0) r0ite
+    A.assign ro0 r0ite
+    io0 <- A.newVar (name0 ++ "_i") (sort i0) ((?) swap i1 i0)
+    ao0 <- A.newVar (name0 ++ "_a") (sort a0) ((?) swap a1 a0)
+    vo0 <- A.newVar (name0 ++ "_v") (sort v0) ((?) swap v1 v0)
+    ro1 <- A.newVar (name1 ++ "_r") (sort r0) ((?) swap r0 r1)
+    io1 <- A.newVar (name1 ++ "_i") (sort i0) ((?) swap i0 i1)
+    ao1 <- A.newVar (name1 ++ "_a") (sort a0) ((?) swap a0 a1)
+    vo1 <- A.newVar (name1 ++ "_v") (sort v0) ((?) swap v0 v1)
+
     return [(ro0, io0, ao0, vo0), (ro1, io1, ao1, vo1)]
 
 -- | Construct a 3-input Benes network (i.e., 3 switches)
