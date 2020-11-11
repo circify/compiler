@@ -222,7 +222,7 @@ instance Bitable CTermData where
     t | Type.isIntegerType t -> CInt (Type.isSignedInt t) (Type.numBits t) bv
     Type.Double              -> CDouble $ Ty.BvToFp $ Ty.mkStatifyBv @64 bv
     Type.Float               -> CFloat $ Ty.BvToFp $ Ty.mkStatifyBv @32 bv
-    Type.Bool                -> CBool $ Ty.mkEq bv (Mem.bvNum False 1 1)
+    Type.Bool                -> CBool $ Ty.mkDynBvExtractBit 0 bv
     Type.Struct fs ->
       let
         sizes  = map (Type.numBits . snd) fs
