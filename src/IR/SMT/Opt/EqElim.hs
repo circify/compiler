@@ -177,13 +177,17 @@ eqElimFn noElim usedOnce ts = do
       isArray SortArray{} = True
       isArray _           = False
 
+      isSelect :: Term s -> Bool
+      isSelect Select{} = True
+      isSelect _        = False
+
       subbable :: SortClass s => String -> Sort -> Term s -> Bool
       subbable v s t =
         (allowBlowup || nNodes t == 1 || Set.member v usedOnce)
-          &&              v
-          `Set.notMember` noElim
-          &&              not (v `inTerm` t)
-          &&              not (isArray s)
+          && (v `Set.notMember` noElim)
+          && not (v `inTerm` t)
+          && not (isArray s)
+          && not (isSelect t)
 
       asSub' :: TermBool -> Maybe (String, Dynamic)
       asSub' a = case a of

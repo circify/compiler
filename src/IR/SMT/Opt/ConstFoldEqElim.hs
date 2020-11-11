@@ -25,7 +25,7 @@ import           Data.Field.Galois              ( Prime
                                                 , toP
                                                 , fromP
                                                 )
-import           Data.List                      ( foldl' )
+import           Data.List                      ( foldl', foldl1' )
 import           Data.Hashable                  ( Hashable )
 import qualified Data.HashMap.Strict           as HMap
 import qualified Data.IntMap.Strict            as IntMap
@@ -168,7 +168,7 @@ constantFold = mapTerm visit
               e -> Left e
             ) a'
           c = nOpConsts consts
-      in  if null ls then Just $ DynBvLit $ c else nOpTermsConst ls c
+      in  if null ls then Just $ DynBvLit c else nOpTermsConst ls c
      where
       nOpConsts :: [Bv.BV] -> Bv.BV
       nOpConsts = case op of
@@ -184,7 +184,19 @@ constantFold = mapTerm visit
         BvAdd | r == 0 -> Just $ safeNary l
         BvMul | r == 0 -> Just (DynBvLit r)
         BvMul | r == 1 -> Just $ safeNary l
+        BvAnd | r == Bv.ones w -> Just $ safeNary l
+        BvAnd -> Just $ bitwise foldAnd
+        BvOr  | r == 0 -> Just $ safeNary l
+        BvOr -> Just $ bitwise foldOr
+        BvXor | r == 0 -> Just $ safeNary l
+        BvXor -> Just $ bitwise foldXor
         _ -> Nothing
+       where
+        foldAnd, foldOr, foldXor :: Bool -> [TermBool] -> TermBool
+        foldAnd cbit = if cbit then BoolNaryExpr And else const (BoolLit False)
+        foldOr cbit = if cbit then const (BoolLit True) else BoolNaryExpr Or
+        foldXor cbit = (if cbit then Not else id) . BoolNaryExpr Xor
+        bitwise f = foldl1' mkDynBvConcat $ map (\i -> BoolToDynBv $ f (Bv.testBit r i) (map (mkDynBvExtractBit i) l)) [0..(w-1)]
 
 
     DynBvBinPred op w a b ->

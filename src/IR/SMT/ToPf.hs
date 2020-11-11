@@ -523,7 +523,7 @@ getIntBits term = fromMaybe (error $ "No bits for " ++ show term) <$> do
     Just bs -> return $ Just bs
     Nothing -> case e >>= int of
       Just (i, width) -> do
-        bs <- bitify "getBits" i width
+        bs <- bitify ("getBits " ++ show term) i width
         saveIntBits term bs
         return $ Just bs
       Nothing -> return Nothing

@@ -659,7 +659,7 @@ scoped a = liftCircify enterLexScope *> a <* liftCircify exitLexScope
 pushGuard :: Ty.TermBool -> Circify ty term ()
 pushGuard test = do
   i <- gets guardCnt
-  let guardName = "circify_guard_" ++ show i
+  let guardName = "C_guard_" ++ show i
   modify $ \s -> s { guardCnt = 1 + guardCnt s }
   g <- liftAssert $ do
     g <- Assert.newVar guardName Ty.SortBool

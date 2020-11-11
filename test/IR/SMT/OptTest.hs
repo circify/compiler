@@ -48,7 +48,7 @@ mkEqElimTest
   :: Bool -> String -> Set.Set String -> [TermBool] -> Int -> BenchTest
 mkEqElimTest allowBlowup name protected original nExpected =
   benchTestCase (if null name then show original else name) $ do
-    let elim = evalLog $ eqElimFn protected original
+    let elim = evalLog $ eqElimFn protected Set.empty original
     actual <- evalCfg
       elim
       (defaultCfgState

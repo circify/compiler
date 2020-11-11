@@ -1,7 +1,9 @@
+
+{-# LANGUAGE LambdaCase #-}
 module Parser.ZokratesTest where
 import           BenchUtils
 import           Test.Tasty.HUnit
-import qualified Data.Map as Map
+import qualified Data.Map                      as Map
 import           Parser.Zokrates.Lexer
 import           Parser.Zokrates.Parser
 import           Parser.Zokrates
@@ -47,7 +49,8 @@ zokratesParserTests = benchTestGroup
   , testParse "test/Code/Zokrates/stdlib/hashes/sha256/1024bitPadded.zok"
   , testParse "test/Code/Zokrates/stdlib/hashes/sha256/512bitPadded.zok"
   , testParse "test/Code/Zokrates/stdlib/hashes/sha256/shaRound.zok"
-  , testParse "test/Code/Zokrates/stdlib/hashes/utils/256bitsDirectionHelper.zok"
+  , testParse
+    "test/Code/Zokrates/stdlib/hashes/utils/256bitsDirectionHelper.zok"
   , testParse "test/Code/Zokrates/stdlib/signatures/verifyEddsa.zok"
   , testLoad "test/Code/Zokrates/stdlib/signatures/verifyEddsa.zok"
   ]
@@ -63,36 +66,39 @@ testLoad path = benchTestCase ("parse: " ++ path) $ do
   Map.size ast > 0 @? "0 files!"
 
 tokenize' =
-  filter (\t ->
-        case t of
-          Newline _ -> False
-          _ -> True) . either error id . tokenize
+  filter
+      (\case
+        Posnd _ Newline -> False
+        _               -> True
+      )
+    . either error id
+    . tokenize
 
 testParseExpr :: String -> BenchTest
 testParseExpr s = benchTestCase ("expr: " ++ show s) $ do
-  let ts = either error id $ tokenize s
+  let ts  = either error id $ tokenize s
   let ast = parseZokratesExpr ts
   ast `seq` return ()
 
 testParseStatement :: String -> BenchTest
 testParseStatement s = benchTestCase ("stmt: " ++ show s) $ do
-  let ts = either error id $ tokenize s
+  let ts  = either error id $ tokenize s
   let ast = parseZokratesStatement ts
   ast `seq` return ()
 testParseBlock :: String -> BenchTest
 testParseBlock s = benchTestCase ("block: " ++ show s) $ do
-  let ts = either error id $ tokenize s
+  let ts  = either error id $ tokenize s
   let ast = parseZokratesBlock ts
   ast `seq` return ()
 
 testParseItem :: String -> BenchTest
 testParseItem s = benchTestCase ("item: " ++ show s) $ do
-  let ts = either error id $ tokenize s
+  let ts  = either error id $ tokenize s
   let ast = parseZokratesItem ts
   ast `seq` return ()
 
 testParseItems :: String -> BenchTest
 testParseItems s = benchTestCase ("items: " ++ show s) $ do
-  let ts = either error id $ tokenize s
+  let ts  = either error id $ tokenize s
   let ast = parseZokratesFile ts
   ast `seq` return ()
