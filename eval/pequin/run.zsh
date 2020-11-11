@@ -48,10 +48,10 @@ paths=(
              ~/repos/llcl/compiler/test/Code/C/pequin/log.c
     u32log2
              ~/repos/llcl/compiler/test/Code/C/pequin/log_norm.c
-    ptrs
+    ptrs-8
              ~/repos/llcl/compiler/test/Code/C/pequin/ptrchase_8_8.c
-    ptrs-benes
-             ~/repos/llcl/compiler/test/Code/C/pequin/ptrchase_8_8.c
+    ptrs-256
+             ~/repos/llcl/compiler/test/Code/C/pequin/ptrchase_256_8.c
          )
 typeset -A envvars
 envvars=(
@@ -63,10 +63,10 @@ envvars=(
              ""
     u32log2-array
              ""
-    ptrs
+    ptrs-8
              ""
-    ptrs-benes
-             "C_smt_benes_thresh=7"
+    ptrs-256
+             ""
          )
 
 init_results
