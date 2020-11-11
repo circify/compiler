@@ -59,7 +59,7 @@ andOrScalingTest op arity =
         then 0
         -- arity - 1 is the cost of doing this with multiplication-ANDs
         -- 3 is the cost of doing this with addition/inverse-ORs
-        else min (arity - 1) 3
+        else min (arity - 1) 2
       nC = nOpConstraints + 1
   in  constraintCountTest (show op ++ show arity)
                           [BoolNaryExpr op (bvs arity)]
@@ -105,25 +105,24 @@ toPfTests = benchTestGroup
     -- , one const constraint, two for AND
     , constraintCountTest "and4 3 repeats"
                           [BoolNaryExpr And [bv "a", bv "b", bv "a", bv "a"]]
-                          4
+                          3
     , constraintCountTest "ite" [mkIte (bv "a") (bv "b") (bv "c")] 2
-    -- two for EQ, one to force
-    , constraintCountTest "eq"  [mkEq (bv "a") (bv "b")]           3
+    , constraintCountTest "eq"  [mkEq (bv "a") (bv "b")]           2
     ]
   , benchTestGroup
     "bvToPf constraint counts"
-    [ constraintCountTest "5" [mkEq (int "a" 4) (IntToDynBv 4 $ IntLit 5)] 4
+    [ constraintCountTest "5" [mkEq (int "a" 4) (IntToDynBv 4 $ IntLit 5)] 3
     , constraintCountTest
       "5 = x + y"
       [ mkEq (mkDynBvNaryExpr BvAdd [int "x" 4, int "y" 4])
              (IntToDynBv 4 $ IntLit 5)
       ]
-      10
+      9
     , constraintCountTest "x < y"
                           [mkDynBvBinPred BvUlt (int "x" 4) (int "y" 4)]
-                          -- 4 bits in the comparison difference + 3
+                          -- 4 bits in the comparison difference + 2
                           -- bits in the comparison logic + 1 assertion bit
-                          (4 + 3 + 1)
+                          (4 + 2 + 1)
     , constraintCountTest
       "17 = x >> y (logical)"
       [ mkEq (mkDynBvBinExpr BvLshr (int "x" 16) (int "y" 16))
@@ -133,7 +132,7 @@ toPfTests = benchTestGroup
            shiftRBound = 1
            shiftMults  = 4
            sumSplit    = 16 * 2
-           eq          = 3
+           eq          = 2
            forceBool   = 1
        in  inputBounds + shiftRBound + shiftMults + sumSplit + eq + forceBool
       )
@@ -148,7 +147,7 @@ toPfTests = benchTestGroup
            shiftExtMults = 4
            shiftExtMask  = 1
            sumSplit      = 16 * 2
-           eq            = 3
+           eq            = 2
            forceBool     = 1
        in  inputBounds
              + shiftRBound

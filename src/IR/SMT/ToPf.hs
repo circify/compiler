@@ -153,11 +153,6 @@ enforceCheck ((a, av), (b, bv), (c, cv)) = do
     _ -> return ()
   enforce (a, b, c)
 
-enforceNonzero :: KnownNat n => LSig n -> ToPf n ()
-enforceNonzero l = do
-  inv <- nextVar "nonzero" (recip <$> snd l)
-  enforceCheck (l, inv, lcOne)
-
 enforceTrue :: KnownNat n => LSig n -> ToPf n ()
 enforceTrue s = enforceCheck (lcZero, lcZero, lcSub s lcOne)
 
@@ -196,8 +191,7 @@ asBit :: KnownNat n => LSig n -> ToPf n (LSig n)
 asBit l = enforceBit l >> return l
 
 nextBit :: KnownNat n => String -> Maybe Bool -> ToPf n (LSig n)
-nextBit name value =
-  nextVar name (toP . toInteger . fromEnum <$> value) >>= asBit
+nextBit name value = nextVar name (bToPf <$> value) >>= asBit
 
 unhandled :: Show a => String -> a -> b
 unhandled description thing =
@@ -303,10 +297,7 @@ boolToPf env term = do
       return s
  where
   lookupBitVal :: String -> Maybe (Prime n)
-  lookupBitVal name =
-    toP
-      .   toInteger
-      .   fromEnum
+  lookupBitVal name = bToPf
       .   valAsBool
       .   flip fromDyn (error $ name ++ " has wrong type")
       <$> (env >>= (Map.!? name))
@@ -340,7 +331,7 @@ boolToPf env term = do
               a' <- pfToPf env apf
               binEq a' b'
             Nothing -> error $ "Cannot lower " ++ show a
-      BoolLit b  -> return $ lcShift (toP $ fromIntegral $ fromEnum b) lcZero
+      BoolLit b  -> return $ lcShift (bToPf b) lcZero
       Not     a  -> lcNot <$> boolToPf env a
       Var name _ -> do
         v <- asVar name (lookupBitVal name)
@@ -348,7 +339,7 @@ boolToPf env term = do
       BoolNaryExpr o xs -> do
         xs' <- traverse (boolToPf env) xs
         case xs' of
-          []  -> pure $ lcShift (toP $ fromIntegral $ fromEnum $ opId o) lcZero
+          []  -> pure $ lcShift (bToPf $ opId o) lcZero
           [a] -> pure a
           _   -> case o of
             Or  -> naryOr xs'
@@ -388,11 +379,7 @@ naryOr xs = if length xs <= 3
   then lcNot <$> naryAnd (map lcNot xs)
   else
     let s = foldl1 lcAdd xs
-    in  do
-          or' <- nextBit "or" ((/= toP 0) <$> snd s)
-          enforceCheck (s, lcSub lcOne or', lcZero)
-          enforceNonzero $ lcSub (lcAdd lcOne s) or'
-          return or'
+    in  lcNot <$> eqZero s
 
 impl :: KnownNat n => LSig n -> LSig n -> ToPf n (LSig n)
 impl a b = do
@@ -405,19 +392,20 @@ impl a b = do
   return v
 
 bitEq :: KnownNat n => LSig n -> LSig n -> ToPf n (LSig n)
-bitEq a b = do
-  eq <- nextBit "bitEq" $ liftA2 (==) (snd a) (snd b)
-  let onesPlace = lcNot eq
-  let twosPlace = lcSub (lcAdd a b) onesPlace
-  enforceCheck (twosPlace, lcSub twosPlace (lcConst 2), lcZero)
-  return eq
+bitEq a b = lcNot <$> binXor a b
+
+eqZero :: KnownNat n => LSig n -> ToPf n (LSig n)
+eqZero x = do
+  -- m (a - b) - (1 - e) = 0
+  -- e (a - b) = 0
+  e <- nextVar "eqZero" $ fmap (bToPf . (== 0)) (snd x)
+  m <- nextVar "eqZeroInv" $ fmap (\x -> if x == 0 then 1 else recip x) (snd x)
+  enforceCheck (m, x, lcSub lcOne e)
+  enforceCheck (e, x, lcZero)
+  return e
 
 binEq :: KnownNat n => LSig n -> LSig n -> ToPf n (LSig n)
-binEq a b = do
-  v <- nextBit "binEq" $ liftA2 (==) (snd a) (snd b)
-  enforceCheck (lcSub a b, v, lcZero)
-  enforceNonzero $ lcAdd (lcSub a b) v
-  return v
+binEq a b = eqZero (lcSub a b)
 
 -- Strategy: we add the bits, and decompose the sum. The LSB is the answer.
 naryXor :: KnownNat n => [LSig n] -> ToPf n (LSig n)
@@ -458,6 +446,10 @@ bvEntryEmpty = BvEntry { int = Nothing, bits = Nothing }
 initIntEntry :: TermDynBv -> ToPf n ()
 initIntEntry t =
   modify $ \s -> s { ints = AMap.insertWith (const id) t bvEntryEmpty $ ints s }
+
+-- Convert Bool to 0 or 1
+bToPf :: KnownNat n => Bool -> Prime n
+bToPf = toP . toInteger . fromEnum
 
 -- Saving transalations
 saveConstBv :: KnownNat n => TermDynBv -> Bv.BV -> ToPf n ()
@@ -806,7 +798,7 @@ bvToPf env term = do
               bs <- sequence $ zipWith3 maj a b c
               saveIntBits bv bs
              where
-              majF x y z = toP $ toInteger $ fromEnum $ fromP (x + y + z) >= 2
+              majF x y z = bToPf $ fromP (x + y + z) >= 2
               maj x y z = do
                  -- Derivation:
                  -- r = xy | xz | yz
