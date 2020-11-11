@@ -46,6 +46,8 @@ paths=(
              ~/repos/llcl/compiler/test/Code/C/sqrt.c
     u32log2
              ~/repos/llcl/compiler/test/Code/C/pequin/log.c
+    u32log2-array
+             ~/repos/llcl/compiler/test/Code/C/pequin/log_norm.c
     ptrs
              ~/repos/llcl/compiler/test/Code/C/pequin/ptrchase_8_8.c
     ptrs-benes
@@ -58,6 +60,8 @@ envvars=(
     u32sqrt
              ""
     u32log2
+             ""
+    u32log2-array
              ""
     ptrs
              ""

@@ -45,7 +45,7 @@ stack run -- verify
 C_pequin_io=True C_no_overflow=True stack run -- c-setup compute ./test/Code/C/pequin/mm_flat.c
 C_pequin_io=True C_no_overflow=True C_loop_bound=3 stack run -- -i ./test/Code/C/pequin/inputs/mm_flat.i c-prove compute ./test/Code/C/pequin/mm_flat.c
 stack run -- verify
-[[ $(num_constraints) = 27 ]]
+[[ $(num_constraints) = 125 ]]
 
 C_smt_benes_thresh=1 C_pequin_io=True stack run -- c-setup compute ./test/Code/C/pequin/ptrchase_8_8.c
 C_smt_benes_thresh=1 C_pequin_io=True stack run -- -i ./test/Code/C/pequin/inputs/ptrchase_8_8.i c-prove compute ./test/Code/C/pequin/ptrchase_8_8.c
@@ -62,3 +62,5 @@ stack run -- verify
 C_smt_benes_thresh=1 C_smt_opts=cfee,ee,mem C_smt_check_opts=True stack run -- c-setup flex test/Code/C/benes_arrays.c
 C_smt_benes_thresh=1 C_smt_opts=cfee,ee,mem C_smt_check_opts=True stack run -- -i <(echo x 1; echo y 1) c-prove flex test/Code/C/benes_arrays.c
 stack run -- verify
+
+stack run -- zokrates-emit-r1cs main test/Code/Zokrates/stdlib/ecc/edwardsScalarMult.zok
