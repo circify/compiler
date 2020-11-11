@@ -10,18 +10,15 @@ module IR.SMT.Opt.Mem.Route
 where
 
 import qualified Control.Monad.ST as CmST
-import qualified Data.Array.IO as DaIO
 import qualified Data.Array.ST as DaST
 import Data.Bits (xor)
 import qualified Data.IntSet as DISet
 import qualified Data.STRef as DStR
 
-import Control.Exception (assert)
 import Control.Monad (liftM, forM_, when)
 import qualified Data.List as DLs
 import qualified Data.Map.Strict as DM
 import Data.Maybe (fromJust)
-import qualified System.Environment as Env
 
 -- precondition: ins is sorted, outs is a permutation of ins
 -- returns the indices

@@ -83,6 +83,7 @@ import qualified Data.HashMap.Strict           as HMap
 import qualified Data.HashSet                  as HSet
 import           Data.List                      ( intercalate
                                                 , sortOn
+                                                , transpose
                                                 , zip4
                                                 )
 import           Data.Maybe                     ( fromMaybe
@@ -325,11 +326,12 @@ benesRoute (ITrace name size def accesses) = do
         then valAsDynBv <$> A.eval t
         else return (Bv.bitVec 1 (0 :: Int))
   a' <- forM (zip [(0 :: Int) ..] accesses) $ \(idx, (_, _, a, _)) -> (, idx) <$> evalOr a
-  -- need to be sure that sortOn uses a stable sort! otherwise proofs will be broken
+  -- NOTE: need to be sure that sortOn uses a stable sort! otherwise proofs will be broken
   let out_ord = map snd $ sortOn fst a'
       in_ord = take (length out_ord) $ [(0 :: Int)..]
       buildBenes name inp outp accesses = do
         case length inp of
+            len | len < 2 -> return accesses
             2 -> benesLayer2 name (inp /= outp) accesses
             3 -> benesLayer3 name (MemR.benesRoute3 inp outp) accesses
             _ -> do
@@ -346,7 +348,80 @@ benesRoute (ITrace name size def accesses) = do
                 benesLayerOut name accTO accBO sw_o
   liftM (ITrace name size def) $ buildBenes (name ++ "_benes") in_ord out_ord accesses
 
--- | Turn a list into successive pairs and possibly a final value
+-- | A memory access: (is_read, idx, addr, val)
+type MemAcc = (TermBool, TBv, TBv, TBv)
+
+-- | Create one crossbar switch and accompanying constraints
+benesSwitch :: String -> Bool -> MemAcc -> MemAcc -> Assert (MemAcc, MemAcc)
+benesSwitch name swap accIn0 accIn1 = do
+    swapVar <- A.newVar (name ++ "_sw") SortBool (BoolLit swap)
+    let (r0, i0, a0, v0) = accIn0
+        (r1, i1, a1, v1) = accIn1
+
+        toTuple4 r [i, a, v] = (r, i, a, v)
+        toTuple4 _ _ = undefined
+
+        toTuple2 [o0, o1] = (o0, o1)
+        toTuple2 _ = undefined
+
+        -- generate one crossbar switch (i.e., two ITEs)
+        mkSwitch :: SortClass a => (String, Term a, Term a) -> Assert [Term a]
+        mkSwitch (suffix, in0, in1) = do
+            let ite0 = Ite swapVar in1 in0
+                ite1 = Ite swapVar in0 in1
+            o0 <- A.newVar (name ++ suffix ++ "0") (sort in0) ite0
+            o1 <- A.newVar (name ++ suffix ++ "1") (sort in0) ite1
+            A.assign o0 ite0
+            A.assign o1 ite1
+            return [o0, o1]
+
+    ret1 <- mkSwitch ("_r", r0, r1)
+    ret2 <- mapM mkSwitch [("_i", i0, i1), ("_a", a0, a1), ("_v", v0, v1)]
+    return . toTuple2 $ zipWith ($) (map toTuple4 ret1) (transpose ret2)
+
+-- | Construct a two-input Benes network (i.e., one switch)
+benesLayer2 :: String -> Bool -> [MemAcc] -> Assert [MemAcc]
+benesLayer2 name swap accesses = do
+    logIf "smt::opt::benes" "benesLayer2"
+    let [acc0, acc1] = accesses
+    (o0, o1) <- benesSwitch name swap acc0 acc1
+    return [o0, o1]
+
+-- | Construct a 3-input Benes network (i.e., 3 switches)
+benesLayer3 :: String -> [Bool] -> [MemAcc] -> Assert [MemAcc]
+benesLayer3 name sw accesses = do
+    logIf "smt::opt::benes" $ "benesLayer3 (" ++ show sw ++ ")"
+    let [acc0, acc1, acc2] = accesses
+        [sw_i, sw_m, sw_o] = sw
+    (t0, m) <- benesSwitch (name ++ "_I") sw_i acc0 acc1
+    (t1, o2) <- benesSwitch (name ++ "_M") sw_m m acc2
+    (o0, o1) <- benesSwitch (name ++ "_O") sw_o t0 t1
+    return [o0, o1, o2]
+
+-- | Construct input side of one Benes "shell"
+benesLayerIn :: String -> [MemAcc] -> [Bool] -> Assert ([MemAcc], [MemAcc])
+benesLayerIn name accesses sw_i = do
+    let (accPairs, accOdd) = toPairs accesses
+        loop_in = zip3 [(0 :: Int)..] accPairs sw_i
+    res <- forM loop_in $ \(idx, (acc0, acc1), swval) ->
+        benesSwitch (name ++ "_I" ++ show idx) swval acc0 acc1
+    let (accT, accB) = unzip res
+    return $ case accOdd of
+        Nothing -> (accT, accB)
+        Just odd -> (accT, accB ++ [odd])
+
+-- | Construct output side of one Benes "shell"
+benesLayerOut :: String -> [MemAcc] -> [MemAcc] -> [Bool] -> Assert [MemAcc]
+benesLayerOut name accT accB sw_o = do
+    let loop_in = zip4 [(0 :: Int)..] accT accB sw_o
+    res <- liftM concat $ forM loop_in $ \(idx, accT, accB, swval) -> do
+        (o0, o1) <- benesSwitch (name ++ "_O" ++ show idx) swval accT accB
+        return [o0, o1]
+    return $ case length accB `mod` 2 == 1 of
+        True -> res ++ [last accB]
+        False -> res ++ [last accT, last accB]
+
+-- | Turn a list into successive pairs (not sliding!) and possibly a final value
 toPairs :: [a] -> ([(a, a)], Maybe a)
 toPairs accesses = (reverse res, rem)
   where
@@ -354,118 +429,6 @@ toPairs accesses = (reverse res, rem)
     tPH acc (l:[]) = (acc, Just l)
     tPH acc (l:m:ls) = tPH ((l,m) : acc) ls
     (res, rem) = tPH [] accesses
-
--- | A memory access: (is_read, idx, addr, val)
-type MemAcc = (TermBool, TBv, TBv, TBv)
-
--- | Construct a two-input Benes network (i.e., one switch)
-benesLayer2 :: String -> Bool -> [MemAcc] -> Assert [MemAcc]
-benesLayer2 name swap accesses = do
-    logIf "benes" "benesLayer2"
-    let [acc0, acc1] = accesses
-        name0 = name ++ "_wO_0"
-        name1 = name ++ "_wO_1"
-        nbool = name ++ "_swI"
-        (r0, i0, a0, v0) = acc0
-        (r1, i1, a1, v1) = acc1
-        (?) c t f = if c then t else f
-    -- XXX need newvar for bool
-    -- XXX need ITEs to define these values
-    swapVar <- A.newVar nbool SortBool (BoolLit swap)
-    let r0ite = Ite swapVar r1 r0
-    ro0 <- A.newVar (name0 ++ "_r") (sort r0) r0ite
-    A.assign ro0 r0ite
-    io0 <- A.newVar (name0 ++ "_i") (sort i0) ((?) swap i1 i0)
-    ao0 <- A.newVar (name0 ++ "_a") (sort a0) ((?) swap a1 a0)
-    vo0 <- A.newVar (name0 ++ "_v") (sort v0) ((?) swap v1 v0)
-    ro1 <- A.newVar (name1 ++ "_r") (sort r0) ((?) swap r0 r1)
-    io1 <- A.newVar (name1 ++ "_i") (sort i0) ((?) swap i0 i1)
-    ao1 <- A.newVar (name1 ++ "_a") (sort a0) ((?) swap a0 a1)
-    vo1 <- A.newVar (name1 ++ "_v") (sort v0) ((?) swap v0 v1)
-
-    return [(ro0, io0, ao0, vo0), (ro1, io1, ao1, vo1)]
-
--- | Construct a 3-input Benes network (i.e., 3 switches)
-benesLayer3 :: String -> [Bool] -> [MemAcc] -> Assert [MemAcc]
-benesLayer3 name sw accesses = do
-    let [acc0, acc1, acc2] = accesses
-        name0 = name ++ "_wO_0"
-        name1 = name ++ "_wO_1"
-        name2 = name ++ "_wO_2"
-        nswI = name ++ "_swI"
-        nswM = name ++ "_swM"
-        nswO = name ++ "_swO"
-        (r0, i0, a0, v0) = acc0
-        (r1, i1, a1, v1) = acc1
-        (r2, i2, a2, v2) = acc2
-    -- XXX need newvars for bools
-    -- XXX need ITEs for switches
-    ro0 <- A.newVar (name0 ++ "_r") (sort r0) r0
-    io0 <- A.newVar (name0 ++ "_i") (sort i0) i0
-    ao0 <- A.newVar (name0 ++ "_a") (sort a0) a0
-    vo0 <- A.newVar (name0 ++ "_v") (sort v0) v0
-    ro1 <- A.newVar (name1 ++ "_r") (sort r1) r1
-    io1 <- A.newVar (name1 ++ "_i") (sort i1) i1
-    ao1 <- A.newVar (name1 ++ "_a") (sort a1) a1
-    vo1 <- A.newVar (name1 ++ "_v") (sort v1) v1
-    ro2 <- A.newVar (name2 ++ "_r") (sort r2) r2
-    io2 <- A.newVar (name2 ++ "_i") (sort i2) i2
-    ao2 <- A.newVar (name2 ++ "_a") (sort a2) a2
-    vo2 <- A.newVar (name2 ++ "_v") (sort v2) v2
-    return [(ro0, io0, ao0, vo0), (ro1, io1, ao1, vo1), (ro2, io2, ao2, vo2)]
-
--- | Construct input side of one Benes "shell"
-benesLayerIn :: String -> [MemAcc] -> [Bool] -> Assert ([MemAcc], [MemAcc])
-benesLayerIn name accesses sw_i = do
-    let (accPairs, accOdd) = toPairs accesses
-        loop_in = zip3 [(0 :: Int)..] accPairs sw_i
-    res <- forM loop_in $ \(idx, (acc0, acc1), swval) -> do
-        let nameT = name ++ "_top_wI_" ++ show idx
-            nameB = name ++ "_bot_wI_" ++ show idx
-            nbool = name ++ "_swI_" ++ show idx
-            (r0, i0, a0, v0) = acc0
-            (r1, i1, a1, v1) = acc1
-        -- XXX need newvar for bool
-        -- XXX need ITEs to define these values
-        rT <- A.newVar (nameT ++ "_r") (sort r0) r0
-        iT <- A.newVar (nameT ++ "_i") (sort i0) i0
-        aT <- A.newVar (nameT ++ "_a") (sort a0) a0
-        vT <- A.newVar (nameT ++ "_v") (sort v0) v0
-        rB <- A.newVar (nameB ++ "_r") (sort r1) r1
-        iB <- A.newVar (nameB ++ "_i") (sort i1) i1
-        aB <- A.newVar (nameB ++ "_a") (sort a1) a1
-        vB <- A.newVar (nameB ++ "_v") (sort v1) v1
-        return ((rT, iT, aT, vT), (rB, iB, aB, vB))
-    let (accT, accB) = unzip res
-    case accOdd of
-        Nothing -> return (accT, accB)
-        Just odd -> return (accT, accB ++ [odd])
-
--- | Construct output side of one Benes "shell"
-benesLayerOut :: String -> [MemAcc] -> [MemAcc] -> [Bool] -> Assert [MemAcc]
-benesLayerOut name accT accB sw_o = do
-    let loop_in = zip4 [(0 :: Int)..] accT accB sw_o
-    res <- forM loop_in $ \(idx, accT, accB, swval) -> do
-        let name0 = name ++ "_wO_" ++ show (2 * idx)
-            name1 = name ++ "_wO_" ++ show (2 * idx + 1)
-            nbool = name ++ "_swO_" ++ show idx
-            (rT, iT, aT, vT) = accT
-            (rB, iB, aB, vB) = accB
-        -- XXX need newvar for boolean
-        -- XXX need ITEs to define these values
-        r0 <- A.newVar (name0 ++ "_r") (sort rT) rT
-        i0 <- A.newVar (name0 ++ "_i") (sort iT) iT
-        a0 <- A.newVar (name0 ++ "_a") (sort aT) aT
-        v0 <- A.newVar (name0 ++ "_v") (sort vT) vT
-        r1 <- A.newVar (name1 ++ "_r") (sort rB) rB
-        i1 <- A.newVar (name1 ++ "_i") (sort iB) iB
-        a1 <- A.newVar (name1 ++ "_a") (sort aB) aB
-        v1 <- A.newVar (name1 ++ "_v") (sort vB) vB
-        return [(r0, i0, a0, v0), (r1, i1, a1, v1)]
-    let accO = concat res
-    case length accB `mod` 2 == 1 of
-        True -> return $ accO ++ [last accB]
-        False -> return $ accO ++ [last accT, last accB]
 
 -- | A list of pairs of adjacent elements
 slidingPairs :: [a] -> [(a, a)]
