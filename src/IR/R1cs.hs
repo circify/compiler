@@ -146,7 +146,7 @@ data R1CS s n = R1CS
 instance {-# OVERLAPS #-} forall s n. (Show s, KnownNat n) => ToJSON (LC s (Prime n)) where
   toJSON (m, c) =
     let back =
-          map (\(k, v) -> Text.pack (show k) .= show (fromP v)) (Map.toList m)
+            map (\(k, v) -> Text.pack (show k) .= show (fromP v)) (Map.toList m)
     in
       object
         [ "type" .= Text.pack "LINEARCOMBINATION"
@@ -216,8 +216,8 @@ qeqShow (a, b, c) =
 lcShow :: (KnownNat n, Show s) => LC s (Prime n) -> String
 lcShow (m, c) =
   let list =
-        map (\(x, v) -> primeShow v ++ " " ++ show x) (Map.toList m)
-          ++ [ primeShow c | c /= toP 0 ]
+          map (\(x, v) -> primeShow v ++ " " ++ show x) (Map.toList m)
+            ++ [ primeShow c | c /= toP 0 ]
   in  List.intercalate " + " (if null list then ["0"] else list)
 
 lcSigs :: LC s k -> [s]
@@ -286,7 +286,7 @@ r1csMergeSignalNums !aN !bN !r1cs =
       numSigs' = IntMap.adjust (++ bSigs) aN (numSigs r1cs)
       sigNums' = foldr (flip Map.insert aN) (sigNums r1cs) bSigs
       constraints' =
-        fmap (sigMapQeq (\i -> if i == bN then aN else i)) (constraints r1cs)
+          fmap (sigMapQeq (\i -> if i == bN then aN else i)) (constraints r1cs)
   in  r1cs { numSigs     = numSigs'
            , sigNums     = sigNums'
            , constraints = constraints'
@@ -338,7 +338,7 @@ sigMapLc
   -> LC t n
 sigMapLc !f (!m, !c) =
   let m' :: Map.Map t n =
-        Map.filter (/= fromInteger 0) $ Map.mapKeysWith (+) f m
+          Map.filter (/= fromInteger 0) $ Map.mapKeysWith (+) f m
   in  m' `deepseq` (m', c)
 
 sigMapQeq
@@ -367,8 +367,7 @@ r1csAsLines r1cs =
   in  [nPubIns, nWit, nConstraints] : constraintLines
 
 -- Todo: implement this using a better IO system.
-writeToR1csFile
-  :: (Show s, KnownNat n) => Bool -> R1CS s n -> FilePath -> IO ()
+writeToR1csFile :: (Show s, KnownNat n) => Bool -> R1CS s n -> FilePath -> IO ()
 writeToR1csFile asJson r1cs path = if asJson
   then ByteString.writeFile path $ encode r1cs
   else writeFile path $ unlines $ map (unwords . map show) $ r1csAsLines r1cs

@@ -249,7 +249,7 @@ modifyAssertions f = do
 
 modifyAssertionsWith :: MonadAssert m => (Ty.TermBool -> m Ty.TermBool) -> m ()
 modifyAssertionsWith f = do
-  idxs  <- liftAssert $ listAssertionIdxs
+  idxs <- liftAssert $ listAssertionIdxs
   forM_ (ISet.toAscList idxs) $ \i -> do
     a' <- liftAssert (getAssertion i) >>= f
     liftAssert $ modify $ over assertions $ IMap.insert i a'

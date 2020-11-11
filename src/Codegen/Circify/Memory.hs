@@ -218,8 +218,8 @@ stackAllocCons idxWidth' elems = do
   let s         = length elems
       valWidth' = Ty.dynBvWidth $ head elems
   id <- stackNewAlloc s idxWidth' valWidth'
-  forM_ (zip [0..] elems) $ \(i, e) ->
-    stackStore id (bvNum False idxWidth' i) e (Ty.BoolLit True)
+  forM_ (zip [0 ..] elems)
+    $ \(i, e) -> stackStore id (bvNum False idxWidth' i) e (Ty.BoolLit True)
   return id
 
 stackNewAlloc
@@ -230,7 +230,7 @@ stackNewAlloc
 stackNewAlloc size' idxWidth' valWidth' = do
   let a = Ty.ConstArray (Ty.SortBv idxWidth') (bvNum False valWidth' 0)
   id <- stackAlloc a size' idxWidth' valWidth'
-  v <- stackGetAllocVar id
+  v  <- stackGetAllocVar id
   modify $ \s -> s { sizes = SMap.insert v size' $ sizes s }
   return id
 

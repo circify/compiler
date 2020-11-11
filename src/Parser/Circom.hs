@@ -27,9 +27,9 @@ import           Parser.Includer
 
 parseFile :: FilePath -> IO SFile
 parseFile p = do
-    f <- readFile p
-    return (map (mapAnns toSpan) $ parseCircomFile $ tokenize f)
-    where toSpan (PosnPair x y) = Span p x y
+  f <- readFile p
+  return (map (mapAnns toSpan) $ parseCircomFile $ tokenize f)
+  where toSpan (PosnPair x y) = Span p x y
 
 newtype LoadableFile = LoadableFile SFile
 instance Includer LoadableFile where

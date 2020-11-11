@@ -346,11 +346,11 @@ cmdZokratesEmitR1cs path fnName asJson r1csPath = do
   r1cs  <- evalLog $ do
     assertState <- ZGen.run @Order path fnName files
     --liftIO $ putStrLn $ pShow assertState
-    newSmt <- SmtOpt.opt SMap.empty assertState
-    r      <- ToPf.toPf @Order (OptAssert._vals newSmt)
-                               (OptAssert._public newSmt)
-                               SMap.empty
-                               (OptAssert.listAssertions newSmt)
+    newSmt      <- SmtOpt.opt SMap.empty assertState
+    r           <- ToPf.toPf @Order (OptAssert._vals newSmt)
+                                    (OptAssert._public newSmt)
+                                    SMap.empty
+                                    (OptAssert.listAssertions newSmt)
     R1csOpt.opt r
   liftIO $ do
     putStrLn $ R1cs.r1csStats r1cs

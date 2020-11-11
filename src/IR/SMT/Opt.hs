@@ -80,10 +80,7 @@ flattenAndsOpt = Opt
   }
 
 flattenNaryOpt :: Opt
-flattenNaryOpt = Opt
-  { fn   = flattenNary
-  , name = "nary"
-  }
+flattenNaryOpt = Opt { fn = flattenNary, name = "nary" }
 
 opts :: Map.Map String Opt
 opts = Map.fromList $ map

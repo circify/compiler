@@ -80,8 +80,7 @@ getFunc s p n = fromMaybe (errSpan s $ "Cannot find function: " ++ show n)
   <$> gets (Map.lookup (p, n) . view funcs)
 
 inFile :: FilePath -> Z n a -> Z n a
-inFile f a =
-  modify (over fileStack (f :)) *> a <* modify (over fileStack tail)
+inFile f a = modify (over fileStack (f :)) *> a <* modify (over fileStack tail)
 
 registerStruct :: String -> T.Type -> Z n ()
 registerStruct name s = do

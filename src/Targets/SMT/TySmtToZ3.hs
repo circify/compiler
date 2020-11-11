@@ -125,7 +125,7 @@ toZ3 t = case t of
     if s then Z.mkFpToBv rm i' w' else Z.mkFpToUbv rm i' w'
   DynBvBinExpr o _ l r -> tyBinZ3Bin (bvBinOpToZ3 o) l r
   DynBvNaryExpr o _ l  -> tyNaryZ3Bin (bvNaryOpToZ3 o) l
-  DynBvUnExpr o _ b    -> toZ3 b >>= case o of
+  DynBvUnExpr   o _ b  -> toZ3 b >>= case o of
     BvNeg -> Z.mkBvneg
     BvNot -> Z.mkBvnot
   DynBvLit bv            -> Z.mkBvNum (Bv.size bv) bv
@@ -167,10 +167,10 @@ toZ3 t = case t of
   BoolToInt     t' -> toZ3 $ Ite t' (IntLit 1) (IntLit 0)
   PfToInt{}        -> nyi "Prime fields"
   PfToDynBv{}      -> nyi "Prime fields"
-  BoolToDynBv b    -> toZ3 $ Ite b (DynBvLit $ Bv.ones 1) (DynBvLit $ Bv.zeros 1)
+  BoolToDynBv b -> toZ3 $ Ite b (DynBvLit $ Bv.ones 1) (DynBvLit $ Bv.zeros 1)
 
-  Fp64Lit d        -> Z.mkDoubleSort >>= Z.mkFpFromDouble d
-  Fp32Lit d        -> Z.mkFloatSort >>= Z.mkFpFromFloat d
+  Fp64Lit     d    -> Z.mkDoubleSort >>= Z.mkFpFromDouble d
+  Fp32Lit     d    -> Z.mkFloatSort >>= Z.mkFpFromFloat d
   FpBinExpr o l r ->
 
     let wrapRound g a b = do
@@ -292,11 +292,11 @@ toZ3 t = case t of
     BvUdiv -> Z.mkBvudiv
     BvSub  -> Z.mkBvsub
   bvNaryOpToZ3 o = case o of
-    BvAdd  -> Z.mkBvadd
-    BvMul  -> Z.mkBvmul
-    BvOr   -> Z.mkBvor
-    BvAnd  -> Z.mkBvand
-    BvXor  -> Z.mkBvxor
+    BvAdd -> Z.mkBvadd
+    BvMul -> Z.mkBvmul
+    BvOr  -> Z.mkBvor
+    BvAnd -> Z.mkBvand
+    BvXor -> Z.mkBvxor
   bvBinPredToZ3 o w = case o of
     BvUgt   -> Z.mkBvugt
     BvUlt   -> Z.mkBvult

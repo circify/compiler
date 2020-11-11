@@ -88,12 +88,20 @@ tySmtTests = benchTestGroup
   , genOverflowTest @4 Smt.BvSsubo False "low" (-3) 5
   , genOverflowTest @4 Smt.BvSsubo True "low" (-3) 6
   , genShowReadTest "vars" (Smt.Eq (bvar "x") (bvar "y"))
-  , genShowReadTest "add" (Smt.Eq (bvar "x") (Smt.mkDynBvNaryExpr Smt.BvAdd [bvar "x", bvar "y"]))
-  , genShowReadTest "lit" (Smt.Eq (bvar "x") (Smt.mkDynBvNaryExpr Smt.BvAdd [Smt.DynBvLit $ Bv.bitVec 4 0, bvar "y"]))
+  , genShowReadTest
+    "add"
+    (Smt.Eq (bvar "x") (Smt.mkDynBvNaryExpr Smt.BvAdd [bvar "x", bvar "y"]))
+  , genShowReadTest
+    "lit"
+    (Smt.Eq
+      (bvar "x")
+      (Smt.mkDynBvNaryExpr Smt.BvAdd [Smt.DynBvLit $ Bv.bitVec 4 0, bvar "y"])
+    )
   ]
- where bvar :: String -> Smt.TermDynBv
-       bvar s = Smt.Var s (Smt.SortBv 4)
-       bvar s = Smt.Var s (Smt.SortBv 4)
+ where
+  bvar :: String -> Smt.TermDynBv
+  bvar s = Smt.Var s (Smt.SortBv 4)
+  bvar s = Smt.Var s (Smt.SortBv 4)
 
 genOverflowTest
   :: forall n
@@ -121,9 +129,8 @@ genEvalTest name ctx t v' = benchTestCase ("eval test: " ++ name) $ do
   let v = Smt.eval ctx t
   v' @=? v
 
-genShowReadTest
-  :: String -> Smt.TermBool -> BenchTest
+genShowReadTest :: String -> Smt.TermBool -> BenchTest
 genShowReadTest name t = benchTestCase ("show/read test: " ++ name) $ do
-  let s = show t
+  let s  = show t
   let t' = read s
   t' @=? t

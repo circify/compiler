@@ -1,7 +1,7 @@
 module AST.Zokrates where
 
 import           AST.Util
-import Data.Bifunctor ( Bifunctor(bimap) )
+import           Data.Bifunctor                 ( Bifunctor(bimap) )
 import           Data.Map                       ( Map )
 
 data Literal = BoolLit !Bool

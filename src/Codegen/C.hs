@@ -225,16 +225,16 @@ genConst c = case c of
     let p = "__SMT_assert:"
     if svExtensions && List.isPrefixOf p str
       then do
-        let t = either error id $ Ty.checkSortDeep (read (drop (length p) str) :: Ty.TermBool)
+        let t = either error id
+              $ Ty.checkSortDeep (read (drop (length p) str) :: Ty.TermBool)
         logIf "SMT_assert" $ "User assertion: " ++ show t
         t' <- localizeVars t
         logIf "SMT_assert" $ "SMT  assertion: " ++ show t'
         whenM (gets findUB) $ bugIf $ Ty.Not t'
         return $ cIntLit U32 0
-      else
-        liftMem $ cArrayLit
-          S8
-          (map (cIntLit S8 . toInteger . Char.ord) str ++ [cIntLit S8 0])
+      else liftMem $ cArrayLit
+        S8
+        (map (cIntLit S8 . toInteger . Char.ord) str ++ [cIntLit S8 0])
 
 -- | Given a term with user-visible variables in it, replaces them with their
 -- (current version) names
@@ -243,7 +243,7 @@ localizeVars = Ty.mapTermM visit
  where
   visit :: Ty.SortClass s => Ty.Term s -> C (Maybe (Ty.Term s))
   visit (Ty.Var n s) = do
-    t <- liftCircify $ ssaValAsTerm "localize" <$> getTerm (SLVar n)
+    t  <- liftCircify $ ssaValAsTerm "localize" <$> getTerm (SLVar n)
     vs <- liftMem $ ctermGetVars n t
     let v = head $ Set.toList $ vs
     return $ Just $ Ty.Var v s

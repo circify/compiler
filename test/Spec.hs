@@ -16,7 +16,9 @@ import           Test.Tasty
 import           Targets.ToZ3
 
 parserTests :: BenchTest
-parserTests = benchTestGroup "Parser tests" [cParserTests, circomParserTests, zokratesParserTests]
+parserTests = benchTestGroup
+  "Parser tests"
+  [cParserTests, circomParserTests, zokratesParserTests]
 
 generatorTests :: BenchTest
 generatorTests = benchTestGroup

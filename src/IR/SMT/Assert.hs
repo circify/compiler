@@ -112,10 +112,11 @@ newVar name sort = do
         ["Already created variable", name, "with wrong sort:", show v]
       )
 
-freshVar :: forall s . Ty.SortClass s => String -> Ty.Sort -> Assert (Ty.Term s)
+freshVar
+  :: forall s . Ty.SortClass s => String -> Ty.Sort -> Assert (Ty.Term s)
 freshVar name sort = do
   i <- gets nextVarN
-  modify $ \s -> s { nextVarN = 1 + nextVarN s}
+  modify $ \s -> s { nextVarN = 1 + nextVarN s }
   let name' = "fresh_" ++ show i ++ "_" ++ name
   newVar name' sort
 

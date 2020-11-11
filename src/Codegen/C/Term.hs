@@ -419,7 +419,7 @@ cDeclVar inMap trackUndef ty smtName mUserName = do
     $ Assert.publicize smtName
   return $ mkCTerm t u
  where
-  getBaseInput 
+  getBaseInput
     :: Ty.SortClass s
     => (Integer -> Ty.Value s)
     -> Ty.Value s
@@ -563,7 +563,7 @@ cWrapBinArith name bvOp doubleF ubF allowDouble mergeWidths a b = convert
   (integralPromotion a)
   (integralPromotion b)
  where
-  bvBinExpr (Left o) = Ty.mkDynBvBinExpr o
+  bvBinExpr (Left  o) = Ty.mkDynBvBinExpr o
   bvBinExpr (Right o) = \x y -> Ty.mkDynBvNaryExpr o [x, y]
   convert a b =
     let
@@ -602,9 +602,7 @@ cWrapBinArith name bvOp doubleF ubF allowDouble mergeWidths a b = convert
         (CStackPtr ty off id, CStackPtr ty' off' id') ->
           if bvOp False == Left Ty.BvSub && ty == ty' && id == id'
             then -- TODO: ptrdiff_t?
-              ( CInt True
-                     (Type.numBits ty)
-                     (bvBinExpr (bvOp False) off off')
+              ( CInt True (Type.numBits ty) (bvBinExpr (bvOp False) off off')
               , ubF >>= (\f -> f True off True off')
               )
             else
@@ -698,10 +696,17 @@ noFpError
   -> Ty.Term (Ty.FpSort f)
 noFpError = const $ const $ error "Invalid FP op"
 cBitOr = cWrapBinArith "|" (const $ Right Ty.BvOr) noFpError Nothing False True
-cBitAnd = cWrapBinArith "&" (const $ Right Ty.BvAnd) noFpError Nothing False True
-cBitXor = cWrapBinArith "^" (const $ Right Ty.BvXor) noFpError Nothing False True
+cBitAnd =
+  cWrapBinArith "&" (const $ Right Ty.BvAnd) noFpError Nothing False True
+cBitXor =
+  cWrapBinArith "^" (const $ Right Ty.BvXor) noFpError Nothing False True
 -- Not quite right, since we're gonna force these to be equal in size
-cShl = cWrapBinArith "<<" (const $ Left Ty.BvShl) noFpError (Just overflow) False True
+cShl = cWrapBinArith "<<"
+                     (const $ Left Ty.BvShl)
+                     noFpError
+                     (Just overflow)
+                     False
+                     True
  where
   overflow s i _s' i' =
     let baseNeg =

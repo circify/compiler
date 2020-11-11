@@ -133,8 +133,8 @@ initRedLinState r1cs =
         $ constraints r1cs
     usePairs =
       [ (v, id') | (id', (_, vs)) <- IntMap.toList cs', v <- IntSet.toList vs ]
-    uses' = IntMap.fromListWith IntSet.union
-      $ map (second IntSet.singleton) usePairs
+    uses' =
+      IntMap.fromListWith IntSet.union $ map (second IntSet.singleton) usePairs
   in
     RedLinState { _cs     = cs'
                 , _uses   = uses'

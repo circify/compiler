@@ -15,10 +15,16 @@ import qualified Data.Sequence                 as Seq
 import           IR.R1cs
 import           IR.R1cs.Opt.RedLin             ( reduceLinearities )
 import           IR.R1cs.Opt.Fold               ( foldEqs )
-import qualified Util.Cfg                       as Cfg
+import qualified Util.Cfg                      as Cfg
 import           Util.Log
 
-runOpt :: (Show s, Ord s, KnownNat n) => String -> (R1CS s n -> Log (R1CS s n)) -> Int -> R1CS s n -> Log (R1CS s n)
+runOpt
+  :: (Show s, Ord s, KnownNat n)
+  => String
+  -> (R1CS s n -> Log (R1CS s n))
+  -> Int
+  -> R1CS s n
+  -> Log (R1CS s n)
 runOpt n f l r1cs = do
   optLevel <- Cfg.liftCfg $ asks (Cfg._optLevel . Cfg._r1csCfg)
   if optLevel >= l
@@ -28,7 +34,7 @@ runOpt n f l r1cs = do
         check <- Cfg.liftCfg $ asks (Cfg._checkR1csOpts . Cfg._r1csCfg)
         when check $ do
           case r1csCheck r1cs' of
-            Left e -> error $ "After " ++ n ++ ": " ++ e
+            Left  e -> error $ "After " ++ n ++ ": " ++ e
             Right _ -> pure ()
       return r1cs'
     else return r1cs
@@ -50,15 +56,14 @@ opt r1cs = do
 removeDeadSignals :: R1CS s n -> R1CS s n
 removeDeadSignals r1cs =
   let liveSigs = liveSignalIntsR1cs r1cs `IntSet.union` publicInputs r1cs
-  in
-    r1cs
-      { numSigs    = IntMap.filterWithKey (\k _ -> IntSet.member k liveSigs)
-                       $ numSigs r1cs
-      , sigNums    = Map.filter (`IntSet.member` liveSigs) $ sigNums r1cs
-      , nextSigNum = 2 + IntSet.size liveSigs
-      , values     = IntMap.filterWithKey (\k _ -> IntSet.member k liveSigs)
-                       <$> values r1cs
-      }
+  in  r1cs
+        { numSigs    = IntMap.filterWithKey (\k _ -> IntSet.member k liveSigs)
+                         $ numSigs r1cs
+        , sigNums    = Map.filter (`IntSet.member` liveSigs) $ sigNums r1cs
+        , nextSigNum = 2 + IntSet.size liveSigs
+        , values     = IntMap.filterWithKey (\k _ -> IntSet.member k liveSigs)
+                         <$> values r1cs
+        }
  where
   liveSignalIntsLc (m, _) = IntSet.fromDistinctAscList $ Map.keys m
   liveSignalIntsQeq (a, b, c) =
@@ -86,10 +91,10 @@ compactifySigNums r1cs =
             $         numMap
             IntMap.!? i
   in  R1CS
-        { sigNums      = Map.map (remap "sigNums") $ sigNums r1cs
+        { sigNums = Map.map (remap "sigNums") $ sigNums r1cs
         , numSigs = IntMap.mapKeysMonotonic (remap "numSigs") $ numSigs r1cs
-        , constraints  = sigMapQeq (remap "constraints") <$> constraints r1cs
+        , constraints = sigMapQeq (remap "constraints") <$> constraints r1cs
         , publicInputs = IntSet.map (remap "publicInputs") $ publicInputs r1cs
-        , values       = IntMap.mapKeysMonotonic (remap "values") <$> values r1cs
-        , nextSigNum   = 2 + IntMap.size numMap
+        , values = IntMap.mapKeysMonotonic (remap "values") <$> values r1cs
+        , nextSigNum = 2 + IntMap.size numMap
         }

@@ -102,9 +102,8 @@ data R1csCfg = R1csCfg { _optLevel :: Int
 
 $(makeLenses ''R1csCfg)
 
-defaultR1csCfg = R1csCfg { _optLevel = 2
-                         , _checkR1csOpts = False}
-                
+defaultR1csCfg = R1csCfg { _optLevel = 2, _checkR1csOpts = False }
+
 
 data CfgState = CfgState { _r1csCfg :: R1csCfg
                          , _toPfCfg :: ToPfCfg
@@ -181,12 +180,11 @@ options =
     "Level of optimization to apply to the R1CS"
     "0: None (not recommended), 1: eliminate equalities, 2: eliminate all linear constraints"
     "2"
-  , CfgOption
-    (r1csCfg . checkR1csOpts . showReadLens)
-    "check-opt-r1cs"
-    "Check each R1cs optimization"
-    ""
-    "False"
+  , CfgOption (r1csCfg . checkR1csOpts . showReadLens)
+              "check-opt-r1cs"
+              "Check each R1cs optimization"
+              ""
+              "False"
   , CfgOption
     (toPfCfg . assumeNoOverflow . showReadLens)
     "no-overflow"

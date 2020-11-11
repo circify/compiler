@@ -252,8 +252,7 @@ lcNot :: KnownNat n => LSig n -> LSig n
 lcNot = lcSub lcOne
 
 
-pfToPf
-  :: forall n . KnownNat n => Maybe SmtVals -> TermPf n -> ToPf n (LSig n)
+pfToPf :: forall n . KnownNat n => Maybe SmtVals -> TermPf n -> ToPf n (LSig n)
 pfToPf env term = do
   entry <- gets (AMap.lookup term . pfs)
   case entry of
@@ -316,9 +315,10 @@ boolToPf env term = do
   boolToPfUncached t = do
     r1cs'                <- gets r1cs
     assumeInputsInRange' <- gets (assumeInputsInRange . cfg)
-    aliasVars' <- gets aliasVars
+    aliasVars'           <- gets aliasVars
     let omitRangeCheck input =
-          (assumeInputsInRange' && R1cs.r1csIsPublicSignal input r1cs') || Set.member input aliasVars'
+          (assumeInputsInRange' && R1cs.r1csIsPublicSignal input r1cs')
+            || Set.member input aliasVars'
     case t of
       Eq a b -> case cast a of
         -- Bool
@@ -560,7 +560,7 @@ lazyInt = gets (assumeNoBvOverflow . cfg)
 -- The 0th index contains the LSB
 bitify :: KnownNat n => String -> LSig n -> Int -> ToPf n [LSig n]
 bitify ctx x width = do
-  logIf "toPf" $ "bitify " ++ show width ++  ": " ++ ctx
+  logIf "toPf" $ "bitify " ++ show width ++ ": " ++ ctx
   sigs <- nbits ctx $ asBits width $ snd x
   let sum' = foldr lcAdd lcZero $ zipWith lcScale (map twoPow [0 ..]) sigs
   enforceCheck (lcZero, lcZero, lcSub sum' x)
@@ -588,7 +588,7 @@ ite c t f = do
 deBitify :: KnownNat n => Bool -> [LSig n] -> LSig n
 deBitify signed bs =
   let lowBits =
-        foldr lcAdd lcZero $ zipWith lcScale (map twoPow [0 ..]) (init bs)
+          foldr lcAdd lcZero $ zipWith lcScale (map twoPow [0 ..]) (init bs)
       highBitPos = lcScale (toP $ 2 ^ (length bs - 1)) $ last bs
       highBit    = if signed then lcNeg highBitPos else highBitPos
   in  lcAdd lowBits highBit
@@ -637,9 +637,10 @@ bvToPf env term = do
   bvToPfUncached bv = do
     r1cs'                <- gets r1cs
     assumeInputsInRange' <- gets (assumeInputsInRange . cfg)
-    aliasVars' <- gets aliasVars
+    aliasVars'           <- gets aliasVars
     let omitRangeCheck input =
-          (assumeInputsInRange' && R1cs.r1csIsPublicSignal input r1cs') || Set.member input aliasVars'
+          (assumeInputsInRange' && R1cs.r1csIsPublicSignal input r1cs')
+            || Set.member input aliasVars'
     case bv of
       IntToDynBv w (IntLit i) -> saveConstBv bv (Bv.bitVec w i)
       DynBvLit l              -> saveConstBv bv l
@@ -842,7 +843,7 @@ bvToPf env term = do
               BvMul -> if length ls' * w < 240
                 then (, length ls' * w)
                   <$> foldM (lcMul "mul") (head ls') (tail ls')
-                else (,w) <$> foldM (binMul w) (head ls') (tail ls')
+                else (, w) <$> foldM (binMul w) (head ls') (tail ls')
               _ -> unhandledOp op
             lazy <- lazyInt
             if lazy
@@ -958,7 +959,7 @@ enforceAsPf env b = do
   logIf "toPf" $ "wasAlias: " ++ show wasAlias
   unless wasAlias $ boolToPf env b >>= enforceTrue
   n' <- gets $ Seq.length . R1cs.constraints . r1cs
-  r <- gets $ r1csStats . r1cs
+  r  <- gets $ r1csStats . r1cs
   logIf "toPf" $ "New constraints: " ++ show (n' - n)
   logIf "toPf" $ "Net: " ++ r
 

@@ -148,9 +148,12 @@ zDiv = wrapBin
   (Just $ \a b -> S.PfNaryExpr S.PfMul [a, S.PfUnExpr S.PfRecip b])
   Nothing
 zPow = wrapBin "**" Nothing (Just undefined) Nothing
-zBitAnd = wrapBin "&" (Just $ bvNToBin $ S.mkDynBvNaryExpr S.BvAnd) Nothing Nothing
-zBitOr = wrapBin "|"  (Just $ bvNToBin $ S.mkDynBvNaryExpr S.BvOr) Nothing Nothing
-zBitXor = wrapBin "^" (Just $ bvNToBin $ S.mkDynBvNaryExpr S.BvXor) Nothing Nothing
+zBitAnd =
+  wrapBin "&" (Just $ bvNToBin $ S.mkDynBvNaryExpr S.BvAnd) Nothing Nothing
+zBitOr =
+  wrapBin "|" (Just $ bvNToBin $ S.mkDynBvNaryExpr S.BvOr) Nothing Nothing
+zBitXor =
+  wrapBin "^" (Just $ bvNToBin $ S.mkDynBvNaryExpr S.BvXor) Nothing Nothing
 zAnd = wrapBin "&&" Nothing Nothing (Just $ bin (S.BoolNaryExpr S.And))
 zOr = wrapBin "||" Nothing Nothing (Just $ bin (S.BoolNaryExpr S.Or))
 zEq = wrapBinPred "==" (Just S.mkEq) (Just S.mkEq) (Just S.mkEq)

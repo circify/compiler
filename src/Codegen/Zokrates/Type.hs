@@ -3,7 +3,7 @@ module Codegen.Zokrates.Type
   )
 where
 
-import qualified Data.Map.Strict as Map
+import qualified Data.Map.Strict               as Map
 
 data Type = Uint Int
           | Bool
