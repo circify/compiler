@@ -142,12 +142,12 @@ extractRoots = do
   -- Return roots
   return rts
 
-data Access = Access -- ^ A memory access
-                     TermBool -- ^ whether it is a read (inactive writes are reads!)
-                          TBv  -- ^ the address
-                              TBv  -- ^ the value
-  deriving Show
+-- | A memory access: (is_read, addr, val)
+data Access = Access TermBool TBv TBv deriving Show
 
+-- | An indexed memory access: (is_read, idx, addr, val)
+-- "index" is the formula/time index of the access.
+type IAccess = (TermBool, TBv, TBv, TBv)
 
 type SelectReplace a = StateT (Int, Seq Access) Assert a
 
@@ -301,7 +301,7 @@ data ITrace = ITrace -- ^ Trace of an array through the computation
                    String-- ^ Root name
                           Int   -- ^ Array size
                               TBv   -- ^ Default term
-                                  [(TermBool, TBv, TBv, TBv)] -- ^ Accesses (isRead, idx, addr, val)
+                                  [IAccess] -- ^ Accesses (isRead, idx, addr, val)
   deriving Show
 
 extractTraces :: Assert [Trace]
@@ -332,7 +332,7 @@ benesRoute (ITrace name size def accesses) = do
         else return (Bv.bitVec 1 (0 :: Int))
   a' <- forM (zip [(0 :: Int) ..] accesses)
     $ \(idx, (_, _, a, _)) -> (, idx) <$> evalOr a
-  -- NOTE: need to be sure that sortOn uses a stable sort! otherwise proofs will be broken
+  -- NB: correctness depends on the stability of sortOn. o.w. proofs break
   let out_ord = map snd $ sortOn fst a'
       in_ord  = take (length out_ord) $ [(0 :: Int) ..]
       buildBenes name inp outp accesses = do
@@ -355,11 +355,8 @@ benesRoute (ITrace name size def accesses) = do
   liftM (ITrace name size def)
     $ buildBenes (name ++ "_benes") in_ord out_ord accesses
 
--- | A memory access: (is_read, idx, addr, val)
-type MemAcc = (TermBool, TBv, TBv, TBv)
-
 -- | Create one crossbar switch and accompanying constraints
-benesSwitch :: String -> Bool -> MemAcc -> MemAcc -> Assert (MemAcc, MemAcc)
+benesSwitch :: String -> Bool -> IAccess -> IAccess -> Assert (IAccess, IAccess)
 benesSwitch name swap accIn0 accIn1 = do
   swapVar <- A.newVar (name ++ "_sw") SortBool (BoolLit swap)
   let (r0, i0, a0, v0) = accIn0
@@ -387,7 +384,7 @@ benesSwitch name swap accIn0 accIn1 = do
   return . toTuple2 $ zipWith ($) (map toTuple4 ret1) (transpose ret2)
 
 -- | Construct a two-input Benes network (i.e., one switch)
-benesLayer2 :: String -> Bool -> [MemAcc] -> Assert [MemAcc]
+benesLayer2 :: String -> Bool -> [IAccess] -> Assert [IAccess]
 benesLayer2 name swap accesses = do
   logIf "smt::opt::benes" $ "benesLayer2 (" ++ show swap ++ ") = " ++ name
   let [acc0, acc1] = accesses
@@ -395,7 +392,7 @@ benesLayer2 name swap accesses = do
   return [o0, o1]
 
 -- | Construct a 3-input Benes network (i.e., 3 switches)
-benesLayer3 :: String -> [Bool] -> [MemAcc] -> Assert [MemAcc]
+benesLayer3 :: String -> [Bool] -> [IAccess] -> Assert [IAccess]
 benesLayer3 name sw accesses = do
   logIf "smt::opt::benes" $ "benesLayer3 (" ++ show sw ++ ") = " ++ name
   let [acc0, acc1, acc2] = accesses
@@ -406,7 +403,7 @@ benesLayer3 name sw accesses = do
   return [o0, o1, o2]
 
 -- | Construct input side of one Benes "shell"
-benesLayerIn :: String -> [MemAcc] -> [Bool] -> Assert ([MemAcc], [MemAcc])
+benesLayerIn :: String -> [IAccess] -> [Bool] -> Assert ([IAccess], [IAccess])
 benesLayerIn name accesses sw_i = do
   logIf "smt::opt::benes" $ "benesLayerIn=" ++ name
   let (accPairs, accOdd) = toPairs accesses
@@ -419,7 +416,7 @@ benesLayerIn name accesses sw_i = do
     Just odd -> (accT, accB ++ [odd])
 
 -- | Construct output side of one Benes "shell"
-benesLayerOut :: String -> [MemAcc] -> [MemAcc] -> [Bool] -> Assert [MemAcc]
+benesLayerOut :: String -> [IAccess] -> [IAccess] -> [Bool] -> Assert [IAccess]
 benesLayerOut name accT accB sw_o = do
   logIf "smt::opt::benes" $ "benesLayerOut=" ++ name
   let loop_in = zip4 [(0 :: Int) ..] accT accB sw_o
