@@ -208,7 +208,7 @@ instance Bitable CTermData where
     --CStackPtr ty _ _ -> Type.numBits ty
     _          -> error $ "Cannot serialize: " ++ show c
   serialize c = case c of
-    CBool b     -> Ty.mkIte b (Mem.bvNum False 1 1) (Mem.bvNum False 1 0)
+    CBool b     -> Ty.BoolToDynBv b
     CInt _ _ bv -> bv
     CDouble d   -> Ty.mkDynamizeBv $ Ty.FpToBv d
     CFloat  d   -> Ty.mkDynamizeBv $ Ty.FpToBv d
