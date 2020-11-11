@@ -48,6 +48,7 @@ benesTopBottom sws vals = (reverse i, reverse o)
   bTBHelp (top, bot) [] (v : w : []) = (v : top, w : bot)
   bTBHelp (top, bot) (s : sw) (v : w : xs) =
     let (tt, bb) = if s then (w : top, v : bot) else (v : top, w : bot) in bTBHelp (tt, bb) sw xs
+  bTBHelp _ _ _ = undefined -- illegal: ran out of sws or vals
   (i, o) = bTBHelp ([], []) sws vals
 
 -- precondition: outp is permutation of inp, inp is sorted
