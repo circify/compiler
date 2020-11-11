@@ -321,6 +321,7 @@ extractTraces = do
 -- They are not confirmed to be in address order.
 benesRoute :: ITrace -> Assert ITrace
 benesRoute (ITrace name size def accesses) = do
+  logIf "smt::opt::benes" $ "benesRoute (" ++ show (length accesses) ++ ") = " ++ name
   storing_vals <- A.isStoringValues
   let evalOr t = if storing_vals
         then valAsDynBv <$> A.eval t
@@ -384,7 +385,7 @@ benesSwitch name swap accIn0 accIn1 = do
 -- | Construct a two-input Benes network (i.e., one switch)
 benesLayer2 :: String -> Bool -> [MemAcc] -> Assert [MemAcc]
 benesLayer2 name swap accesses = do
-  logIf "smt::opt::benes" "benesLayer2"
+  logIf "smt::opt::benes" $ "benesLayer2 (" ++ show swap ++ ") = " ++ name
   let [acc0, acc1] = accesses
   (o0, o1) <- benesSwitch name swap acc0 acc1
   return [o0, o1]
@@ -392,7 +393,7 @@ benesLayer2 name swap accesses = do
 -- | Construct a 3-input Benes network (i.e., 3 switches)
 benesLayer3 :: String -> [Bool] -> [MemAcc] -> Assert [MemAcc]
 benesLayer3 name sw accesses = do
-  logIf "smt::opt::benes" $ "benesLayer3 (" ++ show sw ++ ")"
+  logIf "smt::opt::benes" $ "benesLayer3 (" ++ show sw ++ ") = " ++ name
   let [acc0, acc1, acc2] = accesses
       [sw_i, sw_m, sw_o] = sw
   (t0, m ) <- benesSwitch (name ++ "_I") sw_i acc0 acc1
@@ -403,6 +404,7 @@ benesLayer3 name sw accesses = do
 -- | Construct input side of one Benes "shell"
 benesLayerIn :: String -> [MemAcc] -> [Bool] -> Assert ([MemAcc], [MemAcc])
 benesLayerIn name accesses sw_i = do
+  logIf "smt::opt::benes" $ "benesLayerIn=" ++ name
   let (accPairs, accOdd) = toPairs accesses
       loop_in            = zip3 [(0 :: Int) ..] accPairs sw_i
   res <- forM loop_in $ \(idx, (acc0, acc1), swval) ->
@@ -415,6 +417,7 @@ benesLayerIn name accesses sw_i = do
 -- | Construct output side of one Benes "shell"
 benesLayerOut :: String -> [MemAcc] -> [MemAcc] -> [Bool] -> Assert [MemAcc]
 benesLayerOut name accT accB sw_o = do
+  logIf "smt::opt::benes" $ "benesLayerOut=" ++ name
   let loop_in = zip4 [(0 :: Int) ..] accT accB sw_o
   res <- liftM concat $ forM loop_in $ \(idx, accT, accB, swval) -> do
     (o0, o1) <- benesSwitch (name ++ "_O" ++ show idx) swval accT accB
