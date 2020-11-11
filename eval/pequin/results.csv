@@ -3,8 +3,8 @@ mm5,circify,125
 ptrs-benes,circify,1977
 ptrs,circify,168
 u32sqrt,circify,559
-u32log2-array,circify,126
-u32log2,circify,305
+u32log2,circify,126
+u32log2-array,circify,305
 mm5,pequin,125
 u32log2-array,pequin,124
 u32log2,pequin,159
