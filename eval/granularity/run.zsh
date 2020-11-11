@@ -37,7 +37,7 @@ for size in 1 2 4 8; do
         ../gen.py -w $size ${=s} > out.c
         z3t=$(C_streams=time::z3 C_c_sv=True $CIRCIFY c-check perm out.c | rg Time | awk '{print $3}')
         echo $size : $s
-        C_c_sv=True $CIRCIFY c-emit-r1cs perm out.c
+        C_smt_benes_thresh=1000 C_c_sv=True $CIRCIFY c-emit-r1cs perm out.c
         n=$(head -n 1 C | awk '{print $3}')
         echo $z3t $n
         save_result $size $perms $i $z3t $n
