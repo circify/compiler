@@ -55,10 +55,16 @@ assoc_array=(mimc7
              ~/repos/llcl/compiler/test/Code/Zokrates/stdlib/hashes/mimc7/mimc7R50.zok
              pedersen
              ~/repos/llcl/compiler/test/Code/Zokrates/stdlib/hashes/pedersen/512bit.zok
-             ecc
+             ec-scalar-mult
              ~/repos/llcl/compiler/test/Code/Zokrates/stdlib/ecc/edwardsScalarMult.zok
+             ec-add
+             ~/repos/llcl/compiler/test/Code/Zokrates/stdlib/ecc/edwardsAdd.zok
              sha2round
              ~/repos/llcl/compiler/test/Code/Zokrates/stdlib/hashes/sha256/shaRound.zok
+             eddsa
+             ~/repos/llcl/compiler/test/Code/Zokrates/stdlib/signatures/verifyEddsa.zok
+             mux3signed
+             ~/repos/llcl/compiler/test/Code/Zokrates/stdlib/utils/multiplexer/lookup3bitSigned.zok
          )
 
 init_results
