@@ -321,7 +321,11 @@ extractTraces = do
 -- They are not confirmed to be in address order.
 benesRoute :: ITrace -> Assert ITrace
 benesRoute (ITrace name size def accesses) = do
-  logIf "smt::opt::benes" $ "benesRoute (" ++ show (length accesses) ++ ") = " ++ name
+  logIf "smt::opt::benes"
+    $  "benesRoute ("
+    ++ show (length accesses)
+    ++ ") = "
+    ++ name
   storing_vals <- A.isStoringValues
   let evalOr t = if storing_vals
         then valAsDynBv <$> A.eval t
