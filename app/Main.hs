@@ -92,6 +92,7 @@ Usage:
   compiler [options] c-prove <fn-name> <path>
   compiler [options] c-eval <fn-name> <path>
   compiler [options] c-check-setup <fn-name> <path>
+  compiler [options] c-check-emit-r1cs <fn-name> <path>
   compiler [options] c-check-prove <fn-name> <path>
   compiler [options] zokrates-parse <path>
   compiler [options] zokrates-emit-r1cs <fn-name> <path>
@@ -429,6 +430,12 @@ main = do
         wPath    <- args `getArgOrExit` shortOption 'w'
         pfPath   <- args `getArgOrExit` shortOption 'p'
         cmdCProve libsnark pkPath vkPath inPath xPath wPath pfPath fnName cPath
+      _ | args `isPresent` command "c-check-emit-r1cs" -> do
+        let asJson = args `isPresent` longOption "json"
+        fnName   <- args `getArgOrExit` argument "fn-name"
+        cPath    <- args `getExistingFilePath` argument "path"
+        r1csPath <- args `getArgOrExit` shortOption 'C'
+        cmdCEmitR1cs True asJson fnName cPath r1csPath
       _ | args `isPresent` command "c-check-setup" -> do
         libsnark <- args `getExistingFilePath` longOption "libsnark"
         fnName   <- args `getArgOrExit` argument "fn-name"

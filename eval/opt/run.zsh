@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-set -ex
+set -e
 ZOKRATES=$(which zokrates)
 CIRCIFY=$(which compiler-exe)
 SCRIPT_PATH="${0:A:h}"
@@ -30,12 +30,13 @@ function count() {
     cd $d
     touch C
     cfile=$(readlink -f "C")
-    sed "s/ROUNDS/$1/" ../sha.c > tmp.c
-    z3t=$(env C_pequin_io=True C_streams=time::z3 C_c_sv=True C_opt_z3=$2 $CIRCIFY -C $cfile c-check compute tmp.c | rg Time | awk '{ print $3 }')
+    sed "s/LEN/$1/" ../lfsc.c > tmp.c
     if [[ $2 = "True" ]]; then
-        env C_smt_opts=cfee,arrayElim,flattenAnds,cfee C_pequin_io=True C_c_sv=True $CIRCIFY -C $cfile c-emit-r1cs main tmp.c
+        z3t=$(env C_streams=time::z3 C_smt_cfold_in_sub=False C_smt_opts=ee,mem,flattenAnds,cfee C_c_sv=True C_opt_z3=$2 $CIRCIFY -C $cfile c-check compute tmp.c | rg Time | awk '{ print $3 }')
+        env C_smt_cfold_in_sub=False C_smt_opts=ee,mem,flattenAnds,cfee C_c_sv=True $CIRCIFY -C $cfile c-check-emit-r1cs compute tmp.c
     else
-        env C_smt_opts=cfee,arrayElim,flattenAnds C_pequin_io=True C_c_sv=True $CIRCIFY -C $cfile c-emit-r1cs main tmp.c
+        z3t=$(env C_streams=time::z3 C_smt_cfold_in_sub=False C_smt_opts=ee,mem,flattenAnds C_c_sv=True C_opt_z3=$2 $CIRCIFY -C $cfile c-check compute tmp.c | rg Time | awk '{ print $3 }')
+        env C_smt_cfold_in_sub=False C_smt_opts=ee,mem,flattenAnds C_c_sv=True $CIRCIFY -C $cfile c-check-emit-r1cs compute tmp.c
     fi
     n=$(head -n 1 $cfile | awk '{print $3}')
     cd -
@@ -45,7 +46,7 @@ function count() {
 }
 
 init_results
-for s in $(seq 18 22); do
+for s in $(seq 10 5 30); do
     for o in True False; do
         count $s $o
     done
