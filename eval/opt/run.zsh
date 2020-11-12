@@ -35,7 +35,7 @@ function count() {
     if [[ $2 = "True" ]]; then
         env C_c_sv=True C_pequin_io=True C_c_sv=True $CIRCIFY -C $cfile c-emit-r1cs main tmp.c
     else
-        env C_smt_opts=cfee,arrayElim C_pequin_io=True C_c_sv=True $CIRCIFY -C $cfile c-emit-r1cs main tmp.c
+        env C_smt_opts=cfee,arrayElim,flattenAnds C_pequin_io=True C_c_sv=True $CIRCIFY -C $cfile c-emit-r1cs main tmp.c
     fi
     n=$(head -n 1 $cfile | awk '{print $3}')
     cd -
