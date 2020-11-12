@@ -33,7 +33,7 @@ function count() {
     sed "s/ROUNDS/$1/" ../sha.c > tmp.c
     z3t=$(env C_pequin_io=True C_streams=time::z3 C_c_sv=True C_opt_z3=$2 $CIRCIFY -C $cfile c-check compute tmp.c | rg Time | awk '{ print $3 }')
     if [[ $2 = "True" ]]; then
-        env C_c_sv=True C_pequin_io=True C_c_sv=True $CIRCIFY -C $cfile c-emit-r1cs main tmp.c
+        env C_smt_opts=cfee,arrayElim,flattenAnds,cfee C_pequin_io=True C_c_sv=True $CIRCIFY -C $cfile c-emit-r1cs main tmp.c
     else
         env C_smt_opts=cfee,arrayElim,flattenAnds C_pequin_io=True C_c_sv=True $CIRCIFY -C $cfile c-emit-r1cs main tmp.c
     fi

@@ -14,9 +14,10 @@ smt_plot <-
   t
 ps_plot <-
   ggplot(d) +
-  geom_point(aes(x = rounds, y = constraints/1000, color = optimized, shape=optimized)) +
-  labs(y = "R1CS Constraints (k)", shape = "Optimization:", color = "Optimization:") +
+  geom_point(aes(x = rounds, y = constraints, color = optimized, shape=optimized)) +
+  labs(y = "R1CS Constraints", shape = "Optimization:", color = "Optimization:") +
   scale_y_continuous(trans="log2") +
+  ylim(0,8000) +
   t
 ((smt_plot | ps_plot) / guide_area()) + plot_layout(heights = c(5,1),guides = 'collect')
 ggsave("results.png", width = 3, height = 2, units = "in")
