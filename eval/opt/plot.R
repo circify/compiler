@@ -8,16 +8,18 @@ print(d)
 
 t <-   t + theme(legend.position = "bottom")
 olab = "Constant Folding: "
+l <- labs(x = "Input Length", shape = "Constant Folding", color = "Constant Folding")
 
 smt_plot <-
   ggplot(d) +
   geom_point(aes(x = rounds, y = 1000*z3_time, color = optimized, shape = optimized)) +
-  labs(x = "Input length", y = "Solver Time (ms)", shape = olab, color= olab) +
+  labs(y = "Solver Time (ms)") + l +
+  scale_y_continuous(trans='log2') +
   t
 ps_plot <-
   ggplot(d) +
   geom_point(aes(x = rounds, y = constraints/1000, color = optimized, shape=optimized)) +
-  labs(x = "Input length", y = "R1CS Constraints (k)", shape = olab, color= olab) +
+  labs(y = "R1CS Constraints (k)") + l +
   scale_y_continuous(trans='log2') +
   t
 ((smt_plot | ps_plot) / guide_area()) + plot_layout(heights = c(5,1),guides = 'collect')
