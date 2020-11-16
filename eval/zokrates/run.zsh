@@ -61,6 +61,10 @@ assoc_array=(mimc7
              ~/repos/llcl/compiler/test/Code/Zokrates/stdlib/ecc/edwardsAdd.zok
              sha2round
              ~/repos/llcl/compiler/test/Code/Zokrates/stdlib/hashes/sha256/shaRound.zok
+             field-to-bools
+             ~/repos/llcl/compiler/test/Code/Zokrates/stdlib/utils/pack/bool/nonStrictUnpack256.zok
+             u32s-to-bools
+             ~/repos/llcl/compiler/test/Code/Zokrates/stdlib/utils/casts/u32_4_to_bool_128.zok
              eddsa
              ~/repos/llcl/compiler/test/Code/Zokrates/stdlib/signatures/verifyEddsa.zok
              mux3signed
