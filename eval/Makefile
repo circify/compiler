@@ -1,4 +1,4 @@
-SUBDIRS = circom zokrates pequin obliv granularity
+SUBDIRS = circom zokrates pequin obliv granularity opt
 
 .PHONY: subdirs $(SUBDIRS)
 

@@ -8,7 +8,7 @@ dw <- d %>% select(-wall_time) %>% pivot_wider(values_from = constraints, names_
 ggplot(data = dw) +
   geom_point(aes(x = benchmark, y = ratio)) +
   labs(x = "Benchmark",
-       y = "Constraint Ratio\nZoKrates/CirC") +
+       y = "Constraint Ratio\nZoKrates/CirC\n(higher is better)") +
   geom_hline(yintercept=1) +
   scale_y_continuous(trans="log2", limits=c(0.5,2)) +
   t

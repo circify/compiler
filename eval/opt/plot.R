@@ -13,13 +13,13 @@ l <- labs(x = "Input Length", shape = "Constant Folding", color = "Constant Fold
 smt_plot <-
   ggplot(d) +
   geom_point(aes(x = rounds, y = 1000*z3_time, color = optimized, shape = optimized)) +
-  labs(y = "Solver Time (ms)") + l +
+  labs(y = "Solver Time (ms)\n(lower is better)") + l +
   scale_y_continuous(trans='log2') +
   t
 ps_plot <-
   ggplot(d) +
   geom_point(aes(x = rounds, y = constraints/1000, color = optimized, shape=optimized)) +
-  labs(y = "R1CS Constraints (k)") + l +
+  labs(y = "R1CS Constraints (k)\n(lower is better)") + l +
   scale_y_continuous(trans='log2') +
   t
 ((smt_plot | ps_plot) / guide_area()) + plot_layout(heights = c(5,1),guides = 'collect')

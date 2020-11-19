@@ -12,11 +12,11 @@ l <- labs(x = "Arrays Fused (%)", color = "Permutation Size", shape = "Permutati
 smt_plot <- ggplot(d, mapping = aes(x = 100 * largest_perm / perms, color=size, y = z3_time, shape = size)) +
   geom_point() +
   geom_line() +
-  labs(y = "Solver Time (s)") + l + s + t
+  labs(y = "Solver Time (s)\n(lower is better)") + l + s + t
 ps_plot <- ggplot(d, mapping = aes(x = 100 * largest_perm / perms, color=size, y = constraints, shape = size)) +
   geom_point() +
   geom_line() +
-  labs(y = "R1CS Constraints") + l + s + t
+  labs(y = "R1CS Constraints\n(lower is better)") + l + s + t
 
 ((smt_plot | ps_plot) / guide_area()) + plot_layout(heights = c(5,1),guides = 'collect')
 ggsave("results.png", width = 3, height = 2, units = "in")
