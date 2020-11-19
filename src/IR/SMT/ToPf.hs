@@ -297,7 +297,8 @@ boolToPf env term = do
       return s
  where
   lookupBitVal :: String -> Maybe (Prime n)
-  lookupBitVal name = bToPf
+  lookupBitVal name =
+    bToPf
       .   valAsBool
       .   flip fromDyn (error $ name ++ " has wrong type")
       <$> (env >>= (Map.!? name))
@@ -377,9 +378,7 @@ binAnd = lcMul "and"
 naryOr :: KnownNat n => [LSig n] -> ToPf n (LSig n)
 naryOr xs = if length xs <= 3
   then lcNot <$> naryAnd (map lcNot xs)
-  else
-    let s = foldl1 lcAdd xs
-    in  lcNot <$> eqZero s
+  else let s = foldl1 lcAdd xs in lcNot <$> eqZero s
 
 impl :: KnownNat n => LSig n -> LSig n -> ToPf n (LSig n)
 impl a b = do

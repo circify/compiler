@@ -20,7 +20,7 @@ import           Codegen.C                      ( runC
                                                 , assertBug
                                                 , genFn
                                                 )
-import           Codegen.C.Term                 ( InMap )
+import           Codegen.LangVal                ( InMap )
 import           IR.SMT.ToPf                    ( toPf )
 import qualified IR.SMT.Opt                    as SmtOpt
 import           IR.R1cs                        ( R1CS(..) )

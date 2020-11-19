@@ -14,6 +14,7 @@ import           AST.Util
 import           Control.Monad.State.Strict
 import           Codegen.Circify
 import qualified Codegen.Circify.Memory        as Mem
+import           Codegen.LangVal
 import qualified Codegen.Zokrates.Type         as T
 import           Codegen.Zokrates.Term
 import qualified Data.BitVector                as Bv
@@ -21,6 +22,7 @@ import           Data.Bifunctor                 ( bimap )
 import qualified Data.Map.Strict               as Map
 import           Data.Maybe                     ( fromMaybe
                                                 , listToMaybe
+                                                , isJust
                                                 )
 import           Data.List                      ( isInfixOf )
 import qualified Data.Set                      as Set
@@ -310,14 +312,14 @@ run
   => FilePath
   -> String
   -> A.SFiles
+  -> Maybe InMap
   -> Log Assert.AssertState
-run path fnName files = do
+run path fnName files inMap = do
   let Z act = inFile path $ do
         genFiles @n files
         f <- getFunc nullSpan path fnName
         genEntryFunc f
-  (_, assertState) <-
-    Cfg.liftCfg $ Assert.runAssert $ runCircify (zLangDef Nothing) $ runStateT
-      act
-      emptyZState
+  assertState <- Cfg.liftCfg $ Assert.execAssert $ do
+    if isJust inMap then Assert.initValues else return ()
+    runCircify (zLangDef inMap) $ runStateT act emptyZState
   return assertState

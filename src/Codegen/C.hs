@@ -12,6 +12,7 @@ import           Codegen.Circify.Memory         ( MonadMem
                                                 , liftMem
                                                 , MemState
                                                 )
+import           Codegen.LangVal
 import           Control.Monad                  ( replicateM_
                                                 , forM
                                                 , join
@@ -69,7 +70,7 @@ emptyCState findBugs = CState { funs          = Map.empty
 
 enterBreak :: C ()
 enterBreak = do
-  d <- (+1) <$> gets breakDepth
+  d <- (+ 1) <$> gets breakDepth
   modify $ \s -> s { breakDepth = d }
   liftCircify $ pushBreakable $ "break" ++ show d
 
@@ -567,10 +568,9 @@ genStmt stmt = do
       -- Execute up to the loop bound
       bound <- getForLoopBound stmt body
       case bound of
-        Right b ->
-          replicateM_ b $ do
-            genStmt body
-            forM_ incr $ \inc -> genExpr inc
+        Right b -> replicateM_ b $ do
+          genStmt body
+          forM_ incr $ \inc -> genExpr inc
         Left b -> do
           replicateM_ b $ do
             test <- genExpr $ fromMaybe (error "Missing test in for-loop") check
@@ -600,7 +600,7 @@ genStmt stmt = do
       logIf "return" $ "Returning: " ++ show toReturn
       liftCircify $ doReturn $ ssaValAsTerm "return" toReturn
     CLabel _ inner _ _ -> genStmt inner
-    CBreak _ -> cBreak
+    CBreak _           -> cBreak
     _                  -> do
       text <- liftIO $ nodeText stmt
       error $ unlines ["Unsupported:", text]

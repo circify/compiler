@@ -17,7 +17,7 @@ import           Codegen.C.CToR1cs              ( fnToR1cs )
 import           Codegen.C                      ( checkFn
                                                 , evalFn
                                                 )
-import           Codegen.C.Term                 ( parseToMap
+import           Codegen.LangVal                ( parseToMap
                                                 , modelMapToExtMap
                                                 )
 import qualified Codegen.Circom.Compilation    as Comp
@@ -96,6 +96,8 @@ Usage:
   compiler [options] c-check-prove <fn-name> <path>
   compiler [options] zokrates-parse <path>
   compiler [options] zokrates-emit-r1cs <fn-name> <path>
+  compiler [options] zokrates-setup <fn-name> <path>
+  compiler [options] zokrates-prove <fn-name> <path>
 
 Options:
   -h, --help         Display this message
@@ -345,7 +347,7 @@ cmdZokratesEmitR1cs :: FilePath -> String -> Bool -> FilePath -> Cfg ()
 cmdZokratesEmitR1cs path fnName asJson r1csPath = do
   files <- liftIO $ ZParse.loadFilesRecursively path
   r1cs  <- evalLog $ do
-    assertState <- ZGen.run @Order path fnName files
+    assertState <- ZGen.run @Order path fnName files Nothing
     --liftIO $ putStrLn $ pShow assertState
     newSmt      <- SmtOpt.opt SMap.empty assertState
     r           <- ToPf.toPf @Order (OptAssert._vals newSmt)
@@ -357,6 +359,51 @@ cmdZokratesEmitR1cs path fnName asJson r1csPath = do
     putStrLn $ R1cs.r1csStats r1cs
     R1cs.writeToR1csFile asJson r1cs r1csPath
 
+cmdZokratesSetup
+  :: FilePath
+  -> FilePath
+  -> String
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> Cfg ()
+cmdZokratesSetup libsnarkPath path fnName r1csPath pkPath vkPath = do
+  cmdZokratesEmitR1cs path fnName False r1csPath
+  liftIO $ runSetup libsnarkPath r1csPath pkPath vkPath
+
+cmdZokratesProve
+  :: FilePath
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> FilePath
+  -> String
+  -> FilePath
+  -> Cfg ()
+cmdZokratesProve libsnark pkPath vkPath inPath xPath wPath pfPath fnName path =
+  do
+    files <- liftIO $ ZParse.loadFilesRecursively path
+    inMap <- liftIO $ parseToMap <$> readFile inPath
+    r1cs  <- evalLog $ do
+      assertState <- ZGen.run @Order path fnName files (Just inMap)
+      liftIO $ putStrLn $ pShow assertState
+      newSmt <- SmtOpt.opt SMap.empty assertState
+      liftIO $ putStrLn $ pShow newSmt
+      r <- ToPf.toPf @Order (OptAssert._vals newSmt)
+                            (OptAssert._public newSmt)
+                            SMap.empty
+                            (OptAssert.listAssertions newSmt)
+      R1csOpt.opt r
+    case R1cs.r1csCheck r1cs of
+      Right _ -> return ()
+      Left  e -> liftIO $ do
+        putStrLn e
+        exitFailure
+    liftIO $ do
+      R1cs.r1csWriteAssignments r1cs xPath wPath
+      runProve libsnark pkPath vkPath xPath wPath pfPath
 
 defaultR1cs :: String
 defaultR1cs = "C"
@@ -472,6 +519,33 @@ main = do
         r1csPath <- args `getArgOrExit` shortOption 'C'
         let asJson = args `isPresent` longOption "json"
         cmdZokratesEmitR1cs path fnName asJson r1csPath
+      _ | args `isPresent` command "zokrates-setup" -> do
+        libsnark <- args `getExistingFilePath` longOption "libsnark"
+        fnName   <- args `getArgOrExit` argument "fn-name"
+        path     <- args `getExistingFilePath` argument "path"
+        r1csPath <- args `getArgOrExit` shortOption 'C'
+        pkPath   <- args `getArgOrExit` shortOption 'P'
+        vkPath   <- args `getArgOrExit` shortOption 'V'
+        cmdZokratesSetup libsnark path fnName r1csPath pkPath vkPath
+      _ | args `isPresent` command "zokrates-prove" -> do
+        libsnark <- args `getExistingFilePath` longOption "libsnark"
+        fnName   <- args `getArgOrExit` argument "fn-name"
+        cPath    <- args `getExistingFilePath` argument "path"
+        pkPath   <- args `getExistingFilePath` shortOption 'P'
+        vkPath   <- args `getExistingFilePath` shortOption 'V'
+        inPath   <- args `getArgOrExit` shortOption 'i'
+        xPath    <- args `getArgOrExit` shortOption 'x'
+        wPath    <- args `getArgOrExit` shortOption 'w'
+        pfPath   <- args `getArgOrExit` shortOption 'p'
+        cmdZokratesProve libsnark
+                         pkPath
+                         vkPath
+                         inPath
+                         xPath
+                         wPath
+                         pfPath
+                         fnName
+                         cPath
       _ -> liftIO $ exitWithUsageMessage patterns "Missing command!"
   cfg <- Cfg.setFromEnv Cfg.defaultCfgState
   Cfg.evalCfg cmd cfg

@@ -47,7 +47,6 @@ module Codegen.Zokrates.Term
   , zAssign
   , zSetValues
   , zTermVars
-  , InMap
   -- Built-ins
   , zU32fromBits
   , zU32toBits
@@ -58,7 +57,7 @@ where
 import           Control.Monad
 import qualified Codegen.Circify.Memory        as Mem
 import qualified Codegen.Zokrates.Type         as T
-import           Codegen.C.Term                 ( InMap
+import           Codegen.LangVal                ( InMap
                                                 , setInputFromMap
                                                 )
 import qualified Data.BitVector                as Bv
@@ -341,6 +340,7 @@ zDeclare inputs ty name mUserName = case ty of
     -> (S.Term s -> Term n)
     -> Mem.Mem (Term n)
   declBase parse default_ sort toTerm = Assert.liftAssert $ do
+    logIf "decl" $ "declBase: " ++ name ++ " " ++ show mUserName
     t <- Assert.newVar name sort
     setInputFromMap inputs parse default_ name mUserName
     return $ toTerm t

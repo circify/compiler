@@ -63,4 +63,5 @@ C_smt_benes_thresh=1 C_smt_opts=cfee,ee,mem C_smt_check_opts=True stack run -- c
 C_smt_benes_thresh=1 C_smt_opts=cfee,ee,mem C_smt_check_opts=True stack run -- -i <(echo x 1; echo y 1) c-prove flex test/Code/C/benes_arrays.c
 stack run -- verify
 
-stack run -- zokrates-emit-r1cs main test/Code/Zokrates/stdlib/ecc/edwardsScalarMult.zok
+stack run -- zokrates-setup main test/Code/Zokrates/sum.zok
+stack run -- -i test/Code/Zokrates/inputs/sum.i zokrates-prove main test/Code/Zokrates/sum.zok
