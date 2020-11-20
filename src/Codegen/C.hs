@@ -55,8 +55,10 @@ data CState = CState
   , breakDepth    :: Int
   }
 
-newtype C a = C (StateT CState (Circify Type CTerm) a)
-    deriving (Functor, Applicative, Monad, MonadState CState, MonadIO, MonadLog, MonadAssert, MonadMem, MonadCircify Type CTerm, MonadCfg, MonadDeepState (((Assert.AssertState, Mem.MemState), CircifyState Type CTerm), CState))
+type CCircState = CircifyState Type CTerm (Maybe InMap, Bool)
+
+newtype C a = C (StateT CState (Circify Type CTerm (Maybe InMap, Bool)) a)
+    deriving (Functor, Applicative, Monad, MonadState CState, MonadIO, MonadLog, MonadAssert, MonadMem, MonadCircify Type CTerm (Maybe InMap, Bool), MonadCfg, MonadDeepState (((Assert.AssertState, Mem.MemState), CCircState), CState))
 
 emptyCState :: Bool -> CState
 emptyCState findBugs = CState { funs          = Map.empty
@@ -774,23 +776,17 @@ genFn (CTranslUnit decls _) name = do
   registerFns decls
   genFunDef (findFn name decls)
 
-cLangDef :: Maybe InMap -> Bool -> LangDef Type CTerm
-cLangDef inputs findBugs = LangDef { declare   = cDeclVar inputs findBugs
-                                   , assign    = cAssign findBugs
-                                   , ite       = ((.).(.).(.)) return cIte
-                                   , setValues = cSetValues findBugs
-                                   }
-
 runC
   :: Maybe InMap
   -> Bool
   -> C a
-  -> Assert.Assert (a, CircifyState Type CTerm, MemState)
+  -> Assert.Assert
+       (a, CCircState, MemState)
 runC inMap findBugs c = do
   when (isJust inMap) Assert.initValues
   let (C act) = cfgFromEnv >> c
-  (((x, _), circState), memState) <-
-    runCircify (cLangDef inMap findBugs) $ runStateT act (emptyCState findBugs)
+  (((x, _), circState), memState) <- runCircify (inMap, findBugs)
+    $ runStateT act (emptyCState findBugs)
   return (x, circState, memState)
 
 evalC :: Maybe InMap -> Bool -> C a -> Assert.Assert a

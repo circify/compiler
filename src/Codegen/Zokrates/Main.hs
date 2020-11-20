@@ -48,8 +48,8 @@ data ZState = ZState
   }
 $(makeLenses ''ZState)
 
-newtype Z n a = Z (StateT ZState (Circify T.Type (Term n)) a)
-    deriving (Functor, Applicative, Monad, MonadState ZState, MonadIO, MonadLog, Assert.MonadAssert, Mem.MonadMem, MonadCircify T.Type (Term n), Cfg.MonadCfg, MonadDeepState (((Assert.AssertState, Mem.MemState), CircifyState T.Type (Term n)), ZState))
+newtype Z n a = Z (StateT ZState (Circify T.Type (Term n) (Maybe InMap)) a)
+    deriving (Functor, Applicative, Monad, MonadState ZState, MonadIO, MonadLog, Assert.MonadAssert, Mem.MonadMem, MonadCircify T.Type (Term n) (Maybe InMap), Cfg.MonadCfg, MonadDeepState (((Assert.AssertState, Mem.MemState), CircifyState T.Type (Term n) (Maybe InMap)), ZState))
 
 emptyZState :: ZState
 emptyZState =
@@ -84,7 +84,7 @@ getFunc s p n = fromMaybe (errSpan s $ "Cannot find function: " ++ show n)
 inFile :: FilePath -> Z n a -> Z n a
 inFile f a = modify (over fileStack (f :)) *> a <* modify (over fileStack tail)
 
-registerStruct :: String -> T.Type -> Z n ()
+registerStruct :: KnownNat n => String -> T.Type -> Z n ()
 registerStruct name s = do
   curPath <- currentPath
   logIf "struct" $ "Saving " ++ name ++ " in " ++ curPath
@@ -136,9 +136,6 @@ errSpan s m = error $ m ++ "\n at: " ++ show s
 
 fromEitherSpan :: Span -> Either String a -> a
 fromEitherSpan s = either (errSpan s) id
-
-unwrap :: Either String a -> a
-unwrap = either error id
 
 genElemExpr :: KnownNat n => A.SElemExpr -> Z n [Term n]
 genElemExpr e = do
@@ -305,13 +302,6 @@ genFiles :: KnownNat n => A.SFiles -> Z n ()
 genFiles fs =
   forM_ (Map.toAscList fs) $ \(path, items) -> inFile path $ mapM_ genItem items
 
-zLangDef :: KnownNat n => Maybe InMap -> LangDef T.Type (Term n)
-zLangDef inMap = LangDef { declare   = zDeclare inMap
-                         , ite       = ((.) . (.) . (.)) (return . unwrap) zIte
-                         , assign    = zAssign
-                         , setValues = zSetValues
-                         }
-
 run
   :: forall n
    . KnownNat n
@@ -327,5 +317,5 @@ run path fnName files inMap = do
         genEntryFunc f
   assertState <- Cfg.liftCfg $ Assert.execAssert $ do
     if isJust inMap then Assert.initValues else return ()
-    runCircify (zLangDef inMap) $ runStateT act emptyZState
+    runCircify inMap $ runStateT act emptyZState
   return assertState

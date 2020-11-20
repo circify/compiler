@@ -3,6 +3,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 module Codegen.Zokrates.Term
   ( Term(..)
   -- Binary
@@ -29,7 +31,6 @@ module Codegen.Zokrates.Term
   , zNot
   -- Ternary
   , zCond
-  , zIte
   -- Typing & casting
   , zBool
   , zConstInt
@@ -44,9 +45,6 @@ module Codegen.Zokrates.Term
   , zFieldGet
   , zFieldSet
   -- Infra
-  , zDeclare
-  , zAssign
-  , zSetValues
   , zTermVars
   -- Built-ins
   , zU32fromBits
@@ -57,6 +55,7 @@ where
 
 import           Control.Monad
 import qualified Codegen.Circify.Memory        as Mem
+import           Codegen.Circify                ( Embeddable(..) )
 import qualified Codegen.Zokrates.Type         as T
 import           Codegen.LangVal                ( InMap
                                                 , setInputFromMap
@@ -423,3 +422,9 @@ zFieldtoBits t = case t of
     let bv = S.PfToDynBv 254 f
     in  Right $ Array 254 $ map (Bool . flip S.mkDynBvExtractBit bv) [0 .. 253]
   _ -> Left $ "Cannot call (field) unpack on " ++ show t
+
+instance KnownNat n => Embeddable T.Type (Term n) (Maybe InMap) where
+  declare   = zDeclare
+  ite       = const $ ((.) . (.) . (.)) (return . either error id) zIte
+  assign    = const zAssign
+  setValues = const zSetValues

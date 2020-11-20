@@ -1,9 +1,10 @@
-{-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE Rank2Types          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE TypeApplications    #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-| This module define CTerm: an SMT/Mem embedding of C values and terms.
  - It does not handle control flow.
  -}
@@ -13,9 +14,6 @@ module Codegen.C.Term
   , CTermData(..)
   , Bitable(..)
   , cDeclVar
-  , cDeclInitVar
-  , cAssign
-  , cSetValues
   , ctermGetVars
   , ctermIsUndef
   -- Memory Operations
@@ -50,7 +48,6 @@ module Codegen.C.Term
   , cNe
   -- Ites
   , cCond
-  , cIte
   -- Other
   , cCast
   , cBool
@@ -75,6 +72,7 @@ module Codegen.C.Term
   , asArray
   , asDouble
   , asVar
+  , CCirc
   )
 where
 
@@ -83,6 +81,9 @@ import           Codegen.LangVal                ( InMap
                                                 )
 import qualified Codegen.C.Type                as Type
 import           Codegen.Circify.Memory         ( Mem )
+import           Codegen.Circify                ( Circify
+                                                , Embeddable(..)
+                                                )
 import qualified Codegen.Circify.Memory        as Mem
 import           Control.Monad                  ( forM
                                                 , unless
@@ -1028,3 +1029,11 @@ binAnd a b = Ty.BoolNaryExpr Ty.And [a, b]
 
 cBoolLit :: Bool -> CTerm
 cBoolLit b = mkCTerm (CBool $ Ty.BoolLit b) (Ty.BoolLit False)
+
+instance Embeddable Type.Type CTerm (Maybe InMap, Bool) where
+  declare   = uncurry cDeclVar
+  assign    = cAssign . snd
+  ite       = const $ ((.) . (.) . (.)) return cIte
+  setValues = cSetValues . snd
+
+type CCirc a = Circify Type.Type CTerm (Maybe InMap, Bool) a
