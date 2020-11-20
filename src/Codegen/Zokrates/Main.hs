@@ -22,7 +22,6 @@ import           Data.Bifunctor                 ( bimap )
 import qualified Data.Map.Strict               as Map
 import           Data.Maybe                     ( fromMaybe
                                                 , listToMaybe
-                                                , isJust
                                                 )
 import           Data.List                      ( isInfixOf )
 import qualified Data.Set                      as Set
@@ -38,7 +37,7 @@ import           System.FilePath                ( splitFileName
                                                 , splitExtension
                                                 )
 import qualified Util.Cfg                      as Cfg
-import           Util.Control                   ( MonadDeepState )
+import           Util.Control
 import           Util.Log
 
 data ZState = ZState
@@ -310,12 +309,11 @@ run
   -> A.SFiles
   -> Maybe InMap
   -> Log Assert.AssertState
-run path fnName files inMap = do
+run path fnName files inMap =
   let Z act = inFile path $ do
         genFiles @n files
         f <- getFunc nullSpan path fnName
         genEntryFunc f
-  assertState <- Cfg.liftCfg $ Assert.execAssert $ do
-    if isJust inMap then Assert.initValues else return ()
-    runCircify inMap $ runStateT act emptyZState
-  return assertState
+  in  Cfg.liftCfg $ Assert.execAssert $ do
+        whenJust inMap $ const Assert.initValues
+        runCircify inMap $ runStateT act emptyZState
