@@ -54,10 +54,8 @@ module Codegen.C.Term
   -- Other
   , cCast
   , cBool
-  -- Consts
-  , cTrue
-  , cFalse
   -- Literals
+  , cBoolLit
   , cIntLit
   , cFloatLit
   , cDoubleLit
@@ -1028,8 +1026,5 @@ binOr a b = Ty.BoolNaryExpr Ty.Or [a, b]
 binAnd :: Ty.TermBool -> Ty.TermBool -> Ty.TermBool
 binAnd a b = Ty.BoolNaryExpr Ty.And [a, b]
 
-cTrue :: CTerm
-cTrue = mkCTerm (CBool $ Ty.BoolLit True) (Ty.BoolLit False)
-
-cFalse :: CTerm
-cFalse = mkCTerm (CBool $ Ty.BoolLit False) (Ty.BoolLit False)
+cBoolLit :: Bool -> CTerm
+cBoolLit b = mkCTerm (CBool $ Ty.BoolLit b) (Ty.BoolLit False)
