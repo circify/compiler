@@ -2,7 +2,7 @@
 
 typeset -A components
 components=(
-    c "../../src/Codegen/C ../../src/Codegen/C.hs"
+    c "../../src/Codegen/C"
     circom "../../src/Codegen/Circom"
     z3 "../../src/Targets/SMT/TySmtToZ3.hs"
     r1cs "../../src/IR/R1cs.hs ../../src/IR/R1cs/ ../../src/IR/SMT/ToPf.hs"
