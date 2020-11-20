@@ -1,6 +1,6 @@
 module Codegen.C.EvalTest where
 import           BenchUtils
-import           Codegen.C
+import           Codegen.C.Main
 import           Control.Monad                  ( forM_ )
 import qualified Data.Map                      as M
 import           Targets.SMT.TySmtToZ3          ( Val

@@ -14,7 +14,7 @@ module Main where
 
 import           Control.Exception              ( catchJust )
 import           Codegen.C.CToR1cs              ( fnToR1cs )
-import           Codegen.C                      ( checkFn
+import           Codegen.C.Main                 ( checkFn
                                                 , evalFn
                                                 )
 import           Codegen.LangVal                ( parseToMap

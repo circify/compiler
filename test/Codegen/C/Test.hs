@@ -5,7 +5,7 @@ module Codegen.C.Test
   )
 where
 import           BenchUtils
-import           Codegen.C
+import           Codegen.C.Main
 import           Control.Monad
 import           Data.Either                    ( isRight )
 import qualified Data.Foldable                 as Fold

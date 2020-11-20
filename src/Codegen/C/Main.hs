@@ -2,7 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE LambdaCase                 #-}
-module Codegen.C where
+module Codegen.C.Main where
 import           Codegen.C.Type
 import           Codegen.C.Term
 import           Codegen.C.AstUtil

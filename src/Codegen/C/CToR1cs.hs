@@ -16,7 +16,7 @@ import qualified IR.SMT.Opt.Assert             as OptAssert
 import qualified Language.C.Syntax.AST         as AST
 import qualified Codegen.Circify.Memory        as Mem
 import qualified IR.R1cs.Opt                   as R1csOpt
-import           Codegen.C                      ( runC
+import           Codegen.C.Main                 ( runC
                                                 , assertBug
                                                 , genFn
                                                 )
