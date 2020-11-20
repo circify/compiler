@@ -246,7 +246,7 @@ localizeVars = Ty.mapTermM visit
   visit (Ty.Var n s) = do
     t  <- liftCircify $ ssaValAsTerm "localize" <$> getTerm (SLVar n)
     vs <- liftMem $ ctermGetVars n t
-    let v = head $ Set.toList $ vs
+    let v = head $ Set.toList vs
     return $ Just $ Ty.Var v s
   visit _ = return Nothing
 
@@ -776,7 +776,8 @@ genFn (CTranslUnit decls _) name = do
 
 cLangDef :: Maybe InMap -> Bool -> LangDef Type CTerm
 cLangDef inputs findBugs = LangDef { declare   = cDeclVar inputs findBugs
-                                   , assign    = cCondAssign findBugs
+                                   , assign    = cAssign findBugs
+                                   , ite       = ((.).(.).(.)) return cIte
                                    , setValues = cSetValues findBugs
                                    }
 
@@ -806,7 +807,7 @@ checkFn tu name = do
       genFn tu name
       assertBug
   let sizes' = Mem.sizes memState
-  let a      = Fold.toList $ Assert.asserted $ assertState
+  let a      = Fold.toList $ Assert.asserted assertState
   doOpt <- liftCfg $ asks (Cfg._optForZ3 . Cfg._smtOptCfg)
   a'    <- if doOpt
     then OptAssert.listAssertions <$> Opt.opt sizes' assertState

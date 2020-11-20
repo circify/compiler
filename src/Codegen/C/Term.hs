@@ -14,7 +14,7 @@ module Codegen.C.Term
   , Bitable(..)
   , cDeclVar
   , cDeclInitVar
-  , cCondAssign
+  , cAssign
   , cSetValues
   , ctermGetVars
   , ctermIsUndef
@@ -318,23 +318,11 @@ cDeclInitVar trackUndef ty name init =
   in  liftAssert $ (, init') <$> alias trackUndef name init'
 
 -- Declare a new variable, initializing it to a value.
--- Optional argument: a condition and an alternate value in which case this is
--- an ITE-assignment in which the first value is assigned if the condition is
--- met, otherwise the second value.
--- Returns the term corresponding to the new variable and the ITE or cast or
--- whatever that it was ultimately assigned to.
-cCondAssign
-  :: Bool
-  -> Type.Type
-  -> String
-  -> CTerm
-  -> Maybe (Ty.TermBool, CTerm)
-  -> Mem (CTerm, CTerm)
-cCondAssign trackUndef ty name value alternate = case alternate of
-  Just (cond, value') ->
-    let ite = cIte cond (cCast ty value) (cCast ty value')
-    in  cDeclInitVar trackUndef ty name ite
-  Nothing -> cDeclInitVar trackUndef ty name (cCast ty value)
+-- Returns the term corresponding to the new variable and
+-- whatever it was ultimately assigned to.
+cAssign :: Bool -> Type.Type -> String -> CTerm -> Mem (CTerm, CTerm)
+cAssign trackUndef ty name value =
+  cDeclInitVar trackUndef ty name (cCast ty value)
 
 -- Declare a new variable, do not initialize it.
 cDeclVar
@@ -968,6 +956,10 @@ cIte condB t f =
       (CBool   tB, CBool fB  ) -> CBool $ Ty.mkIte condB tB fB
       (CDouble tB, CDouble fB) -> CDouble $ Ty.mkIte condB tB fB
       (CFloat  tB, CFloat fB ) -> CFloat $ Ty.mkIte condB tB fB
+      (CDouble{} , _         ) -> term $ cIte condB t (cCast (cType t) f)
+      (_         , CDouble{} ) -> term $ cIte condB (cCast (cType f) t) f
+      (CFloat{}  , _         ) -> term $ cIte condB t (cCast (cType t) f)
+      (_         , CFloat{}  ) -> term $ cIte condB (cCast (cType f) t) f
       -- TODO: not quite right.
       -- Wrong in some instances of conditional initialization.
       (CStackPtr tTy tB tId, CStackPtr fTy fB fId)

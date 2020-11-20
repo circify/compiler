@@ -29,6 +29,7 @@ module Codegen.Zokrates.Term
   , zNot
   -- Ternary
   , zCond
+  , zIte
   -- Typing & casting
   , zBool
   , zConstInt
@@ -375,20 +376,10 @@ aName idx base = base ++ "_" ++ show idx
 sName :: String -> String -> String
 sName field base = base ++ "_" ++ field
 
-zAssign
-  :: KnownNat n
-  => T.Type
-  -> String
-  -> Term n
-  -> Maybe (S.TermBool, Term n)
-  -> Mem.Mem (Term n, Term n)
-zAssign ty name term mElse =
-  let a = case mElse of
-        Just (c, e) -> either error id $ zIte c term e
-        Nothing     -> term
-  in  if zType a == ty
-        then Assert.liftAssert $ (, a) <$> zAlias name a
-        else error $ unwords ["Type mismatch", show ty, "v.", show a]
+zAssign :: KnownNat n => T.Type -> String -> Term n -> Mem.Mem (Term n, Term n)
+zAssign ty name term = if zType term == ty
+  then Assert.liftAssert $ (, term) <$> zAlias name term
+  else error $ unwords ["Type mismatch", show ty, "v.", show term]
 
 zSetValues :: KnownNat n => String -> Term n -> Assert.Assert ()
 zSetValues name t = do

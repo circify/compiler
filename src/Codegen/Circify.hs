@@ -387,12 +387,14 @@ data LangDef ty term = LangDef
     --   computed, the @declare@ function is responsible for getting its value
     --   from the user.
     declare :: ty -> String -> Maybe VarName -> Mem term
+    -- | Returns a new term, equal to the ITE of the two argument term, on the
+    -- argument condition.
+  , ite :: Ty.TermBool -> term -> term -> Mem term
     -- | Create a new variable of the given type, set to the given term.
-    -- If the Maybe isJust, conditionally set the variable to the other term.
-    -- Returns the term for the new variable, and the conditional term that
-    -- represents the ITE that it has been assigned to.
-  , assign
-      :: ty -> String -> term -> Maybe (Ty.TermBool, term) -> Mem (term, term)
+    -- Returns the term for the new variable, and the term that
+    -- it was assigned to.
+    -- These are distinguished to allow for casting.
+  , assign :: ty -> String -> term -> Mem (term, term)
   , setValues :: String -> term -> Assert ()
   }
 
@@ -707,7 +709,7 @@ argAssign var val = do
   case val of
     Base cval -> do
       a            <- gets (assign . lang)
-      (t, castVal) <- liftMem $ a ty ssaName cval Nothing
+      (t, castVal) <- liftMem $ a ty ssaName cval
       setTerm var (Base t)
       whenM computingValues $ setValue var castVal
       return (Base t)
@@ -726,7 +728,9 @@ ssaAssign var val = do
   case (val, priorTerm) of
     (Base cval, Base priorCval) -> do
       a         <- gets (assign . lang)
-      (t, val') <- liftMem $ a ty nextSsaName cval (Just (guard, priorCval))
+      i         <- gets (ite . lang)
+      cterm     <- liftMem $ i guard cval priorCval
+      (t, val') <- liftMem $ a ty nextSsaName cterm
       nextVer var
       setTerm var (Base t)
       whenM computingValues $ setValue var val'
@@ -797,7 +801,7 @@ popFunction = do
     t <- ssaValAsTerm "return get" <$> getTerm (SLVar returnValueName)
     let retName = fsPrefix frame ++ "__" ++ returnValueName
     a        <- gets (assign . lang)
-    (t', v') <- liftMem $ a ty retName t Nothing
+    (t', v') <- liftMem $ a ty retName t
     whenM computingValues $ setValueRaw retName v'
     return t'
   exitLexScope

@@ -137,6 +137,9 @@ errSpan s m = error $ m ++ "\n at: " ++ show s
 fromEitherSpan :: Span -> Either String a -> a
 fromEitherSpan s = either (errSpan s) id
 
+unwrap :: Either String a -> a
+unwrap = either error id
+
 genElemExpr :: KnownNat n => A.SElemExpr -> Z n [Term n]
 genElemExpr e = do
   logIf "elemExpr" $ "ElemExpr" ++ show e
@@ -303,8 +306,11 @@ genFiles fs =
   forM_ (Map.toAscList fs) $ \(path, items) -> inFile path $ mapM_ genItem items
 
 zLangDef :: KnownNat n => Maybe InMap -> LangDef T.Type (Term n)
-zLangDef inMap =
-  LangDef { declare = zDeclare inMap, assign = zAssign, setValues = zSetValues }
+zLangDef inMap = LangDef { declare   = zDeclare inMap
+                         , ite       = ((.) . (.) . (.)) (return . unwrap) zIte
+                         , assign    = zAssign
+                         , setValues = zSetValues
+                         }
 
 run
   :: forall n
