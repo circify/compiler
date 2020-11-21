@@ -9,7 +9,7 @@ import           BenchUtils
 import qualified Data.BitVector                as Bv
 import qualified Data.Map.Strict               as Map
 import           Data.Maybe                     ( fromMaybe )
-import           Targets.SMT.TySmtToZ3
+import           Targets.SMT.Z3
 import qualified IR.SMT.TySmt                  as Smt
 import           Test.Tasty.HUnit
 import qualified Z3.Monad                      as Z3

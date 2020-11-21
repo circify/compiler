@@ -13,6 +13,7 @@ import           Data.Sequence                  ( Seq )
 import qualified Data.Foldable                 as F
 import qualified Data.Sequence                 as Seq
 import qualified IR.SMT.TySmt                  as Ty
+import qualified IR.SMT.TySmt.Alg              as Alg
 import           Util.Control                   ( MonadDeepState(..) )
 import           Util.Cfg                       ( Cfg
                                                 , MonadCfg
@@ -70,7 +71,7 @@ evalAndSetValue :: Ty.SortClass s => String -> Ty.Term s -> Assert ()
 evalAndSetValue variable term = do
   e <- gets vals
   case e of
-    Just env -> setValue variable $ Ty.eval env term
+    Just env -> setValue variable $ Alg.eval env term
     Nothing  -> return ()
 
 setValue :: Ty.SortClass s => String -> Ty.Value s -> Assert ()
@@ -132,7 +133,7 @@ freshVar name sort = do
 
 check :: AssertState -> Either String ()
 check s = forM_ (F.toList $ asserted s) $ \c -> case vals s of
-  Just e -> if Ty.ValBool True == Ty.eval e c
+  Just e -> if Ty.ValBool True == Alg.eval e c
     then Right ()
     else Left $ "Unsat constraint:\n" ++ show c ++ "\nin\n" ++ show e
   Nothing -> Left "Missing values"

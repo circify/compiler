@@ -10,6 +10,7 @@ import           Control.Monad
 import qualified Data.BitVector                as Bv
 import qualified Data.Set                      as Set
 import           IR.SMT.TySmt
+import           IR.SMT.TySmt.Alg
 import           Test.Tasty.HUnit
 import           Util.Cfg
 import           Util.Log

@@ -78,7 +78,7 @@ import           IR.SMT.Assert                  ( Assert
                                                 , MonadAssert
                                                 , liftAssert
                                                 )
-import qualified Targets.SMT.TySmtToZ3         as Z3
+import qualified Targets.SMT.Z3         as Z3
 import           Util.Cfg                       ( MonadCfg )
 import           Util.Control                   ( MonadDeepState(..)
                                                 , whenM

@@ -67,6 +67,7 @@ import           Data.List                      ( group )
 import           Data.Proxy                     ( Proxy(..) )
 import qualified Data.Set                      as Set
 import qualified IR.SMT.TySmt                  as S
+import qualified IR.SMT.TySmt.Alg              as SAlg
 import qualified IR.SMT.Assert                 as Assert
 import           GHC.TypeLits                   ( KnownNat
                                                 , natVal
@@ -376,9 +377,9 @@ zSetValues name t = do
 
 zTermVars :: KnownNat n => String -> Term n -> Set.Set String
 zTermVars name t = case t of
-  Bool b     -> S.vars b
-  BitInt _ i -> S.vars i
-  Field f    -> S.vars f
+  Bool b     -> SAlg.vars b
+  BitInt _ i -> SAlg.vars i
+  Field f    -> SAlg.vars f
   Struct _ l -> Set.unions
     $ Map.mapWithKey (\fName fTerm -> zTermVars (sName fName name) fTerm) l
   Array _elemTy items -> Set.unions

@@ -4,7 +4,7 @@ typeset -A components
 components=(
     c "../../src/Codegen/C"
     circom "../../src/Codegen/Circom"
-    z3 "../../src/Targets/SMT/TySmtToZ3.hs"
+    z3 "../../src/Targets/SMT/Z3.hs"
     r1cs "../../src/IR/R1cs.hs ../../src/IR/R1cs/ ../../src/IR/SMT/ToPf.hs"
     core "../../src/IR/SMT ../../src/Codegen/FrontEnd.hs ../../src/Codegen/Circify.hs ../../src/Codegen/Circify"
     zokrates "../../src/Codegen/Zokrates"

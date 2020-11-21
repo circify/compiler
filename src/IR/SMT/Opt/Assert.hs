@@ -31,6 +31,7 @@ module IR.SMT.Opt.Assert
   , evalAssert
   , execAssert
   , fromAssertState
+  , toAssertState
   , listAssertionIdxs
   , listAssertions
   , useAssertions
@@ -59,8 +60,10 @@ import           Data.Maybe                     ( isJust
                                                 , fromMaybe
                                                 )
 import qualified Data.Set                      as Set
+import qualified Data.Sequence                 as Seq
 import qualified Data.Foldable                 as F
 import qualified IR.SMT.TySmt                  as Ty
+import qualified IR.SMT.TySmt.Alg              as TyAlg
 import qualified IR.SMT.Assert                 as A
 import           Lens.Simple                    ( makeLenses
                                                 , over
@@ -88,7 +91,7 @@ type Formula = IntMap Ty.TermBool
 
 indexTerm :: Ty.SortClass s => Int -> Ty.Term s -> Index -> Index
 indexTerm i t idx =
-  let uses = Set.toList $ Ty.vars t
+  let uses = Set.toList $ TyAlg.vars t
       addOrSingleton =
           HMap.alter (Just . maybe (ISet.singleton i) (ISet.insert i))
   in  foldl' (flip addOrSingleton) idx uses
@@ -141,6 +144,18 @@ fromAssertState a =
                   , _sizes      = A.arraySizes a
                   }
 
+toAssertState :: AssertState -> A.AssertState
+toAssertState a =
+  let f = IMap.fromDistinctAscList $ zip [0 ..] $ F.toList $ _assertions a
+      n = IMap.size f
+  in  A.AssertState { A.vars       = Map.fromList $ HMap.toList $ _vars a
+                    , A.asserted   = Seq.fromList $ F.toList $ _assertions a
+                    , A.vals       = _vals a
+                    , A.public     = _public a
+                    , A.arraySizes = _sizes a
+                    , A.nextVarN   = n
+                    }
+
 ---
 --- Setup and monad getters and setters
 ---
@@ -149,7 +164,7 @@ isStoringValues :: Assert Bool
 isStoringValues = gets (isJust . view vals)
 
 eval :: Ty.SortClass s => Ty.Term s -> Assert (Ty.Value s)
-eval t = flip Ty.eval t . fromMaybe (error "No values!") <$> gets _vals
+eval t = flip TyAlg.eval t . fromMaybe (error "No values!") <$> gets _vals
 
 evalAndSetValueM
   :: (MonadAssert m, Ty.SortClass s) => String -> m (Ty.Term s) -> m ()
@@ -184,7 +199,7 @@ getAssertionM i = gets (IMap.lookup i . view assertions)
 
 deleteAssertion :: Int -> Assert ()
 deleteAssertion i = do
-  vs <- Ty.vars <$> getAssertion i
+  vs <- TyAlg.vars <$> getAssertion i
   forM_ (Set.toAscList vs)
     $ \v -> modify $ over index $ HMap.adjust (ISet.delete i) v
   modify $ over assertions $ IMap.delete i
@@ -262,7 +277,7 @@ check :: Assert (Either String ())
 check = do
   s <- get
   return $ forM_ (F.toList $ view assertions s) $ \c -> case view vals s of
-    Just e -> if Ty.ValBool True == Ty.eval e c
+    Just e -> if Ty.ValBool True == TyAlg.eval e c
       then Right ()
       else Left $ "Unsat constraint:\n" ++ show c ++ "\nin\n" ++ show e
     Nothing -> Left "Missing values"

@@ -3,7 +3,7 @@ import           BenchUtils
 import           Codegen.C.Main
 import           Control.Monad                  ( forM_ )
 import qualified Data.Map                      as M
-import           Targets.SMT.TySmtToZ3          ( Val
+import           Targets.SMT.Z3          ( Val
                                                 , i_
                                                 , b_
                                                 , d_

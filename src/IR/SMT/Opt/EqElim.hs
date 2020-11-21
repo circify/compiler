@@ -12,6 +12,11 @@ module IR.SMT.Opt.EqElim
   )
 where
 import           IR.SMT.TySmt
+import           IR.SMT.TySmt.Alg               ( nNodes
+                                                , reduceTerm
+                                                , mapTerm
+                                                , vars
+                                                )
 import qualified IR.SMT.Opt.Assert             as OA
 import           IR.SMT.Opt.Assert              ( Assert )
 import           IR.SMT.Opt.ConstFoldEqElim     ( constantFold )

@@ -18,9 +18,10 @@ import           IR.SMT.Assert                  ( AssertState(..)
                                                 , vals
                                                 )
 import qualified IR.SMT.TySmt                  as Ty
+import qualified IR.SMT.TySmt.Alg              as TyAlg
 import           Parser.C
 import           Test.Tasty.HUnit
-import           Targets.SMT.TySmtToZ3
+import           Targets.SMT.Z3
 import           Util.Log
 import           Util.Cfg                       ( evalCfgDefault )
 
@@ -104,11 +105,11 @@ satSmtCircuitTest name fnName path inputs = benchTestCase name $ do
   let assertions = asserted assertState
   let env        = fromJust $ vals assertState
   forM_ assertions $ \a -> do
-    unless (Ty.ValBool True == Ty.eval env a)
+    unless (Ty.ValBool True == TyAlg.eval env a)
       $  putStrLn
       $  "Unsat constraint: "
       ++ show a
-    Ty.ValBool True @=? Ty.eval env a
+    Ty.ValBool True @=? TyAlg.eval env a
 
 satSmtCircuitTests = benchTestGroup
   "SAT SMT Circuit checks"

@@ -3,7 +3,7 @@
 {-# LANGUAGE TypeApplications       #-}
 {-# LANGUAGE TypeOperators          #-}
 {-# LANGUAGE TupleSections          #-}
-module Targets.SMT.TySmtToZ3
+module Targets.SMT.Z3
   ( toZ3
   , Z3Result(..)
   , valToZ3
@@ -16,7 +16,6 @@ module Targets.SMT.TySmtToZ3
   , d_
   , nz
   , nan
-  , asInteger
   )
 where
 
@@ -24,10 +23,12 @@ import           Control.Monad                  ( forM
                                                 , foldM
                                                 )
 import           Control.Monad.IO.Class         ( liftIO )
+import           Control.Monad.Reader
 import qualified Data.Binary.IEEE754           as IEEE754
 import           Data.Bits
 import qualified Data.BitVector                as Bv
 import           Data.Char                      ( digitToInt )
+import qualified Data.Foldable                 as Fold
 import           Data.List                      ( foldl'
                                                 , isInfixOf
                                                 )
@@ -40,10 +41,15 @@ import           Data.Time.Clock.System         ( getSystemTime
                                                 , SystemTime(..)
                                                 )
 import           GHC.TypeLits
+import qualified IR.SMT.Assert                 as Assert
+import qualified IR.SMT.Opt                    as Opt
+import qualified IR.SMT.Opt.Assert             as OptAssert
+import           Targets.BackEnd
 import           IR.SMT.TySmt
 import           Z3.Monad                       ( MonadZ3 )
 import qualified Z3.Monad                      as Z
 import           Util.Log
+import qualified Util.Cfg                      as Cfg
 
 sortToZ3 :: forall z . MonadZ3 z => Sort -> z Z.Sort
 sortToZ3 s = case s of
@@ -106,7 +112,7 @@ toZ3 t = case t of
     bvExtract start _term innerTerm = toZ3 innerTerm >>= Z.mkExtract start end
      where
       end     = start + newSize - 1
-      newSize = fromInteger $ natVal (Proxy :: Proxy i)
+      newSize = fromInteger $ natVal $ Proxy @i
   BvBinExpr o l r -> tyBinZ3Bin (bvBinOpToZ3 o) l r
   BvNaryExpr o l  -> tyNaryZ3Bin (bvNaryOpToZ3 o) l
   BvBinPred o l r -> tyBinZ3Bin (bvBinPredToZ3 o $ bvWidth l) l r
@@ -392,9 +398,9 @@ evalZ3Model term = do
   -- We have to do this because the bindings are broken.
   -- Eventually we will just fix the bindings
   -- liftIO $ putStrLn $ "Term: " ++ show (length $ show term)
-  start     <- liftIO $ getSystemTime
+  start     <- liftIO getSystemTime
   model     <- liftIO $ ((length $ show term) `seq` evalZ3 term)
-  end       <- liftIO $ getSystemTime
+  end       <- liftIO getSystemTime
   (m, sat') <- case model of
     Nothing  -> return (Map.empty, False)
     Just str -> (, True) <$> do
@@ -458,9 +464,10 @@ tDiffNanos a b =
       nDiff = toInteger (systemNanoseconds a) - toInteger (systemNanoseconds b)
   in  sDiff * ((10 :: Integer) ^ (9 :: Integer)) + nDiff
 
-
-asInteger :: Val -> Integer
-asInteger v = case v of
-  IVal i -> toInteger i
-  BVal b -> toInteger $ fromEnum b
-  _      -> error $ "Cannot convert " ++ show v ++ " to integer"
+backendZ3 :: BackEnd Z3Result
+backendZ3 assertState = do
+  doOpt <- Cfg.liftCfg $ asks (Cfg._optForZ3 . Cfg._smtOptCfg)
+  a'    <- if doOpt
+    then OptAssert.listAssertions <$> Opt.opt assertState
+    else return $ Fold.toList $ Assert.asserted assertState
+  evalZ3Model $ BoolNaryExpr And a'

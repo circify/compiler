@@ -537,8 +537,8 @@ fromPNeg i =
       ho = o `div` 2
   in  if i' < ho then i' else i' - o
 
-asBits :: KnownNat n => Int -> Maybe (Prime n) -> [Maybe Bool]
-asBits width i = case i of
+decomp :: KnownNat n => Int -> Maybe (Prime n) -> [Maybe Bool]
+decomp width i = case i of
   Just i' ->
     let bv = Bv.bitVec width (2 ^ width + fromPNeg i')
     in  map (Just . Bits.testBit bv) [0 .. (width - 1)]
@@ -552,7 +552,7 @@ lazyInt = gets (assumeNoBvOverflow . cfg)
 bitify :: KnownNat n => String -> LSig n -> Int -> ToPf n [LSig n]
 bitify ctx x width = do
   logIf "toPf" $ "bitify " ++ show width ++ ": " ++ ctx
-  sigs <- nbits ctx $ asBits width $ snd x
+  sigs <- nbits ctx $ decomp width $ snd x
   let sum' = foldr lcAdd lcZero $ zipWith lcScale (map twoPow [0 ..]) sigs
   enforceCheck (lcZero, lcZero, lcSub sum' x)
   return sigs
@@ -561,7 +561,7 @@ bitify ctx x width = do
 inBits :: KnownNat n => Bool -> Int -> LSig n -> ToPf n (LSig n)
 inBits signed w number = do
   logIf "toPf" "inBits"
-  bs <- nbits "inBits" $ asBits w $ snd number
+  bs <- nbits "inBits" $ decomp w $ snd number
   binEq number $ deBitify signed bs
 
 -- | Return a signal equivalent to c ? t : f.

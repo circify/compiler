@@ -22,6 +22,7 @@ import           Data.Either                    ( isRight )
 import qualified Data.Map.Strict               as Map
 import qualified Data.Set                      as Set
 import           IR.SMT.TySmt
+import           IR.SMT.TySmt.Alg
 import           Util.Cfg                       ( evalCfgDefault )
 import           Util.Log
 import qualified Util.ShowMap                  as SMap

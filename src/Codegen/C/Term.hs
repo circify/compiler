@@ -99,6 +99,7 @@ import           Data.Maybe                     ( fromMaybe
 import           IR.SMT.Assert                  ( liftAssert )
 import qualified IR.SMT.Assert                 as Assert
 import qualified IR.SMT.TySmt                  as Ty
+import           IR.SMT.TySmt.Alg               ( vars )
 import           Util.Log
 
 
@@ -988,10 +989,10 @@ ctermGetVars :: String -> CTerm -> Mem (Set.Set String)
 ctermGetVars name t = do
   logIf "outputs" $ "Getting outputs at " ++ name ++ " : " ++ show t
   case term t of
-    CBool b     -> return $ Ty.vars b
-    CInt _ _ i  -> return $ Ty.vars i
-    CDouble x   -> return $ Ty.vars x
-    CFloat  x   -> return $ Ty.vars x
+    CBool b     -> return $ vars b
+    CInt _ _ i  -> return $ vars i
+    CDouble x   -> return $ vars x
+    CFloat  x   -> return $ vars x
     CStruct _ l -> fmap Set.unions $ forM l $ \(fName, fTerm) ->
       ctermGetVars (structVarName name fName) fTerm
     CArray _elemTy id -> do

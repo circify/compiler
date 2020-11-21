@@ -18,6 +18,7 @@ import           IR.SMT.Assert                  ( AssertState(..)
                                                 , vals
                                                 )
 import qualified IR.SMT.TySmt                  as Ty
+import qualified IR.SMT.TySmt.Alg              as SAlg
 import qualified Parser.Zokrates               as ZParse
 import           Test.Tasty.HUnit
 import           Util.Log
@@ -45,11 +46,11 @@ bothTest name fnName path inMap = benchTestGroup
     let assertions = asserted assertState
     let env        = fromJust $ vals assertState
     forM_ assertions $ \a -> do
-      unless (Ty.ValBool True == Ty.eval env a)
+      unless (Ty.ValBool True == SAlg.eval env a)
         $  putStrLn
         $  "Unsat constraint: "
         ++ show a
-      Ty.ValBool True @=? Ty.eval env a
+      Ty.ValBool True @=? SAlg.eval env a
   ]
 
 zTests = benchTestGroup

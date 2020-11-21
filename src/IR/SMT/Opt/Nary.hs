@@ -18,6 +18,7 @@ module IR.SMT.Opt.Nary
   )
 where
 import           IR.SMT.TySmt
+import           IR.SMT.TySmt.Alg               ( mapTermM )
 import qualified IR.SMT.Opt.Assert             as OA
 import           IR.SMT.Opt.Assert              ( Assert )
 import           Control.Monad.State.Strict
@@ -42,7 +43,7 @@ newtype F a = F (StateT FState Assert a)
     deriving (Functor, Applicative, Monad, MonadState FState, MonadLog, OA.MonadAssert)
 
 flattenNary :: Assert ()
-flattenNary = do
+flattenNary =
   let F a = pass in evalStateT a (FState HMap.empty HMap.empty)
 
 

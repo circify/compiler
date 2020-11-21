@@ -29,7 +29,7 @@ import qualified Codegen.Zokrates.Main         as ZGen
 import qualified Codegen.FrontEnd              as Front
 import           Control.Monad
 import           Control.Monad.IO.Class
-import qualified Targets.SMT.TySmtToZ3         as ToZ3
+import qualified Targets.SMT.Z3         as ToZ3
 import qualified IR.R1cs                       as R1cs
 import qualified IR.R1cs.Opt                   as R1csOpt
 import qualified Parser.Circom.Inputs          as Parse

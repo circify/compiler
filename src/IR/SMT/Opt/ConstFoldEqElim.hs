@@ -11,6 +11,9 @@ module IR.SMT.Opt.ConstFoldEqElim
   )
 where
 import           IR.SMT.TySmt
+import           IR.SMT.TySmt.Alg               ( mapTerm
+                                                , vars
+                                                )
 import qualified IR.SMT.Opt.Assert             as OA
 import           IR.SMT.Opt.Assert              ( Assert )
 
@@ -20,12 +23,14 @@ import           Data.Dynamic                   ( Dynamic
                                                 , toDyn
                                                 , fromDyn
                                                 )
-import Data.Either (partitionEithers)
+import           Data.Either                    ( partitionEithers )
 import           Data.Field.Galois              ( Prime
                                                 , toP
                                                 , fromP
                                                 )
-import           Data.List                      ( foldl', foldl1' )
+import           Data.List                      ( foldl'
+                                                , foldl1'
+                                                )
 import           Data.Hashable                  ( Hashable )
 import qualified Data.HashMap.Strict           as HMap
 import qualified Data.IntMap.Strict            as IntMap
@@ -162,41 +167,45 @@ constantFold = mapTerm visit
             ++ " is an overshift"
       opConstTerm _l _r = Nothing
     DynBvNaryExpr op w a ->
-      let a' = map constantFold a
-          (ls, consts) = partitionEithers $ map (\case
+      let a'           = map constantFold a
+          (ls, consts) = partitionEithers $ map
+            (\case
               DynBvLit l -> Right l
-              e -> Left e
-            ) a'
+              e          -> Left e
+            )
+            a'
           c = nOpConsts consts
       in  if null ls then Just $ DynBvLit c else nOpTermsConst ls c
      where
       nOpConsts :: [Bv.BV] -> Bv.BV
       nOpConsts = case op of
-        BvOr   -> foldl' (Bv..|.) (Bv.zeros w)
-        BvAnd  -> foldl' (Bv..&.) (Bv.ones w)
-        BvXor  -> foldl' Bv.xor (Bv.zeros w)
-        BvAdd  -> foldl' (bvizeIntOp (+)) (Bv.zeros w)
-        BvMul  -> foldl' (bvizeIntOp (*)) (Bv.bitVec w (1 :: Integer))
+        BvOr  -> foldl' (Bv..|.) (Bv.zeros w)
+        BvAnd -> foldl' (Bv..&.) (Bv.ones w)
+        BvXor -> foldl' Bv.xor (Bv.zeros w)
+        BvAdd -> foldl' (bvizeIntOp (+)) (Bv.zeros w)
+        BvMul -> foldl' (bvizeIntOp (*)) (Bv.bitVec w (1 :: Integer))
       bvizeIntOp f x y = Bv.bitVec (Bv.size x) $ f (Bv.uint x) (Bv.uint y)
       safeNary ls = if length ls > 1 then DynBvNaryExpr op w ls else head ls
       nOpTermsConst :: [TermDynBv] -> Bv.BV -> Maybe TermDynBv
       nOpTermsConst l r = case op of
-        BvAdd | r == 0 -> Just $ safeNary l
-        BvMul | r == 0 -> Just (DynBvLit r)
-        BvMul | r == 1 -> Just $ safeNary l
+        BvAdd | r == 0         -> Just $ safeNary l
+        BvMul | r == 0         -> Just (DynBvLit r)
+        BvMul | r == 1         -> Just $ safeNary l
         BvAnd | r == Bv.ones w -> Just $ safeNary l
-        BvAnd -> Just $ bitwise foldAnd
-        BvOr  | r == 0 -> Just $ safeNary l
-        BvOr -> Just $ bitwise foldOr
-        BvXor | r == 0 -> Just $ safeNary l
-        BvXor -> Just $ bitwise foldXor
-        _ -> Nothing
+        BvAnd                  -> Just $ bitwise foldAnd
+        BvOr | r == 0          -> Just $ safeNary l
+        BvOr                   -> Just $ bitwise foldOr
+        BvXor | r == 0         -> Just $ safeNary l
+        BvXor                  -> Just $ bitwise foldXor
+        _                      -> Nothing
        where
         foldAnd, foldOr, foldXor :: Bool -> [TermBool] -> TermBool
         foldAnd cbit = if cbit then BoolNaryExpr And else const (BoolLit False)
         foldOr cbit = if cbit then const (BoolLit True) else BoolNaryExpr Or
         foldXor cbit = (if cbit then Not else id) . BoolNaryExpr Xor
-        bitwise f = foldl1' mkDynBvConcat $ map (\i -> BoolToDynBv $ f (Bv.testBit r i) (map (mkDynBvExtractBit i) l)) [0..(w-1)]
+        bitwise f = foldl1' mkDynBvConcat $ map
+          (\i -> BoolToDynBv $ f (Bv.testBit r i) (map (mkDynBvExtractBit i) l))
+          [0 .. (w - 1)]
 
 
     DynBvBinPred op w a b ->
@@ -266,12 +275,14 @@ constantFold = mapTerm visit
                 _       -> PfUnExpr PfNeg p'
     PfNaryExpr PfAdd ps ->
       Just
-        $ let (c, l) = foldl'
-                (\(accConst, accList) entry -> case entry of
-                  PfLit i -> (toP @n i + accConst, accList)
-                  _       -> (accConst, entry : accList)
-                )
-                (0, []) $ map constantFold ps
+        $ let (c, l) =
+                foldl'
+                    (\(accConst, accList) entry -> case entry of
+                      PfLit i -> (toP @n i + accConst, accList)
+                      _       -> (accConst, entry : accList)
+                    )
+                    (0, [])
+                  $ map constantFold ps
           in  if null l
                 then PfLit (fromP @(Prime n) c)
                 else if c == 0
@@ -279,12 +290,14 @@ constantFold = mapTerm visit
                   else PfNaryExpr PfAdd (PfLit (fromP @(Prime n) c) : l)
     PfNaryExpr PfMul ps ->
       Just
-        $ let (c, l) = foldl'
-                (\(accConst, accList) entry -> case entry of
-                  PfLit i -> (toP @n i * accConst, accList)
-                  _       -> (accConst, entry : accList)
-                )
-                (1, []) $ map constantFold ps
+        $ let (c, l) =
+                foldl'
+                    (\(accConst, accList) entry -> case entry of
+                      PfLit i -> (toP @n i * accConst, accList)
+                      _       -> (accConst, entry : accList)
+                    )
+                    (1, [])
+                  $ map constantFold ps
           in  if null l || c == 0
                 then PfLit (fromP @(Prime n) c)
                 else if c == 1
@@ -374,7 +387,7 @@ constFoldEqElimFn noElim ts =
   step = do
     mI <- dequeue
     forM_ mI $ \i -> do
-      cs <- gets $ _consts
+      cs   <- gets $ _consts
       preA <- gets $ (IntMap.! i) . view terms
       logIf "smt::opt::cfee" $ "Checking " ++ show preA
       logIf "smt::opt::cfee" $ "Subbed   " ++ show (subAll cs preA)
@@ -382,13 +395,13 @@ constFoldEqElimFn noElim ts =
       a <- gets ((IntMap.! i) . view terms)
       logIf "smt::opt::cfee" $ "Elimed   " ++ show a
       subst <- case a of
-            Eq (Var v _s) t | v `Set.notMember` noElim && isConst t -> do
-              logIf "smt::opt::cfee" $ "Sub " ++ show v ++ " to " ++ show t
-              return $ Just (v, toDyn t)
-            Eq t (Var v _s) | v `Set.notMember` noElim && isConst t -> do
-              logIf "smt::opt::cfee" $ "Sub " ++ show v ++ " to " ++ show t
-              return $ Just (v, toDyn t)
-            _ -> return $ Nothing
+        Eq (Var v _s) t | v `Set.notMember` noElim && isConst t -> do
+          logIf "smt::opt::cfee" $ "Sub " ++ show v ++ " to " ++ show t
+          return $ Just (v, toDyn t)
+        Eq t (Var v _s) | v `Set.notMember` noElim && isConst t -> do
+          logIf "smt::opt::cfee" $ "Sub " ++ show v ++ " to " ++ show t
+          return $ Just (v, toDyn t)
+        _ -> return $ Nothing
       forM_ subst $ \(var, val) -> do
         modify $ over consts $ HMap.insert var val
         vUses <- gets (fromMaybe IntSet.empty . HMap.lookup var . view uses)

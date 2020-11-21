@@ -39,8 +39,9 @@ import           IR.SMT.Assert                  ( MonadAssert
 import qualified IR.SMT.Assert                 as Assert
 import qualified IR.SMT.Opt.Assert             as OptAssert
 import qualified IR.SMT.TySmt                  as Ty
+import qualified IR.SMT.TySmt.Alg              as TyAlg
 import qualified IR.SMT.Opt                    as Opt
-import qualified Targets.SMT.TySmtToZ3         as ToZ3
+import qualified Targets.SMT.Z3                as ToZ3
 import           Language.C.Data.Ident
 import           Language.C.Syntax.AST
 import           Language.C.Syntax.Constants
@@ -230,8 +231,8 @@ genConst c = case c of
     let p = "__SMT_assert:"
     if svExtensions && List.isPrefixOf p str
       then do
-        let t = either error id
-              $ Ty.checkSortDeep (read (drop (length p) str) :: Ty.TermBool)
+        let t = either error id $ TyAlg.checkSortDeep
+              (read (drop (length p) str) :: Ty.TermBool)
         logIf "SMT_assert" $ "User assertion: " ++ show t
         t' <- localizeVars t
         logIf "SMT_assert" $ "SMT  assertion: " ++ show t'
@@ -244,7 +245,7 @@ genConst c = case c of
 -- | Given a term with user-visible variables in it, replaces them with their
 -- (current version) names
 localizeVars :: Ty.SortClass s => Ty.Term s -> C (Ty.Term s)
-localizeVars = Ty.mapTermM visit
+localizeVars = TyAlg.mapTermM visit
  where
   visit :: Ty.SortClass s => Ty.Term s -> C (Maybe (Ty.Term s))
   visit (Ty.Var n s) = do

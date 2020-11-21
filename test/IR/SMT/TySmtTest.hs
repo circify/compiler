@@ -9,6 +9,7 @@ import           Data.Dynamic
 import qualified Data.Map.Strict               as Map
 import           GHC.TypeLits
 import qualified IR.SMT.TySmt                  as Smt
+import qualified IR.SMT.TySmt.Alg              as SAlg
 import           Test.Tasty.HUnit
 
 tySmtTests :: BenchTest
@@ -95,12 +96,13 @@ tySmtTests = benchTestGroup
     "lit"
     (Smt.Eq
       (bvar "x")
-      (Smt.mkDynBvNaryExpr Smt.BvAdd [Smt.DynBvLit $ Bv.bitVec 4 0, bvar "y"])
+      (Smt.mkDynBvNaryExpr Smt.BvAdd
+                           [Smt.DynBvLit $ Bv.bitVec 4 (0 :: Int), bvar "y"]
+      )
     )
   ]
  where
   bvar :: String -> Smt.TermDynBv
-  bvar s = Smt.Var s (Smt.SortBv 4)
   bvar s = Smt.Var s (Smt.SortBv 4)
 
 genOverflowTest
@@ -126,7 +128,7 @@ type Env = Map.Map String Dynamic
 genEvalTest
   :: (Typeable s) => String -> Env -> Smt.Term s -> Smt.Value s -> BenchTest
 genEvalTest name ctx t v' = benchTestCase ("eval test: " ++ name) $ do
-  let v = Smt.eval ctx t
+  let v = SAlg.eval ctx t
   v' @=? v
 
 genShowReadTest :: String -> Smt.TermBool -> BenchTest
