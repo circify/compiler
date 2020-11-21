@@ -96,9 +96,9 @@ opts = Map.fromList $ map
 
 
 -- Optimize, ensuring that the variables in `p` continue to exist.
-opt :: ArraySizes -> A.AssertState -> Log OA.AssertState
-opt sizes a = do
-  let a' = OA.fromAssertState sizes a
+opt :: A.AssertState -> Log OA.AssertState
+opt a = do
+  let a' = OA.fromAssertState a
   optsToRun <- liftCfg $ asks (_smtOpts . _smtOptCfg)
   let optimize = do
         OA.logAssertions "smt::opt" "initial"

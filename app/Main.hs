@@ -13,9 +13,9 @@
 module Main where
 
 import           Control.Exception              ( catchJust )
-import           Codegen.C.CToR1cs              ( fnToR1cs )
 import           Codegen.C.Main                 ( checkFn
                                                 , evalFn
+                                                , CInputs(..)
                                                 )
 import           Codegen.LangVal                ( parseToMap
                                                 , modelMapToExtMap
@@ -26,14 +26,12 @@ import qualified Codegen.Circom.CompTypes.WitComp
 import qualified Codegen.Circom.CompTypes      as CompT
 import qualified Codegen.Circom.Linking        as Link
 import qualified Codegen.Zokrates.Main         as ZGen
+import qualified Codegen.FrontEnd              as Front
 import           Control.Monad
 import           Control.Monad.IO.Class
 import qualified Targets.SMT.TySmtToZ3         as ToZ3
 import qualified IR.R1cs                       as R1cs
 import qualified IR.R1cs.Opt                   as R1csOpt
-import qualified IR.SMT.Opt                    as SmtOpt
-import qualified IR.SMT.Opt.Assert             as OptAssert
-import qualified IR.SMT.ToPf                   as ToPf
 import qualified Parser.Circom.Inputs          as Parse
 import qualified Parser.Zokrates               as ZParse
 import           Data.Field.Galois              ( toP
@@ -66,7 +64,6 @@ import qualified Util.Cfg                      as Cfg
                                                 , defaultCfgState
                                                 )
 import           Util.Show
-import qualified Util.ShowMap                  as SMap
 
 openFile :: FilePath -> IOMode -> IO Handle
 openFile path mode =
@@ -210,6 +207,9 @@ cmdSetup libsnark circomPath r1csPath pkPath vkPath = do
   cmdEmitR1cs False circomPath r1csPath
   liftIO $ runSetup libsnark r1csPath pkPath vkPath
 
+compileToR1cs :: (Front.FrontEndInputs i) => i -> Cfg (R1cs.R1CS String Order)
+compileToR1cs = evalLog . Front.compileToR1cs
+
 cmdProve
   :: FilePath
   -> FilePath
@@ -268,7 +268,7 @@ cmdCEval name path = do
 cmdCEmitR1cs :: Bool -> Bool -> String -> FilePath -> FilePath -> Cfg ()
 cmdCEmitR1cs findBugs asJson fnName cPath r1csPath = do
   tu   <- liftIO $ parseC cPath
-  r1cs <- evalLog $ fnToR1cs @Order findBugs Nothing tu fnName
+  r1cs <- compileToR1cs $ CInputs tu fnName findBugs Nothing
   liftIO $ R1cs.writeToR1csFile asJson r1cs r1csPath
 
 cmdCSetup
@@ -298,7 +298,7 @@ cmdCProve
 cmdCProve libsnark pkPath vkPath inPath xPath wPath pfPath fnName cPath = do
   tu    <- liftIO $ parseC cPath
   inMap <- liftIO $ parseToMap <$> readFile inPath
-  r1cs  <- evalLog $ fnToR1cs @Order False (Just inMap) tu fnName
+  r1cs  <- compileToR1cs $ CInputs tu fnName False (Just inMap)
   case R1cs.r1csCheck r1cs of
     Right _ -> return ()
     Left  e -> liftIO $ do
@@ -328,7 +328,7 @@ cmdCCheckProve libsnark pkPath vkPath _inPath xPath wPath pfPath fnName cPath =
         inMap = modelMapToExtMap r
     liftIO $ forM_ (Map.toList r) $ \(k, v) ->
       liftIO $ putStrLn $ unwords [k, ":", show v]
-    r1cs <- evalLog $ fnToR1cs @Order True (Just inMap) tu fnName
+    r1cs <- compileToR1cs $ CInputs tu fnName True (Just inMap)
     case R1cs.r1csCheck r1cs of
       Right _ -> return ()
       Left  e -> liftIO $ do
@@ -346,15 +346,7 @@ cmdZokratesParse path = do
 cmdZokratesEmitR1cs :: FilePath -> String -> Bool -> FilePath -> Cfg ()
 cmdZokratesEmitR1cs path fnName asJson r1csPath = do
   files <- liftIO $ ZParse.loadFilesRecursively path
-  r1cs  <- evalLog $ do
-    assertState <- ZGen.run @Order path fnName files Nothing
-    --liftIO $ putStrLn $ pShow assertState
-    newSmt      <- SmtOpt.opt SMap.empty assertState
-    r           <- ToPf.toPf @Order (OptAssert._vals newSmt)
-                                    (OptAssert._public newSmt)
-                                    SMap.empty
-                                    (OptAssert.listAssertions newSmt)
-    R1csOpt.opt r
+  r1cs  <- compileToR1cs $ ZGen.ZokratesInputs @Order fnName path files Nothing
   liftIO $ do
     putStrLn $ R1cs.r1csStats r1cs
     R1cs.writeToR1csFile asJson r1cs r1csPath
@@ -386,16 +378,7 @@ cmdZokratesProve libsnark pkPath vkPath inPath xPath wPath pfPath fnName path =
   do
     files <- liftIO $ ZParse.loadFilesRecursively path
     inMap <- liftIO $ parseToMap <$> readFile inPath
-    r1cs  <- evalLog $ do
-      assertState <- ZGen.run @Order path fnName files (Just inMap)
-      liftIO $ putStrLn $ pShow assertState
-      newSmt <- SmtOpt.opt SMap.empty assertState
-      liftIO $ putStrLn $ pShow newSmt
-      r <- ToPf.toPf @Order (OptAssert._vals newSmt)
-                            (OptAssert._public newSmt)
-                            SMap.empty
-                            (OptAssert.listAssertions newSmt)
-      R1csOpt.opt r
+    r1cs  <- compileToR1cs $ ZGen.ZokratesInputs @Order fnName path files (Just inMap)
     case R1cs.r1csCheck r1cs of
       Right _ -> return ()
       Left  e -> liftIO $ do

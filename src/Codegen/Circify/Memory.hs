@@ -13,7 +13,6 @@ import           IR.SMT.Assert                 as Assert
 import           Util.Log
 import           Util.Cfg                       ( MonadCfg )
 import           Util.Control                   ( MonadDeepState(..) )
-import qualified Util.ShowMap                  as SMap
 
 bvNum :: Bool -> Int -> Integer -> Ty.TermDynBv
 bvNum signed width val
@@ -140,7 +139,6 @@ termMemWidths t = case Ty.sort t of
 -- | State for keeping track of Mem-layer information
 data MemState = MemState
   { stackAllocations :: Map.Map StackAllocId StackAlloc
-  , sizes            :: SMap.ShowMap TermMem Int
   , nextStackId      :: StackAllocId
   }
 
@@ -170,7 +168,7 @@ instance (MonadMem m) => MonadMem (StateT s m) where
   liftMem = lift . liftMem
 
 emptyMem :: MemState
-emptyMem = MemState Map.empty SMap.empty 0
+emptyMem = MemState Map.empty 0
 
 runMem :: Mem a -> Assert.Assert (a, MemState)
 runMem (Mem act) = runStateT act emptyMem
@@ -231,7 +229,7 @@ stackNewAlloc size' idxWidth' valWidth' = do
   let a = Ty.ConstArray (Ty.SortBv idxWidth') (bvNum False valWidth' 0)
   id <- stackAlloc a size' idxWidth' valWidth'
   v  <- stackGetAllocVar id
-  modify $ \s -> s { sizes = SMap.insert v size' $ sizes s }
+  liftAssert $ setSize v size'
   return id
 
 

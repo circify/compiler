@@ -1,12 +1,13 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE KindSignatures #-}
 module Codegen.Zokrates.Main
-  ( run
-  )
+  ( ZokratesInputs(..) ) -- FrontEndInputs instance
 where
 
 import qualified AST.Zokrates                  as A
@@ -14,6 +15,7 @@ import           AST.Util
 import           Control.Monad.State.Strict
 import           Codegen.Circify
 import qualified Codegen.Circify.Memory        as Mem
+import           Codegen.FrontEnd
 import           Codegen.LangVal
 import qualified Codegen.Zokrates.Type         as T
 import           Codegen.Zokrates.Term
@@ -25,7 +27,9 @@ import           Data.Maybe                     ( fromMaybe
                                                 )
 import           Data.List                      ( isInfixOf )
 import qualified Data.Set                      as Set
-import           GHC.TypeNats                   ( KnownNat )
+import           GHC.TypeNats                   ( KnownNat
+                                                , Nat
+                                                )
 import           Lens.Simple                    ( makeLenses
                                                 , over
                                                 , view
@@ -301,19 +305,14 @@ genFiles :: KnownNat n => A.SFiles -> Z n ()
 genFiles fs =
   forM_ (Map.toAscList fs) $ \(path, items) -> inFile path $ mapM_ genItem items
 
-run
-  :: forall n
-   . KnownNat n
-  => FilePath
-  -> String
-  -> A.SFiles
-  -> Maybe InMap
-  -> Log Assert.AssertState
-run path fnName files inMap =
-  let Z act = inFile path $ do
-        genFiles @n files
-        f <- getFunc nullSpan path fnName
-        genEntryFunc f
-  in  Cfg.liftCfg $ Assert.execAssert $ do
-        whenJust inMap $ const Assert.initValues
-        runCircify inMap $ runStateT act emptyZState
+data ZokratesInputs (n :: Nat) = ZokratesInputs String FilePath A.SFiles (Maybe InMap)
+
+instance forall n. KnownNat n => FrontEndInputs (ZokratesInputs n) where
+  compile (ZokratesInputs fnName path files inMap) =
+    let Z act = inFile path $ do
+          genFiles @n files
+          f <- getFunc nullSpan path fnName
+          genEntryFunc f
+    in  do
+          whenJust inMap $ const Assert.initValues
+          void $ runCircify inMap $ runStateT act emptyZState

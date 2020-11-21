@@ -1,8 +1,13 @@
+{-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE LambdaCase                 #-}
-module Codegen.C.Main where
+{-# LANGUAGE MultiParamTypeClasses      #-}
+module Codegen.C.Main
+  ( CInputs(..)
+  , evalFn
+  , checkFn
+  )
+where
 import           Codegen.C.Type
 import           Codegen.C.Term
 import           Codegen.C.AstUtil
@@ -10,8 +15,8 @@ import           Codegen.Circify
 import qualified Codegen.Circify.Memory        as Mem
 import           Codegen.Circify.Memory         ( MonadMem
                                                 , liftMem
-                                                , MemState
                                                 )
+import           Codegen.FrontEnd
 import           Codegen.LangVal
 import           Control.Monad                  ( replicateM_
                                                 , forM
@@ -118,9 +123,6 @@ constIterations stmt body = do
       deepPut oldState -- Restore old state.
       return $ if oldV == newV then Just (fromInteger nIter) else Nothing
     Nothing -> return Nothing
-
-setLoopBound :: Int -> C ()
-setLoopBound bound = modify (\s -> s { loopBound = bound })
 
 -- Functions
 
@@ -748,14 +750,6 @@ registerFns decls = forM_ decls $ \case
   CDeclExt d    -> void $ genDecl Local d
   CAsmExt asm _ -> genAsm asm
 
-codegenAll :: CTranslUnit -> C ()
-codegenAll (CTranslUnit decls _) = do
-  registerFns decls
-  forM_ decls $ \case
-    CDeclExt decl -> void $ genDecl Local decl
-    CFDefExt fun  -> genFunDef fun
-    CAsmExt asm _ -> genAsm asm
-
 findFn :: String -> [CExtDecl] -> CFunDef
 findFn name decls =
   let nameFnPair (CFDefExt f) = [(nameFromFunc f, f)]
@@ -776,46 +770,41 @@ genFn (CTranslUnit decls _) name = do
   registerFns decls
   genFunDef (findFn name decls)
 
-runC
-  :: Maybe InMap
-  -> Bool
-  -> C a
-  -> Assert.Assert
-       (a, CCircState, MemState)
-runC inMap findBugs c = do
-  when (isJust inMap) Assert.initValues
-  let (C act) = cfgFromEnv >> c
-  (((x, _), circState), memState) <- runCircify (inMap, findBugs)
-    $ runStateT act (emptyCState findBugs)
-  return (x, circState, memState)
-
-evalC :: Maybe InMap -> Bool -> C a -> Assert.Assert a
-evalC inMap findBugs act = do
-  (r, _, _) <- runC inMap findBugs act
-  return r
-
 -- Can a fn exhibit undefined behavior?
 -- Returns a string describing it, if so.
 checkFn :: CTranslUnit -> String -> Log ToZ3.Z3Result
 checkFn tu name = do
-  (((), _, memState), assertState) <-
-    liftCfg $ Assert.runAssert $ runC Nothing True $ do
-      genFn tu name
-      assertBug
-  let sizes' = Mem.sizes memState
-  let a      = Fold.toList $ Assert.asserted assertState
+  assertState <- liftCfg $ Assert.execAssert $ compile $ CInputs tu
+                                                                 name
+                                                                 True
+                                                                 Nothing
   doOpt <- liftCfg $ asks (Cfg._optForZ3 . Cfg._smtOptCfg)
   a'    <- if doOpt
-    then OptAssert.listAssertions <$> Opt.opt sizes' assertState
-    else return a
+    then OptAssert.listAssertions <$> Opt.opt assertState
+    else return $ Fold.toList $ Assert.asserted assertState
   ToZ3.evalZ3Model $ Ty.BoolNaryExpr Ty.And a'
 
 evalFn :: Bool -> CTranslUnit -> String -> Log (Map.Map String ToZ3.Val)
 evalFn findBug tu name = do
   -- TODO: inputs?
-  assertions <- liftCfg $ Assert.execAssert $ evalC Nothing findBug $ do
-    genFn tu name
-    when findBug assertBug
-  let a = Fold.toList $ Assert.asserted assertions
+  assertState <- liftCfg $ Assert.execAssert $ compile $ CInputs tu
+                                                                 name
+                                                                 findBug
+                                                                 Nothing
+  let a = Fold.toList $ Assert.asserted assertState
   z3res <- ToZ3.evalZ3Model $ Ty.BoolNaryExpr Ty.And a
   return $ ToZ3.model z3res
+
+data CInputs = CInputs CTranslUnit String Bool (Maybe InMap)
+
+instance FrontEndInputs CInputs where
+  compile (CInputs tu fnName findBugs inMap) =
+    let C act = do
+          cfgFromEnv
+          when (isJust inMap) $ liftAssert Assert.initValues
+          genFn tu fnName
+          when findBugs $ do
+            assertBug
+            liftAssert $ modify $ \s -> s { Assert.public = Set.empty }
+    in  void $ runCircify (inMap, findBugs) $ runStateT act
+                                                        (emptyCState findBugs)

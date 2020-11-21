@@ -127,8 +127,8 @@ instance (MonadAssert m) => MonadAssert (StateT s m) where
 instance (MonadAssert m) => MonadAssert (ReaderT s m) where
   liftAssert = lift . liftAssert
 
-fromAssertState :: ArraySizes -> A.AssertState -> AssertState
-fromAssertState s a =
+fromAssertState :: A.AssertState -> AssertState
+fromAssertState a =
   let f = IMap.fromDistinctAscList $ zip [0 ..] $ F.toList $ A.asserted a
       i = indexFormula f
       n = IMap.size f
@@ -138,7 +138,7 @@ fromAssertState s a =
                   , _public     = A.public a
                   , _nextId     = n
                   , _index      = i
-                  , _sizes      = s
+                  , _sizes      = A.arraySizes a
                   }
 
 ---

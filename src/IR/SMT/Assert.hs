@@ -18,16 +18,21 @@ import           Util.Cfg                       ( Cfg
                                                 , MonadCfg
                                                 )
 import           Util.Log
+import           Util.ShowMap                   ( ShowMap )
+import qualified Util.ShowMap                  as SMap
 
 ---
 --- Monad defintions
 ---
+--
+type ArraySizes = ShowMap (Ty.TermArray Ty.DynBvSort Ty.DynBvSort) Int
 
 -- | State for keeping track of SMT-layer information
 data AssertState = AssertState { vars         :: !(M.Map String Dyn.Dynamic)
                                , asserted     :: !(Seq (Ty.Term Ty.BoolSort))
                                , vals         :: !(Maybe (M.Map String Dyn.Dynamic))
                                , public       :: !(S.Set String)
+                               , arraySizes   :: !ArraySizes
                                , nextVarN     :: !Int
                                }
                                deriving (Show)
@@ -47,11 +52,12 @@ instance (MonadAssert m) => MonadAssert (StateT s m) where
 ---
 
 emptyAssertState :: AssertState
-emptyAssertState = AssertState { vars     = M.empty
-                               , asserted = Seq.empty
-                               , vals     = Nothing
-                               , public   = S.empty
-                               , nextVarN = 0
+emptyAssertState = AssertState { vars       = M.empty
+                               , asserted   = Seq.empty
+                               , vals       = Nothing
+                               , public     = S.empty
+                               , arraySizes = SMap.empty
+                               , nextVarN   = 0
                                }
 
 initValues :: Assert ()
@@ -111,6 +117,10 @@ newVar name sort = do
       (error $ unwords
         ["Already created variable", name, "with wrong sort:", show v]
       )
+
+setSize :: Ty.TermArray Ty.DynBvSort Ty.DynBvSort -> Int -> Assert ()
+setSize array size =
+  modify $ \s -> s { arraySizes = SMap.insert array size $ arraySizes s }
 
 freshVar
   :: forall s . Ty.SortClass s => String -> Ty.Sort -> Assert (Ty.Term s)
