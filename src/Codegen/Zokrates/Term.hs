@@ -117,19 +117,16 @@ wrapBinPred name fI fF fB a b = case (a, b, fI, fF, fB) of
 zAdd, zSub, zMul, zDiv, zShl, zShr, zPow, zBitAnd, zBitOr, zBitXor, zGe, zGt, zLt, zLe, zNe, zEq, zAnd, zOr
   :: KnownNat n => Term n -> Term n -> Either String (Term n)
 
--- Binarize an nary fn
-bin :: ([a] -> a) -> a -> a -> a
-bin f a b = f [a, b]
 
 ne :: S.SortClass s => S.Term s -> S.Term s -> S.TermBool
-ne = ((.) . (.)) S.Not S.mkEq
+ne x y = S.Not $ S.mkEq x y
 
-
-bvNToBin :: ([a] -> t) -> a -> a -> t
-bvNToBin f x y = f [x, y]
+-- Binarize an nary fn
+bin :: ([a] -> t) -> a -> a -> t
+bin f x y = f [x, y]
 
 zAdd = wrapBin "+"
-               (Just $ bvNToBin $ S.mkDynBvNaryExpr S.BvAdd)
+               (Just $ bin $ S.mkDynBvNaryExpr S.BvAdd)
                (Just $ bin (S.PfNaryExpr S.PfAdd))
                Nothing
 zSub = wrapBin
@@ -138,7 +135,7 @@ zSub = wrapBin
   (Just $ \a b -> S.PfNaryExpr S.PfAdd [a, S.PfUnExpr S.PfNeg b])
   Nothing
 zMul = wrapBin "*"
-               (Just $ bvNToBin $ S.mkDynBvNaryExpr S.BvMul)
+               (Just $ bin $ S.mkDynBvNaryExpr S.BvMul)
                (Just $ bin (S.PfNaryExpr S.PfMul))
                Nothing
 zDiv = wrapBin
@@ -147,12 +144,9 @@ zDiv = wrapBin
   (Just $ \a b -> S.PfNaryExpr S.PfMul [a, S.PfUnExpr S.PfRecip b])
   Nothing
 zPow = wrapBin "**" Nothing (Just undefined) Nothing
-zBitAnd =
-  wrapBin "&" (Just $ bvNToBin $ S.mkDynBvNaryExpr S.BvAnd) Nothing Nothing
-zBitOr =
-  wrapBin "|" (Just $ bvNToBin $ S.mkDynBvNaryExpr S.BvOr) Nothing Nothing
-zBitXor =
-  wrapBin "^" (Just $ bvNToBin $ S.mkDynBvNaryExpr S.BvXor) Nothing Nothing
+zBitAnd = wrapBin "&" (Just $ bin $ S.mkDynBvNaryExpr S.BvAnd) Nothing Nothing
+zBitOr = wrapBin "|" (Just $ bin $ S.mkDynBvNaryExpr S.BvOr) Nothing Nothing
+zBitXor = wrapBin "^" (Just $ bin $ S.mkDynBvNaryExpr S.BvXor) Nothing Nothing
 zAnd = wrapBin "&&" Nothing Nothing (Just $ bin (S.BoolNaryExpr S.And))
 zOr = wrapBin "||" Nothing Nothing (Just $ bin (S.BoolNaryExpr S.Or))
 zEq = wrapBinPred "==" (Just S.mkEq) (Just S.mkEq) (Just S.mkEq)
@@ -165,22 +159,19 @@ zLt = wrapBinPred "<" (Just $ S.mkDynBvBinPred S.BvUlt) Nothing Nothing
 wrapShift
   :: KnownNat n
   => String
-  -> (Int -> S.TermDynBv -> Int -> S.TermDynBv)
+  -> S.BvBinOp
   -> Term n
   -> Term n
   -> Either String (Term n)
-wrapShift name f a b = do
-  amt <- zConstInt b
+wrapShift name op a b = do
+  amt <- toInteger <$> zConstInt b
   case a of
-    (BitInt w0 a') -> Right $ BitInt w0 $ f w0 a' amt
-    _              -> Left $ unwords
+    (BitInt w0 a') ->
+      Right $ BitInt w0 $ S.mkDynBvBinExpr op a' $ Mem.bvNum False w0 amt
+    _ -> Left $ unwords
       ["Cannot perform operation", show name, "on\n", show a, "and\n", show b]
-zShl = wrapShift
-  "<<"
-  (\w a b -> S.mkDynBvBinExpr S.BvShl a $ Mem.bvNum False w $ toInteger b)
-zShr = wrapShift
-  ">>"
-  (\w a b -> S.mkDynBvBinExpr S.BvLshr a $ Mem.bvNum False w $ toInteger b)
+zShl = wrapShift "<<" S.BvShl
+zShr = wrapShift ">>" S.BvLshr
 
 wrapUn
   :: forall n
@@ -206,14 +197,13 @@ zNot = wrapUn "!" (Just $ S.mkDynBvUnExpr S.BvNot) Nothing (Just S.Not)
 type Field n = (String, Term n)
 zIte :: KnownNat n => S.TermBool -> Term n -> Term n -> Either String (Term n)
 zIte c a b = case (a, b) of
-  (Bool  x, Bool y )                    -> Right $ Bool $ S.mkIte c x y
-  (Field x, Field y)                    -> Right $ Field $ S.mkIte c x y
-  (BitInt w0 x, BitInt w1 y) | w0 == w1 -> Right $ BitInt w0 $ S.mkIte c x y
-  (Array w0 x, Array w1 y) | w0 == w1   -> Array w0 <$> zipWithM (zIte c) x y
-  (Struct n0 xs, Struct n1 ys) | n0 == n1 ->
-    Struct n0 . Map.fromList <$> zipWithM zipField
-                                          (Map.toAscList xs)
-                                          (Map.toAscList ys)
+  (Bool  x, Bool y )                      -> Right $ Bool $ S.mkIte c x y
+  (Field x, Field y)                      -> Right $ Field $ S.mkIte c x y
+  (BitInt w0 x, BitInt w1 y) | w0 == w1   -> Right $ BitInt w0 $ S.mkIte c x y
+  (Array w0 x, Array w1 y) | w0 == w1     -> Array w0 <$> zipWithM (zIte c) x y
+  (Struct n0 xs, Struct n1 ys) | n0 == n1 -> do
+    ps <- zipWithM zipField (Map.toAscList xs) (Map.toAscList ys)
+    return $ Struct n0 $ Map.fromList ps
    where
     zipField :: KnownNat n => Field n -> Field n -> Either String (Field n)
     zipField (f0, x) (f1, y) = if f0 == f1
@@ -318,19 +308,12 @@ zDeclare inputs ty name mUserName = case ty of
   T.Field -> declBase S.ValPf (S.ValPf 0) (S.SortPf $ natVal (Proxy @n)) Field
   T.Bool  -> declBase (S.ValBool . (/= 0)) (S.ValBool False) S.SortBool Bool
   T.Array s inner ->
-    Array s
-      <$> (forM [0 .. (s - 1)] $ \i ->
-            zDeclare inputs inner (aName i name) (aName i <$> mUserName)
-          )
+    let rec i = zDeclare inputs inner (aName i name) (aName i <$> mUserName)
+    in  Array s <$> forM [0 .. (s - 1)] rec
   T.Struct n fs ->
-    Struct n
-      .   Map.fromList
-      <$> (forM (Map.toList fs) $ \(fName, fTy) -> (fName, ) <$> zDeclare
-            inputs
-            fTy
-            (sName fName name)
-            (sName fName <$> mUserName)
-          )
+    let rec (f, t) =
+            (f, ) <$> zDeclare inputs t (sName f name) (sName f <$> mUserName)
+    in  Struct n . Map.fromList <$> forM (Map.toList fs) rec
  where
   declBase
     :: S.SortClass s
@@ -399,7 +382,7 @@ zTermVars name t = case t of
   Struct _ l -> Set.unions
     $ Map.mapWithKey (\fName fTerm -> zTermVars (sName fName name) fTerm) l
   Array _elemTy items -> Set.unions
-    $ map (\(i, fTerm) -> zTermVars (aName i name) fTerm) (zip [0 ..] items)
+    $ zipWith (\i fTerm -> zTermVars (aName i name) fTerm) [0 ..] items
 
 zU32toBits :: KnownNat n => Term n -> Either String (Term n)
 zU32toBits u32 = case u32 of
