@@ -4,6 +4,7 @@ import           Codegen.C.EvalTest
 import           Codegen.C.Test
 import           Codegen.Circify.MemoryTest
 import           Codegen.CircomTest
+import           Codegen.Zokrates.Test
 import           IR.R1cs.OptTest
 import           IR.SMT.MemRouteTest
 import           IR.SMT.OptTest
@@ -30,6 +31,7 @@ generatorTests = benchTestGroup
   , cValueTests
   , cRealTests
   , cPequinTests
+  , zTests
   ]
 
 benesTests :: BenchTest

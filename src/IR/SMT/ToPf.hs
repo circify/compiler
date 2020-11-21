@@ -962,7 +962,7 @@ publicizeInputs is = do
 -- | Ensure that the provided @inputs@ have an R1CS value assigned to
 -- them, consistent with the SMT value found in @values@. A no-op if
 -- @values@ is [Nothing].
-ensureInputValues :: KnownNat n => Maybe SmtVals -> Set.Set PfVar -> ToPf n ()
+ensureInputValues :: forall n. KnownNat n => Maybe SmtVals -> Set.Set PfVar -> ToPf n ()
 ensureInputValues values inputs = forM_ values $ \values ->
   forM_ inputs $ \input -> do
     let value = case Map.lookup input values of
@@ -971,7 +971,9 @@ ensureInputValues values inputs = forM_ values $ \values ->
             Just b  -> toInteger $ fromEnum $ valAsBool b
             Nothing -> case fromDynamic dval of
               Just b  -> Bv.int $ valAsDynBv b
-              Nothing -> error $ "Bad input type: " ++ show dval
+              Nothing -> case fromDynamic dval of
+                Just b  -> valAsPf @n b
+                Nothing -> error $ "Bad input type: " ++ show dval
     let v = toP value
     logIf "toPfVal" $ input ++ " -> " ++ primeShow v
     modify $ \s -> s { r1cs = r1csSetSignalVal input v $ r1cs s }
