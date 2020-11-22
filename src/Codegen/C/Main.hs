@@ -2,6 +2,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE TypeApplications           #-}
 module Codegen.C.Main
   ( CInputs(..)
   , evalFn
@@ -40,6 +41,7 @@ import qualified IR.SMT.Assert                 as Assert
 import qualified IR.SMT.TySmt                  as Ty
 import qualified IR.SMT.TySmt.Alg              as TyAlg
 import qualified Targets.SMT.Z3                as ToZ3
+import qualified Targets.BackEnd               as Back
 import           Language.C.Data.Ident
 import           Language.C.Syntax.AST
 import           Language.C.Syntax.Constants
@@ -777,7 +779,7 @@ checkFn tu name = do
                                                                  name
                                                                  True
                                                                  Nothing
-  ToZ3.backendZ3 assertState
+  Back.target assertState
 
 evalFn :: Bool -> CTranslUnit -> String -> Log (Map.Map String ToZ3.Val)
 evalFn findBug tu name = do

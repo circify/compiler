@@ -1,9 +1,11 @@
 module Targets.BackEnd
-  ( BackEnd
+  ( BackEnd(..)
   )
 where
 
 import qualified IR.SMT.Assert                 as Assert
 import           Util.Log
 
-type BackEnd o = Assert.AssertState -> Log o
+
+class BackEnd o where
+  target :: Assert.AssertState -> Log o

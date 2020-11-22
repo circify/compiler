@@ -11,7 +11,6 @@ module Targets.SMT.Z3
   , evalZ3
   , evalZ3Model
   , Val(..)
-  , backendZ3
   , i_
   , b_
   , d_
@@ -465,10 +464,10 @@ tDiffNanos a b =
       nDiff = toInteger (systemNanoseconds a) - toInteger (systemNanoseconds b)
   in  sDiff * ((10 :: Integer) ^ (9 :: Integer)) + nDiff
 
-backendZ3 :: BackEnd Z3Result
-backendZ3 assertState = do
-  doOpt <- Cfg.liftCfg $ asks (Cfg._optForZ3 . Cfg._smtOptCfg)
-  a'    <- if doOpt
-    then OptAssert.listAssertions <$> Opt.opt assertState
-    else return $ Fold.toList $ Assert.asserted assertState
-  evalZ3Model $ BoolNaryExpr And a'
+instance BackEnd Z3Result where
+  target assertState = do
+    doOpt <- Cfg.liftCfg $ asks (Cfg._optForZ3 . Cfg._smtOptCfg)
+    a'    <- if doOpt
+      then OptAssert.listAssertions <$> Opt.opt assertState
+      else return $ Fold.toList $ Assert.asserted assertState
+    evalZ3Model $ BoolNaryExpr And a'
