@@ -1,5 +1,3 @@
--- For optDefault
-{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeApplications #-}

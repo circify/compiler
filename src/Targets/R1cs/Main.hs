@@ -4,7 +4,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE BangPatterns #-}
-module IR.R1cs
+module Targets.R1cs.Main
   ( LC
   , QEQ
   , lcSig

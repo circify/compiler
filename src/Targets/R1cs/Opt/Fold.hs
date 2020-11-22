@@ -1,6 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
-module IR.R1cs.Opt.Fold
+module Targets.R1cs.Opt.Fold
   ( foldEqs
   )
 where
@@ -14,8 +14,8 @@ import           Data.IntSet                    ( IntSet )
 import qualified Data.Map.Strict               as Map
 import qualified Data.Sequence                 as Seq
 import           GHC.TypeLits                   ( KnownNat )
-import           IR.R1cs
-import           IR.R1cs.Opt.Util               ( asEqOrConst
+import           Targets.R1cs.Main
+import           Targets.R1cs.Opt.Util          ( asEqOrConst
                                                 , Eliminatable(..)
                                                 , normalize
                                                 , constantlyTrue

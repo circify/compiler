@@ -8,8 +8,8 @@ module Codegen.FrontEnd
 where
 
 import qualified IR.SMT.Assert                 as Assert
-import           IR.R1cs                        ( R1CS(..) )
-import qualified IR.R1cs.Opt                   as R1csOpt
+import           Targets.R1cs.Main              ( R1CS(..) )
+import qualified Targets.R1cs.Opt.Main         as R1csOpt
 import qualified IR.SMT.Opt                    as SmtOpt
 import qualified IR.SMT.Opt.Assert             as OptAssert
 import qualified IR.SMT.ToPf                   as ToPf

@@ -1,20 +1,20 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE PolyKinds           #-}
 {-# LANGUAGE TypeApplications    #-}
-module IR.R1cs.OptTest
+module Targets.R1csOptTest
   ( r1csOptTests
   )
 where
 
 import           BenchUtils
-import           IR.R1cs.Opt
+import           Targets.R1cs.Opt.Main
 import           Control.Monad
 import qualified Data.Set                      as Set
 import qualified Data.Map                      as Map
 import qualified Data.IntMap.Strict            as IntMap
 import qualified Data.IntSet                   as IntSet
 import qualified Data.Sequence                 as Seq
-import           IR.R1cs
+import           Targets.R1cs.Main
 import           Test.Tasty.HUnit
 import           Data.Field.Galois              ( toP )
 import           Util.Log

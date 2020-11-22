@@ -1,5 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module IR.R1cs.Opt.Util
+module Targets.R1cs.Opt.Util
   ( asEqOrConst
   , Eliminatable(..)
   , normalize
@@ -9,7 +9,7 @@ module IR.R1cs.Opt.Util
   , subLcInQeq
   )
 where
-import           IR.R1cs
+import           Targets.R1cs.Main
 
 import           Data.Field.Galois              ( GaloisField )
 import qualified Data.IntSet                   as IntSet

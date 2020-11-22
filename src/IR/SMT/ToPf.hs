@@ -22,8 +22,8 @@ import           Codegen.Circom.CompTypes.LowDeg
                                                 )
 import qualified Codegen.Circom.CompTypes.LowDeg
                                                as LD
-import qualified IR.R1cs                       as R1cs
-import           IR.R1cs                        ( R1CS
+import qualified Targets.R1cs.Main             as R1cs
+import           Targets.R1cs.Main              ( R1CS
                                                 , emptyR1cs
                                                 , r1csAddConstraint
                                                 , r1csStats
@@ -962,7 +962,8 @@ publicizeInputs is = do
 -- | Ensure that the provided @inputs@ have an R1CS value assigned to
 -- them, consistent with the SMT value found in @values@. A no-op if
 -- @values@ is [Nothing].
-ensureInputValues :: forall n. KnownNat n => Maybe SmtVals -> Set.Set PfVar -> ToPf n ()
+ensureInputValues
+  :: forall n . KnownNat n => Maybe SmtVals -> Set.Set PfVar -> ToPf n ()
 ensureInputValues values inputs = forM_ values $ \values ->
   forM_ inputs $ \input -> do
     let value = case Map.lookup input values of

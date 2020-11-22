@@ -1,4 +1,4 @@
-module IR.R1cs.Opt
+module Targets.R1cs.Opt.Main
   ( opt
   )
 where
@@ -12,9 +12,9 @@ import qualified Data.Map.Strict               as Map
 import qualified Data.Maybe                    as Maybe
 import qualified Data.Foldable                 as Fold
 import qualified Data.Sequence                 as Seq
-import           IR.R1cs
-import           IR.R1cs.Opt.RedLin             ( reduceLinearities )
-import           IR.R1cs.Opt.Fold               ( foldEqs )
+import           Targets.R1cs.Main
+import           Targets.R1cs.Opt.RedLin        ( reduceLinearities )
+import           Targets.R1cs.Opt.Fold          ( foldEqs )
 import qualified Util.Cfg                      as Cfg
 import           Util.Log
 

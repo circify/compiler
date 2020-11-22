@@ -9,7 +9,7 @@ import           Control.Monad
 import           BenchUtils
 import           Test.Tasty.HUnit
 import           IR.SMT.ToPf                    ( toPf )
-import           IR.R1cs                        ( R1CS(..)
+import           Targets.R1cs.Main              ( R1CS(..)
                                                 , r1csShow
                                                 , r1csCheck
                                                 )

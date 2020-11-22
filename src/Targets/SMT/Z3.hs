@@ -11,6 +11,7 @@ module Targets.SMT.Z3
   , evalZ3
   , evalZ3Model
   , Val(..)
+  , backendZ3
   , i_
   , b_
   , d_

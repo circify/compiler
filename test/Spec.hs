@@ -5,7 +5,7 @@ import           Codegen.C.Test
 import           Codegen.Circify.MemoryTest
 import           Codegen.CircomTest
 import           Codegen.Zokrates.Test
-import           IR.R1cs.OptTest
+import           Targets.R1csOptTest
 import           IR.SMT.MemRouteTest
 import           IR.SMT.OptTest
 import           IR.SMT.ToPfTest

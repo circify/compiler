@@ -2,7 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TemplateHaskell #-}
-module IR.R1cs.Opt.RedLin
+module Targets.R1cs.Opt.RedLin
   ( reduceLinearities
   )
 where
@@ -20,8 +20,8 @@ import qualified Data.Sequence                 as Seq
 import           Data.Sequence                  ( Seq )
 import           Data.Maybe                     ( fromMaybe )
 import           GHC.TypeLits                   ( KnownNat )
-import           IR.R1cs
-import           IR.R1cs.Opt.Util               ( normalize
+import           Targets.R1cs.Main
+import           Targets.R1cs.Opt.Util          ( normalize
                                                 , constantlyTrue
                                                 , asLinearSub
                                                 , subLcInQeq

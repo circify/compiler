@@ -11,7 +11,7 @@ import           Control.Monad
 import           Data.Either                    ( isRight )
 import qualified Data.Map                      as M
 import           Data.Maybe                     ( fromJust )
-import           IR.R1cs                        ( r1csCheck )
+import           Targets.R1cs.Main              ( r1csCheck )
 import           IR.SMT.Assert                  ( AssertState(..)
                                                 , asserted
                                                 , execAssert

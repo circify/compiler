@@ -37,10 +37,8 @@ import           IR.SMT.Assert                  ( MonadAssert
                                                 , liftAssert
                                                 )
 import qualified IR.SMT.Assert                 as Assert
-import qualified IR.SMT.Opt.Assert             as OptAssert
 import qualified IR.SMT.TySmt                  as Ty
 import qualified IR.SMT.TySmt.Alg              as TyAlg
-import qualified IR.SMT.Opt                    as Opt
 import qualified Targets.SMT.Z3                as ToZ3
 import           Language.C.Data.Ident
 import           Language.C.Syntax.AST
@@ -779,11 +777,7 @@ checkFn tu name = do
                                                                  name
                                                                  True
                                                                  Nothing
-  doOpt <- liftCfg $ asks (Cfg._optForZ3 . Cfg._smtOptCfg)
-  a'    <- if doOpt
-    then OptAssert.listAssertions <$> Opt.opt assertState
-    else return $ Fold.toList $ Assert.asserted assertState
-  ToZ3.evalZ3Model $ Ty.BoolNaryExpr Ty.And a'
+  ToZ3.backendZ3 assertState
 
 evalFn :: Bool -> CTranslUnit -> String -> Log (Map.Map String ToZ3.Val)
 evalFn findBug tu name = do

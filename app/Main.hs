@@ -29,9 +29,9 @@ import qualified Codegen.Zokrates.Main         as ZGen
 import qualified Codegen.FrontEnd              as Front
 import           Control.Monad
 import           Control.Monad.IO.Class
-import qualified Targets.SMT.Z3         as ToZ3
-import qualified IR.R1cs                       as R1cs
-import qualified IR.R1cs.Opt                   as R1csOpt
+import qualified Targets.SMT.Z3                as ToZ3
+import qualified Targets.R1cs.Main             as R1cs
+import qualified Targets.R1cs.Opt.Main         as R1csOpt
 import qualified Parser.Circom.Inputs          as Parse
 import qualified Parser.Zokrates               as ZParse
 import           Data.Field.Galois              ( toP
@@ -378,7 +378,8 @@ cmdZokratesProve libsnark pkPath vkPath inPath xPath wPath pfPath fnName path =
   do
     files <- liftIO $ ZParse.loadFilesRecursively path
     inMap <- liftIO $ parseToMap <$> readFile inPath
-    r1cs  <- compileToR1cs $ ZGen.ZokratesInputs @Order fnName path files (Just inMap)
+    r1cs  <- compileToR1cs
+      $ ZGen.ZokratesInputs @Order fnName path files (Just inMap)
     case R1cs.r1csCheck r1cs of
       Right _ -> return ()
       Left  e -> liftIO $ do
