@@ -9,7 +9,9 @@ module Options
 where
 
 import           Options.Applicative
+import           Options.Applicative.Help.Pretty
 import           Data.Semigroup                 ( (<>) )
+import           Util.Cfg
 
 data ProofAction = EmitR1cs
                  | Setup
@@ -174,9 +176,35 @@ proofOptsP =
           <> value "libsnark-frontend/build/src/main"
           )
 
-parseCmd :: IO Cmd
-parseCmd = execParser $ info
-  (cmdP <**> helper)
-  (fullDesc <> progDesc "Compile an EQC" <> header
-    "circ - the existentially quantified CIRcuit Compiler"
+cfgHelpDoc :: Doc
+cfgHelpDoc = string "Configuration Options:" <$$> indent 2 optDocs
+ where
+  optDoc :: CfgOption -> Doc
+  optDoc o = fill l n <+> align (vsep d)
+   where
+    ifNonNull :: String -> [Doc]
+    ifNonNull s = if null s then [] else [fillSep $ map text $ words s]
+    n = string $ "--" ++ optName o
+    d =
+      ifNonNull (optDesc o)
+        ++ ifNonNull (optDetail o)
+        ++ ifNonNull ("Default: " ++ optDefault o)
+        ++ [string ""]
+
+  l :: Int
+  l       = foldr max 0 $ map ((+ 2) . length . optName) options
+
+  optDocs = vcat $ map optDoc options
+
+parseCmd :: [String] -> IO Cmd
+parseCmd args = handleParseResult $ execParserPure
+  (prefs idm)
+  (info
+    (cmdP <**> helper)
+    (  fullDesc
+    <> progDesc "Compile an EQC"
+    <> header "circ - the existentially quantified CIRcuit Compiler"
+    <> footerDoc (Just cfgHelpDoc)
+    )
   )
+  args

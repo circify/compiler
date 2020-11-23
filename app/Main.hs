@@ -4,11 +4,12 @@ import           SubCmd                         ( runCmd )
 import           Options                        ( parseCmd )
 import qualified Util.Cfg                      as Cfg
 import           Util.Log                       ( evalLog )
-import           Util.Show                      ( pShow )
+import           System.Environment             ( getArgs )
 
 main :: IO ()
 main = do
-  cmd <- parseCmd
-  putStrLn $ "Cmd: " ++ pShow cmd
-  cfg <- Cfg.setFromEnv Cfg.defaultCfgState
-  Cfg.evalCfg (evalLog $ runCmd cmd) cfg
+  cfg  <- Cfg.setFromEnv Cfg.defaultCfgState
+  args <- getArgs
+  let (args', cfg') = Cfg.setFromArgs args cfg
+  cmd <- parseCmd args'
+  Cfg.evalCfg (evalLog $ runCmd cmd) cfg'

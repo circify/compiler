@@ -11,36 +11,43 @@ module Util.Cfg
   , ToPfCfg(..)
   , R1csCfg(..)
   , MonadCfg(..)
+  , CfgOption(..)
   , setFromEnv
+  , setFromArgs
   , defaultCfgState
   , evalCfg
   , evalCfgDefault
+  , options
   )
 where
 
 import           Control.Monad                  ( )
 import           Control.Monad.State.Strict
 import           Control.Monad.Reader
+import           Data.Functor.Identity          ( Identity(runIdentity) )
 import           Data.List                      ( intercalate )
 import           Data.Typeable                  ( Typeable
                                                 , typeRep
                                                 , Proxy(Proxy)
                                                 )
 import           Data.Maybe                     ( fromMaybe )
+import qualified Data.Map                      as M
 import           System.Environment             ( lookupEnv )
 import           System.Exit                    ( exitSuccess )
 import           Text.Read                      ( readMaybe )
 import           Data.List.Split                ( splitOn )
 import           Lens.Simple
 
-data SmtOptCfg = SmtOptCfg { _allowSubBlowup :: Bool
-                           , _cFoldInSub     :: Bool
-                           , _smtOpts        :: [String]
-                           , _optForZ3       :: Bool
-                           , _checkOpts      :: Bool
-                           , _benesThresh    :: Int
-                           , _subBvAdd       :: Bool
-                           } deriving (Show)
+data SmtOptCfg = SmtOptCfg
+  { _allowSubBlowup :: Bool
+  , _cFoldInSub     :: Bool
+  , _smtOpts        :: [String]
+  , _optForZ3       :: Bool
+  , _checkOpts      :: Bool
+  , _benesThresh    :: Int
+  , _subBvAdd       :: Bool
+  }
+  deriving Show
 
 defaultSmtOptCfg :: SmtOptCfg
 defaultSmtOptCfg = SmtOptCfg
@@ -67,10 +74,12 @@ defaultSmtOptCfg = SmtOptCfg
 
 $(makeLenses ''SmtOptCfg)
 
-data ToPfCfg = ToPfCfg { _assumeNoOverflow :: Bool
-                       , _optEqs           :: Bool
-                       , _assumeInputsInRange :: Bool
-                       } deriving (Show)
+data ToPfCfg = ToPfCfg
+  { _assumeNoOverflow    :: Bool
+  , _optEqs              :: Bool
+  , _assumeInputsInRange :: Bool
+  }
+  deriving Show
 defaultToPfCfg :: ToPfCfg
 defaultToPfCfg = ToPfCfg { _assumeNoOverflow    = False
                          , _optEqs              = True
@@ -78,12 +87,14 @@ defaultToPfCfg = ToPfCfg { _assumeNoOverflow    = False
                          }
 $(makeLenses ''ToPfCfg)
 
-data CCfg = CCfg { _printfOutput :: Bool
-                 , _svExtensions :: Bool
-                 , _pequinIo :: Bool
-                 , _constLoops :: Bool
-                 , _smtBoundLoops :: Bool
-                 } deriving (Show)
+data CCfg = CCfg
+  { _printfOutput  :: Bool
+  , _svExtensions  :: Bool
+  , _pequinIo      :: Bool
+  , _constLoops    :: Bool
+  , _smtBoundLoops :: Bool
+  }
+  deriving Show
 
 defaultCCfg = CCfg { _printfOutput  = True
                    , _svExtensions  = False
@@ -94,25 +105,29 @@ defaultCCfg = CCfg { _printfOutput  = True
 
 $(makeLenses ''CCfg)
 
-data R1csCfg = R1csCfg { _optLevel :: Int
-                       , _checkR1csOpts:: Bool
-                       } deriving Show
+data R1csCfg = R1csCfg
+  { _optLevel      :: Int
+  , _checkR1csOpts :: Bool
+  }
+  deriving Show
 
 $(makeLenses ''R1csCfg)
 
 defaultR1csCfg = R1csCfg { _optLevel = 2, _checkR1csOpts = False }
 
 
-data CfgState = CfgState { _r1csCfg :: R1csCfg
-                         , _toPfCfg :: ToPfCfg
-                         , _smtOptCfg :: SmtOptCfg
-                         , _streams :: [String]
-                         , _loopBound :: Int
-                         , _loopFlatten :: Bool
-                         , _loopMaxIteration :: Int
-                         , _cCfg :: CCfg
-                         , _help :: Bool
-                         } deriving (Show)
+data CfgState = CfgState
+  { _r1csCfg          :: R1csCfg
+  , _toPfCfg          :: ToPfCfg
+  , _smtOptCfg        :: SmtOptCfg
+  , _streams          :: [String]
+  , _loopBound        :: Int
+  , _loopFlatten      :: Bool
+  , _loopMaxIteration :: Int
+  , _cCfg             :: CCfg
+  , _help             :: Bool
+  }
+  deriving Show
 
 defaultCfgState :: CfgState
 defaultCfgState = CfgState { _r1csCfg          = defaultR1csCfg
@@ -145,12 +160,13 @@ evalCfg (Cfg action) cfg = setFromEnv cfg >>= runReaderT action
 evalCfgDefault :: Cfg a -> IO a
 evalCfgDefault (Cfg action) = setFromEnv defaultCfgState >>= runReaderT action
 
-data CfgOption = CfgOption { optLens :: Lens' CfgState String
-                           , optName :: String
-                           , optDesc :: String
-                           , optDetail :: String
-                           , optDefault :: String
-                           }
+data CfgOption = CfgOption
+  { optLens    :: Lens' CfgState String
+  , optName    :: String
+  , optDesc    :: String
+  , optDetail  :: String
+  , optDefault :: String
+  }
 
 showReadLens :: (Typeable a, Show a, Read a) => Lens' a String
 showReadLens = lens show (const read')
@@ -321,3 +337,15 @@ setFromEnv cfg = do
     return $ case v of
       Just s  -> set (optLens o) s st
       Nothing -> st
+
+setFromArgs :: [String] -> CfgState -> ([String], CfgState)
+setFromArgs args st = runIdentity $ runStateT (go args) st
+ where
+  go :: [String] -> StateT CfgState Identity [String]
+  go args = case args of
+    []                  -> return []
+    karg : varg : args' -> case M.lookup karg m of
+      Just o  -> (modify $ set (optLens o) varg) >> go args'
+      Nothing -> (karg :) <$> go (varg : args')
+    [a] -> return [a]
+  m = M.fromList [ ("--" ++ optName o, o) | o <- options ]
