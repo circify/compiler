@@ -1,11 +1,11 @@
-{-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE TypeApplications    #-}
 module Codegen.CircomTest where
 import           BenchUtils
 import           Test.Tasty.HUnit
 import qualified Codegen.Circom.Linking        as Link
-import qualified IR.R1cs                       as R1cs
+import qualified Parser.Circom.Inputs          as Parse
+import qualified Targets.R1cs.Main             as R1cs
 import qualified Data.Map                      as Map
 import qualified Data.IntMap                   as IntMap
 import qualified Data.Maybe                    as Maybe
@@ -15,17 +15,19 @@ import           System.FilePath
 import           System.IO.Temp
 import           System.IO
 import           Parser.Circom                 as Parser
+import           Util.Cfg
+import           Util.Log
 
 type Order
   = 113890009193798365449144652900867294558768981710660728242748762258461992583217
 
 checkR1cs :: FilePath -> Maybe Int -> BenchTest
 checkR1cs circuitPath constraintCount = benchTestCase circuitPath $ do
-  pgm <- loadMain circuitPath
-  let r1cs = Link.linkMain @Order pgm
+  pgm      <- loadMain circuitPath
+  r1cs     <- evalCfgDefault $ evalLog $ Link.linkMain @Order pgm
   tempDir  <- getTemporaryDirectory
   tempPath <- emptyTempFile tempDir "circom-test-check.ext"
-  _        <- R1cs.writeToR1csFile r1cs tempPath
+  _        <- R1cs.writeToR1csFile False r1cs tempPath
   case constraintCount of
     Just n  -> length (Link.constraints r1cs) @?= n
     Nothing -> pure ()
@@ -55,10 +57,13 @@ checkWitComp circuitPath inputs = benchTestCase circuitPath $ do
             i
             (unlines $ map (\(n, v) -> n ++ " " ++ show v) $ Map.toList inputs)
           _             <- hClose i
-          inFile <- openFile inPath ReadMode
-          inputsSignals <- Link.parseSignalsFromFile (Proxy @Order) inFile
-          let allSignals = Link.computeWitnesses (Proxy @Order) m inputsSignals
-          let r1cs       = Link.linkMain @Order m
+          inFile        <- openFile inPath ReadMode
+          inputsSignals <- Parse.parseSignalsFromFile (Proxy @Order) inFile
+          allSignals    <- evalCfgDefault $ evalLog $ Link.computeWitnesses
+            (Proxy @Order)
+            m
+            inputsSignals
+          r1cs <- evalCfgDefault $ evalLog $ Link.linkMain @Order m
           let
             getOr m_ k =
               Maybe.fromMaybe (error $ "Missing key: " ++ show k) $ m_ Map.!? k
@@ -66,7 +71,8 @@ checkWitComp circuitPath inputs = benchTestCase circuitPath $ do
                 Maybe.fromMaybe (error $ "Missing sig num: " ++ show k)
                   $         m_
                   IntMap.!? k
-          let lookupSignalVal = getOr allSignals . getOrI (Link.numSigs r1cs)
+          let lookupSignalVal =
+                getOr allSignals . head . getOrI (Link.numSigs r1cs)
           emitAssignment
             (map lookupSignalVal [2 .. (1 + Link.nPublicInputs r1cs)])
             xPath

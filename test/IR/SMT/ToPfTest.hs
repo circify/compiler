@@ -1,6 +1,6 @@
-{-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE TypeApplications    #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module IR.SMT.ToPfTest
   ( toPfTests
   )
@@ -8,10 +8,8 @@ where
 import           Control.Monad
 import           BenchUtils
 import           Test.Tasty.HUnit
-import           IR.SMT.ToPf                    ( toPf
-                                                , toPfWithWit
-                                                )
-import           IR.R1cs                        ( R1CS(..)
+import           IR.SMT.ToPf                    ( toPf )
+import           Targets.R1cs.Main              ( R1CS(..)
                                                 , r1csShow
                                                 , r1csCheck
                                                 )
@@ -19,10 +17,15 @@ import qualified Data.BitVector                as Bv
 import           Data.Dynamic                   ( Dynamic
                                                 , toDyn
                                                 )
+import qualified Data.Foldable                 as Fold
 import           Data.Either                    ( isRight )
 import qualified Data.Map.Strict               as Map
 import qualified Data.Set                      as Set
 import           IR.SMT.TySmt
+import           IR.SMT.TySmt.Alg
+import           Util.Cfg                       ( evalCfgDefault )
+import           Util.Log
+import qualified Util.ShowMap                  as SMap
 
 type Order
   = 113890009193798365449144652900867294558768981710660728242748762258461992583217
@@ -30,9 +33,13 @@ type Order
 constraintCountTest :: String -> [TermBool] -> Int -> BenchTest
 constraintCountTest name terms nConstraints =
   benchTestCase (nameWithConstraints name nConstraints) $ do
-    cs <- toPf @Order Set.empty terms
-    when (nConstraints /= length (constraints cs)) $ putStrLn "" >> putStrLn
-      (r1csShow cs)
+    -- Regard all variables as public: not eliminatable.
+    cs <- evalCfgDefault $ evalLog $ toPf @Order Nothing
+                                                 (Fold.foldMap vars terms)
+                                                 SMap.empty
+                                                 terms
+    when (nConstraints /= length (constraints cs))
+      $ putStrLn ("\n\n" ++ name ++ ":\n" ++ r1csShow cs)
     nConstraints @=? length (constraints cs)
 
 nameWithConstraints :: String -> Int -> String
@@ -53,8 +60,8 @@ andOrScalingTest op arity =
         then 0
         -- arity - 1 is the cost of doing this with multiplication-ANDs
         -- 3 is the cost of doing this with addition/inverse-ORs
-        else min (arity - 1) 3
-      nC = nOpConstraints + arity + 1
+        else min (arity - 1) 2
+      nC = nOpConstraints + 1
   in  constraintCountTest (show op ++ show arity)
                           [BoolNaryExpr op (bvs arity)]
                           nC
@@ -73,9 +80,12 @@ satTest name env assertions = benchTestCase name $ do
     let v = eval e a
     ValBool True == v @? "eval " ++ show a ++ " gave False"
   -- Compute R1CS translation
-  (cs, wit) <- toPfWithWit @Order e Set.empty assertions
+  r1cs <- evalCfgDefault $ evalLog $ toPf @Order (Just e)
+                                                 Set.empty
+                                                 SMap.empty
+                                                 assertions
   -- Check R1CS satisfaction
-  let checkResult = r1csCheck wit cs
+  let checkResult = r1csCheck r1cs
   isRight checkResult @? show checkResult
 
 toPfTests :: BenchTest
@@ -85,69 +95,52 @@ toPfTests = benchTestGroup
     "boolToPf constraint counts"
     [ constraintCountTest "true lit"    [BoolLit True]             1
     -- One bit constraint, one const constraint
-    , constraintCountTest "var is true" [bv "a"]                   2
-    -- Three bit constraints, one const constraint, two for XOR
-    , constraintCountTest "xor2"        [BoolNaryExpr Xor (bvs 2)] 6
-    -- Two bit constraints, one const constraint, one for IMPLIES (an AND) v
-    -- return b
-    , constraintCountTest "implies" [BoolBinExpr Implies (bv "a") (bv "b")] 4
-    -- Two bit constraints, one const constraint, one for AND
+    , constraintCountTest "var is true" [bv "a"]                   1
+    -- one const constraint, two for XOR
+    , constraintCountTest "xor2"        [BoolNaryExpr Xor (bvs 2)] 2
+    -- one const constraint, one for IMPLIES (an AND) v return b
+    , constraintCountTest "implies" [BoolBinExpr Implies (bv "a") (bv "b")] 2
+    -- one const constraint, one for AND
     , benchTestGroup "and" (map (andOrScalingTest And) [0 .. 6])
     , benchTestGroup "or"  (map (andOrScalingTest And) [0 .. 6])
-    -- Three bit constraints, one const constraint, two for AND
+    -- , one const constraint, two for AND
     , constraintCountTest "and4 3 repeats"
                           [BoolNaryExpr And [bv "a", bv "b", bv "a", bv "a"]]
-                          6
-    , constraintCountTest "ite" [Ite (bv "a") (bv "b") (bv "c")] 6
-    -- Thre bit constraints, one const constraint, two for Eq
-    , constraintCountTest "eq"  [Eq (bv "a") (bv "b")]           5
+                          3
+    , constraintCountTest "ite" [mkIte (bv "a") (bv "b") (bv "c")] 2
+    , constraintCountTest "eq"  [mkEq (bv "a") (bv "b")]           2
     ]
   , benchTestGroup
     "bvToPf constraint counts"
-    [ constraintCountTest "5"
-                          [mkDynBvEq (int "a" 4) (IntToDynBv 4 $ IntLit 5)]
-                          9
+    [ constraintCountTest "5" [mkEq (int "a" 4) (IntToDynBv 4 $ IntLit 5)] 3
     , constraintCountTest
       "5 = x + y"
-      [ mkDynBvEq (mkDynBvBinExpr BvAdd (int "x" 4) (int "y" 4))
-                  (IntToDynBv 4 $ IntLit 5)
+      [ mkEq (mkDynBvNaryExpr BvAdd [int "x" 4, int "y" 4])
+             (IntToDynBv 4 $ IntLit 5)
       ]
-      20
+      9
     , constraintCountTest "x < y"
                           [mkDynBvBinPred BvUlt (int "x" 4) (int "y" 4)]
-                          -- Two 5bvs + 4 bits in the comparison difference + 3
+                          -- 4 bits in the comparison difference + 2
                           -- bits in the comparison logic + 1 assertion bit
-                          (2 * 5 + 4 + 3 + 1)
-    , constraintCountTest
-      "17 = x << y"
-      [ mkDynBvEq (mkDynBvBinExpr BvShl (int "x" 16) (int "y" 16))
-                  (IntToDynBv 16 $ IntLit 17)
-      ]
-      (let inputBounds = 17 * 2
-           shiftRBound = 1
-           shiftMults  = 4
-           sumSplit    = 16 * 2
-           eq          = 3
-           forceBool   = 1
-       in  inputBounds + shiftRBound + shiftMults + sumSplit + eq + forceBool
-      )
+                          (4 + 2 + 1)
     , constraintCountTest
       "17 = x >> y (logical)"
-      [ mkDynBvEq (mkDynBvBinExpr BvLshr (int "x" 16) (int "y" 16))
-                  (IntToDynBv 16 $ IntLit 17)
+      [ mkEq (mkDynBvBinExpr BvLshr (int "x" 16) (int "y" 16))
+             (IntToDynBv 16 $ IntLit 17)
       ]
       (let inputBounds = 17 * 2
            shiftRBound = 1
            shiftMults  = 4
            sumSplit    = 16 * 2
-           eq          = 3
+           eq          = 2
            forceBool   = 1
        in  inputBounds + shiftRBound + shiftMults + sumSplit + eq + forceBool
       )
     , constraintCountTest
       "17 = x >> y (arithmetic)"
-      [ mkDynBvEq (mkDynBvBinExpr BvAshr (int "x" 16) (int "y" 16))
-                  (IntToDynBv 16 $ IntLit 17)
+      [ mkEq (mkDynBvBinExpr BvAshr (int "x" 16) (int "y" 16))
+             (IntToDynBv 16 $ IntLit 17)
       ]
       (let inputBounds   = 17 * 2
            shiftRBound   = 1
@@ -155,7 +148,7 @@ toPfTests = benchTestGroup
            shiftExtMults = 4
            shiftExtMask  = 1
            sumSplit      = 16 * 2
-           eq            = 3
+           eq            = 2
            forceBool     = 1
        in  inputBounds
              + shiftRBound
@@ -236,15 +229,15 @@ toPfTests = benchTestGroup
     , satBinBvPredTest "5 <=s 6"               BvSle   6    5
     , satBinBvPredTest "5 >s 6"                BvSgt   6    5
     , satBinBvPredTest "5 >=s 6"               BvSge   6    5
-    , satBinBvOpTest4b "i + j (no overflow)"    BvAdd  8  7
-    , satBinBvOpTest4b "i + j (overflow)"       BvAdd  8  8
-    , satBinBvOpTest4b "i + j (much overflow)"  BvAdd  15 15
-    , satBinBvOpTest4b "i - j (no underflow)"   BvSub  8  8
-    , satBinBvOpTest4b "i - j (underflow)"      BvSub  8  9
-    , satBinBvOpTest4b "i - j (much underflow)" BvSub  0  15
-    , satBinBvOpTest4b "i * j (no overflow)"    BvMul  3  5
-    , satBinBvOpTest4b "i * j (overflow)"       BvMul  4  4
-    , satBinBvOpTest4b "i * j (much overflow)"  BvMul  15 15
+    , satNaryBvOpTest4b "i + j (no overflow)"   BvAdd 8  7
+    , satNaryBvOpTest4b "i + j (overflow)"      BvAdd 8  8
+    , satNaryBvOpTest4b "i + j (much overflow)" BvAdd 15 15
+    , satBinBvOpTest4b "i - j (no underflow)"   BvSub 8 8
+    , satBinBvOpTest4b "i - j (underflow)"      BvSub 8 9
+    , satBinBvOpTest4b "i - j (much underflow)" BvSub 0 15
+    , satNaryBvOpTest4b "i * j (no overflow)"   BvMul 3  5
+    , satNaryBvOpTest4b "i * j (overflow)"      BvMul 4  4
+    , satNaryBvOpTest4b "i * j (much overflow)" BvMul 15 15
     , satBinBvOpTest4b "i << 0"                 BvShl  8  0
     , satBinBvOpTest4b "i << 1"                 BvShl  12 1
     , satBinBvOpTest4b "i << max"               BvShl  15 3
@@ -288,5 +281,10 @@ toPfTests = benchTestGroup
   satBinBvOpTest4b name op i' j =
     let envList = [iVal "i" 4 i', iVal "j" 4 j]
         term    = mkDynBvBinExpr op (int "i" 4) (int "j" 4)
+        exValue = Bv.nat $ valAsDynBv $ eval (Map.fromList envList) term
+    in  satTest name envList [e term (bvLit 4 exValue)]
+  satNaryBvOpTest4b name op i' j =
+    let envList = [iVal "i" 4 i', iVal "j" 4 j]
+        term    = mkDynBvNaryExpr op [int "i" 4, int "j" 4]
         exValue = Bv.nat $ valAsDynBv $ eval (Map.fromList envList) term
     in  satTest name envList [e term (bvLit 4 exValue)]

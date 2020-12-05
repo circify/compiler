@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE GeneralisedNewtypeDeriving #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -42,6 +41,8 @@ import qualified Data.Map.Strict               as Map
 import qualified Data.Maybe                    as Maybe
 import           Data.Proxy                     ( Proxy )
 import           Debug.Trace
+import           Util.Control
+import           Util.Log
 import           GHC.TypeNats
 
 
@@ -125,14 +126,15 @@ compExpr e = case ast e of
                           }
     if isFn
       then do
-        let ((), c') = runCompState (compStatements $ ast code) callState
+        ((), c') <- liftLog $ runCompState (compStatements $ ast code) callState
         case returning c' of
           Just r -> return r
           Nothing ->
             spanE (ann e) $ "Function " ++ ast name ++ " did not return"
       else do
         unless (Map.member invocation (cache c)) $ do
-          let ((), c') = runCompState (compStatements $ ast code) callState
+          ((), c') <- liftLog
+            $ runCompState (compStatements $ ast code) callState
           let newCache = cache c'
           let strippedCtx = c'
                 { env     = Map.restrictKeys
@@ -221,14 +223,14 @@ compStatementNoReturn s = case ast s of
     b <- compCondition cond
     if b then compStatements $ ast true else mapM_ (compStatements . ast) false
   While cond block ->
-    whileM_ (compCondition cond) (compStatements $ ast block) $> ()
+    whileM (compCondition cond) (compStatements $ ast block) $> ()
   For ini cond step block -> do
     compStatement ini
-    _ <- whileM_ (compCondition cond)
-                 (compStatements (ast block) *> compStatement step)
+    _ <- whileM (compCondition cond)
+                (compStatements (ast block) *> compStatement step)
     return ()
   DoWhile block cond -> compStatements (ast block)
-    <* whileM_ (compCondition cond) (compStatements $ ast block)
+    <* whileM (compCondition cond) (compStatements $ ast block)
   Compute b -> do
     ignore <- gets (ignoreCompBlock . baseCtx)
     if ignore then return () else compStatements (ast b)
@@ -244,13 +246,10 @@ compStatementNoReturn s = case ast s of
     modify (\c -> c { returning = Just t })
     return ()
  where
-  assert' (Base b) = modify $ \c -> c { baseCtx = assert b (baseCtx c) }
-  assert' t        = spanE (ann s) $ "Cannot constain " ++ show t ++ " to zero"
-
-  whileM_ :: Monad m => m Bool -> m a -> m ()
-  whileM_ condition step = do
-    b <- condition
-    if b then step *> whileM_ condition step else pure ()
+  assert' (Base b) = do
+    logIf "circomAssert" $ show b
+    modify $ \c -> c { baseCtx = assert b (baseCtx c) }
+  assert' t = spanE (ann s) $ "Cannot constain " ++ show t ++ " to zero"
 
 termMultiDimArray
   :: (Show b, KnownNat k)
@@ -271,29 +270,33 @@ compMain
   :: forall c b k
    . (KnownNat k, BaseCtx c b (Prime k))
   => SMainCircuit
-  -> CompCtx c b (Prime k)
-compMain m = snd $ runCompState (compStatement $ main m) $ empty
-  { callables = Map.union (Map.map (\(p, b) -> (False, p, b)) (templates m))
+  -> Log (CompCtx c b (Prime k))
+compMain m =
+  snd
+    <$> (runCompState (compStatement $ main m) $ empty
+          { callables = Map.union
+                          (Map.map (\(p, b) -> (False, p, b)) (templates m))
                           (Map.map (\(p, b) -> (True, p, b)) (functions m))
-  }
+          }
+        )
 
 compMainCtx
   :: KnownNat k
   => SMainCircuit
-  -> CompCtx (LowDegCtx (Prime k)) (LowDeg (Prime k)) (Prime k)
+  -> Log (CompCtx (LowDegCtx (Prime k)) (LowDeg (Prime k)) (Prime k))
 compMainCtx = compMain
 
 compMainWitCtx
   :: KnownNat k
   => SMainCircuit
-  -> CompCtx (WitBaseCtx k) (WitBaseTerm k) (Prime k)
+  -> Log (CompCtx (WitBaseCtx k) (WitBaseTerm k) (Prime k))
 compMainWitCtx = compMain
 
 runLowDegCompState
   :: KnownNat n
   => CompState (LowDegCtx (Prime n)) (LowDeg (Prime n)) n a
   -> LowDegCompCtx (Prime n)
-  -> (a, LowDegCompCtx (Prime n))
+  -> Log (a, LowDegCompCtx (Prime n))
 runLowDegCompState = runCompState
 
 
@@ -302,12 +305,9 @@ getMainInvocation
    . KnownNat k
   => Proxy k
   -> SMainCircuit
-  -> TemplateInvocation (Prime k)
+  -> Log (TemplateInvocation (Prime k))
 getMainInvocation _order m = case ast (main m) of
-  SubDeclaration _ [] (Just (Annotated (Call name args) _)) ->
-    ( ast name
-    , map (termAsConst nullSpan) $ fst $ runLowDegCompState @k
-      (compExprs args)
-      empty
-    )
+  SubDeclaration _ [] (Just (Annotated (Call name args) _)) -> do
+    e <- runLowDegCompState @k (compExprs args) empty
+    return (ast name, map (termAsConst nullSpan) $ fst e)
   expr -> spanE (ann $ main m) $ "Invalid main expression " ++ show expr

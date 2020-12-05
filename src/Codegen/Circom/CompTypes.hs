@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE EmptyDataDeriving #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -64,6 +63,7 @@ import qualified Data.Foldable                 as Fold
 import           Data.Ix
 import qualified Data.List                     as List
 import qualified Data.Map.Strict               as Map
+import           Util.Log
 import           GHC.TypeNats
 
 data LTerm = LTermLocal !Sig.IndexedIdent
@@ -259,15 +259,15 @@ nPublicInputs c =
     $ Fold.toList
     $ signals c
 
-newtype CompState c b n a = CompState (State (CompCtx c b (Prime n)) a)
-    deriving (Functor, Applicative, Monad, MonadState (CompCtx c b (Prime n)))
+newtype CompState c b n a = CompState (StateT (CompCtx c b (Prime n)) Log a)
+    deriving (Functor, Applicative, Monad, MonadState (CompCtx c b (Prime n)), MonadLog, MonadIO)
 
 runCompState
   :: KnownNat n
   => CompState c b n a
   -> CompCtx c b (Prime n)
-  -> (a, CompCtx c b (Prime n))
-runCompState (CompState s) = runState s
+  -> Log (a, CompCtx c b (Prime n))
+runCompState (CompState s) = runStateT s
 
 -- Gets a value from a location
 load

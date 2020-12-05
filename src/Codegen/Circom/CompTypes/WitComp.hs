@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -fplugin GHC.TypeLits.KnownNat.Solver #-}
 -- Because of out KnownNat1 instance for the Log2 family...
 {-# OPTIONS_GHC -Wno-orphans #-}
@@ -29,6 +28,7 @@ import           Codegen.Circom.Utils           ( spanE
                                                 , mapGetE
                                                 )
 import qualified IR.SMT.TySmt                  as Smt
+import qualified IR.SMT.TySmt.Alg              as SAlg
 import           Data.Coerce                    ( coerce )
 import qualified Data.Either                   as Either
 import           Data.Field.Galois              ( Prime
@@ -38,7 +38,9 @@ import qualified Data.Foldable                 as Fold
 import           Data.Proxy                     ( Proxy(Proxy) )
 import qualified Data.Set                      as Set
 import qualified Data.Map.Strict               as Map
+import           Data.Maybe                     ( fromMaybe )
 import qualified Digraph
+import           Text.Read                      ( readMaybe )
 import           GHC.TypeLits.KnownNat
 import           GHC.TypeNats
 
@@ -57,8 +59,11 @@ instance KnownNat x => KnownNat1 $(nameToSymbol ''Log2) x where
 newtype WitBaseTerm n = WitBaseTerm (Smt.Term (Smt.PfSort n)) deriving (Show)
 
 instance KnownNat n => BaseTerm (WitBaseTerm n) (Prime n) where
-  fromConst  = WitBaseTerm . Smt.IntToPf . Smt.IntLit . fromP
-  fromSignal = WitBaseTerm . flip Smt.Var (Smt.SortPf $ fromIntegral $ natVal $ Proxy @n) . show
+  fromConst = WitBaseTerm . Smt.IntToPf . Smt.IntLit . fromP
+  fromSignal =
+    WitBaseTerm
+      . flip Smt.Var (Smt.SortPf $ fromIntegral $ natVal $ Proxy @n)
+      . show
   binOp o = case o of
     Add    -> liftPf (\a b -> Smt.PfNaryExpr Smt.PfAdd [a, b])
     Sub    -> \a b -> binOp Add a $ unOp UnNeg b
@@ -74,13 +79,14 @@ instance KnownNat n => BaseTerm (WitBaseTerm n) (Prime n) where
     Ne     -> liftIntPred (\a b -> Smt.Not $ Smt.Eq a b)
     And    -> liftBool (\a b -> Smt.BoolNaryExpr Smt.And [a, b])
     Or     -> liftBool (\a b -> Smt.BoolNaryExpr Smt.Or [a, b])
-    BitAnd -> liftBv (Smt.BvBinExpr Smt.BvAnd)
-    BitOr  -> liftBv (Smt.BvBinExpr Smt.BvOr)
-    BitXor -> liftBv (Smt.BvBinExpr Smt.BvXor)
+    BitAnd -> liftBv (binBv $ Smt.BvNaryExpr Smt.BvAnd)
+    BitOr  -> liftBv (binBv $ Smt.BvNaryExpr Smt.BvOr)
+    BitXor -> liftBv (binBv $ Smt.BvNaryExpr Smt.BvXor)
     Pow    -> liftInt (Smt.IntBinExpr Smt.IntPow)
     Shl    -> liftBv (Smt.BvBinExpr Smt.BvShl)
     Shr    -> liftBv (Smt.BvBinExpr Smt.BvLshr)
    where
+    binBv f x y = f [x, y]
     liftPfUn f = WitBaseTerm . f . coerce
     liftPf f (WitBaseTerm a) (WitBaseTerm b) = WitBaseTerm (f a b)
     liftInt f (WitBaseTerm a) (WitBaseTerm b) =
@@ -98,9 +104,7 @@ instance KnownNat n => BaseTerm (WitBaseTerm n) (Prime n) where
     BitNot ->
       error "Bitwise negation has unclear semantics for prime field elements"
     Not -> \(WitBaseTerm a) ->
-      WitBaseTerm $ Smt.IntToPf $ Smt.BoolToInt $ Smt.Eq
-        z
-        a
+      WitBaseTerm $ Smt.IntToPf $ Smt.BoolToInt $ Smt.Eq z a
       where z = Smt.IntToPf $ Smt.IntLit 0
     UnPos -> id
     UnNeg -> WitBaseTerm . Smt.PfUnExpr Smt.PfNeg . coerce
@@ -138,12 +142,16 @@ instance KnownNat n => BaseCtx (WitBaseCtx n) (WitBaseTerm n) (Prime n) where
       keys = Fold.toList $ assignmentSet c
 
       collectSigs :: Smt.SortClass s => Smt.Term s -> Set.Set Sig.Signal
-      collectSigs = Smt.reduceTerm visit Set.empty Set.union
+      collectSigs = SAlg.reduceTerm visit Set.empty Set.union
        where
         visit :: Smt.Term t -> Maybe (Set.Set Sig.Signal)
         visit t = case t of
-          Smt.Var v _ -> Just $ Set.singleton $ read v
-          _           -> Nothing
+          Smt.Var v _ ->
+            Just
+              $ Set.singleton
+              $ fromMaybe (error $ "Cannot read signal: " ++ show v)
+              $ readMaybe v
+          _ -> Nothing
 
       asLterm :: Either LTerm Sig.IndexedIdent -> LTerm
       asLterm = either id LTermLocal
@@ -155,15 +163,11 @@ instance KnownNat n => BaseCtx (WitBaseCtx n) (WitBaseTerm n) (Prime n) where
       dependencies :: Either LTerm Sig.IndexedIdent -> [LTerm]
       dependencies assignment = case assignment of
         Left signal ->
-          map (outputComponent . sigToLterm)
-            $ Fold.toList
-            $ collectSigs
-            $ (let WitBaseTerm s = mapGetE
-                     ("Signal " ++ show signal ++ " has no term")
-                     signal
-                     (signalTerms c)
-               in  s
-              )
+          let WitBaseTerm s = mapGetE
+                ("Signal " ++ show signal ++ " has no term")
+                signal
+                (signalTerms c)
+          in  map (outputComponent . sigToLterm) $ Fold.toList $ collectSigs s
         Right componentLoc -> filter inputToComponent $ Either.lefts keys
          where
           inputToComponent l = case l of
@@ -187,4 +191,4 @@ instance KnownNat n => BaseCtx (WitBaseCtx n) (WitBaseTerm n) (Prime n) where
 
 nSmtNodes :: KnownNat n => WitBaseCtx n -> Int
 nSmtNodes =
-  Map.foldr ((+) . (\(WitBaseTerm a) -> Smt.nNodes a)) 0 . signalTerms
+  Map.foldr ((+) . (\(WitBaseTerm a) -> SAlg.nNodes a)) 0 . signalTerms

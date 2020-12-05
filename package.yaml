@@ -18,6 +18,11 @@ extra-source-files:
 # common to point users to the README.md file.
 description:         Please see the README on GitHub at <https://github.com/githubuser/compiler#readme>
 
+ghc-options:
+- -Wall
+- -Wno-missing-signatures
+- -Wno-name-shadowing
+
 dependencies:
 - base >= 4.7 && < 5
 - galois-field >= 1.0.1
@@ -31,18 +36,25 @@ library:
   - data-binary-ieee754
   - split >= 0.2.3.3
   - bytestring >= 0.10.8.2
-  - language-c >= 0.8.3
-  - llvm-hs >= 9.0.1
-  - llvm-hs-pure >= 9.0.0
-  - lens >= 4
+  - directory >= 1.2 && < 1.4
+  - language-c >= 0.8.3 && < 0.9
   - array >= 0.5
-  - arithmoi >= 0.10
   - filepath >= 1.4
   - ghc >= 8.3
   - bv >= 0.5
   - ghc-typelits-knownnat >= 0.7
   - bitvec >= 1.0.2
   - data-binary-ieee754 >= 0.4
+  - lens-simple >= 0.1.0.9 && < 0.2
+  - union-find >= 0.2 && < 0.3
+  - aeson >= 1.4.6 && < 1.5
+  - text >= 1.2.3 && < 1.3
+  - deepseq >= 1.4.4 && < 1.5
+  - unordered-containers >= 0.2.10 && < 0.3
+  - hashable >= 1.2.7 && < 1.3
+  - time >= 1.8 && < 1.9
+  - pretty-simple >= 2.2 && < 2.3
+  - optparse-applicative >= 0.14 && < 0.15
 
 executables:
   compiler-exe:
@@ -55,8 +67,9 @@ executables:
     dependencies:
     - compiler
     - containers >= 0.5
+    - directory >= 1.2 && < 1.4
     - ghc-typelits-knownnat >= 0.7
-    - docopt >= 0.7
+    - optparse-applicative >= 0.14 && < 0.15
     - process >= 1.6
 
 tests:
@@ -74,10 +87,10 @@ tests:
     - filepath
     - tasty
     - tasty-golden
+    - ghc >= 8.3
     - tasty-hunit
     - QuickCheck
     - tasty-quickcheck
-    - criterion
     - directory
     - bytestring
     - mtl >= 2.2.2
