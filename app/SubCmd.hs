@@ -12,6 +12,7 @@ import           Codegen.LangVal                ( parseToMap
                                                 , modelMapToExtMap
                                                 )
 import qualified Codegen.Zokrates.Main         as ZGen
+import           ConsProp.Main                  ( constPropParse )
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.Field.Galois              ( toP
@@ -118,6 +119,9 @@ runFrontend inPath fe = do
   a     <- liftCfg $ case fe of
     C fn path bugs -> do
       tu <- liftIO $ CParse.parseC path
+      return $ compile $ C.CInputs tu fn bugs inMap
+    CConsProp fn path bugs -> do
+      tu <- liftIO $ constPropParse path
       return $ compile $ C.CInputs tu fn bugs inMap
     Zokrates fn path -> do
       ast <- liftIO $ ZokratesParse.loadFilesRecursively path

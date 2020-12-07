@@ -15,4 +15,7 @@ constPropParse fileName = do
   cpParseHelper ast
 
 cpParseHelper :: Abstract CTranslUnit -> IO CTranslUnit
-cpParseHelper atu = evalAbstract defaultState $ atu
+cpParseHelper atu = evalAbstract defaultState $ do
+  initAbstractState Constants [] []
+  tu <- atu
+  return tu

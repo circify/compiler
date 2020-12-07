@@ -34,12 +34,20 @@ backEndP =
     <|> (Proof <$> proofOptsP <*> proofActionP)
 
 data FrontEnd = C String FilePath Bool
+              | CConsProp String FilePath Bool
               | Zokrates String FilePath
               deriving (Show)
 
 cP :: Parser FrontEnd
 cP =
   C
+    <$> strArgument (metavar "FN-NAME" <> help "C function to compile")
+    <*> strArgument (metavar "C-PATH" <> help "C file to compile")
+    <*> switch (long "check" <> help "Compile assertions")
+
+cConsPropP :: Parser FrontEnd
+cConsPropP =
+  CConsProp
     <$> strArgument (metavar "FN-NAME" <> help "C function to compile")
     <*> strArgument (metavar "C-PATH" <> help "C file to compile")
     <*> switch (long "check" <> help "Compile assertions")
@@ -53,6 +61,7 @@ zokratesP =
 frontEndP :: Parser FrontEnd
 frontEndP = hsubparser
   (  command "c" (info cP (progDesc "C compiler front-end"))
+  <> command "cconsprop" (info cConsPropP (progDesc "C compiler front-end with constant propagation"))
   <> command
        "zokrates"
        (info zokratesP (progDesc "ZoKrates compiler front-end"))
