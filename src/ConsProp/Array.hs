@@ -3,7 +3,7 @@ module ConsProp.Array where
 import Language.C.Syntax.AST
 import Language.C.Data.Ident
 import Language.C.Syntax.Constants
-import Data.List (find, delete)
+import Data.List (find)
 
 -- A spinoff of the findScope function that avoids the problem of abstract monad
 findVarName :: String -> String -> [String] -> String
@@ -53,10 +53,12 @@ oaFunc :: [String] -> CFunctionDef a -> [String]
 oaFunc s (CFunDef _ (CDeclr (Just (Ident f _ _)) _ _ _ _) decls stmt _) =
   oaStmt ns f stmt
   where ns = foldl (\a b -> oaDecl a f b) s decls
+oaFunc _ _ = error "Unsupported Function"
 
 oaDecl :: [String] -> String -> CDeclaration a -> [String]
 oaDecl s f (CDecl _ decls _) =
   foldl (\a b -> oaDeclHelper a f b) s decls
+oaDecl _ _ _ = error "Invalid Declaration"
 
 oaDeclHelper :: [String] -> String -> (Maybe (CDeclarator a), Maybe (CInitializer a), Maybe (CExpression a)) -> [String]
 oaDeclHelper s f (decl, _, _) =
@@ -75,8 +77,8 @@ getArrayLength (cd:cds) =
   where is = getArrayLength cds
 
 oaStmt :: [String] -> String -> CStatement a -> [String]
-oaStmt s f (CExpr _ _ )  = s
-oaStmt s f (CReturn _ _) = s
+oaStmt s _ (CExpr _ _ )  = s
+oaStmt s _ (CReturn _ _) = s
 oaStmt s f (CIf _ tstmt fstmt _)
   | ts == fs  = ts
   | otherwise = error "Please do not use array declarataion in if/else statements"

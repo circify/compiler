@@ -8,33 +8,24 @@
 
 module ConsProp.Eval where
 
-import GHC.Int
 import ConsProp.Init
 import ConsProp.Operation
-import ConsProp.Apron.Texpr1
-import ConsProp.Apron.Tcons1
 import ConsProp.Apron.Abstract1
+import ConsProp.Apron.Texpr1
 import ConsProp.Apron.AbstractMonad
 import Language.C.Data.Ident
-import Language.C.Data.Node
 import Language.C.Syntax.AST
 import Language.C.Syntax.Constants
-import Control.Monad.State.Strict (liftIO)
 import Data.Char (ord)
 import Data.List (last, init)
 
 -----
 
 {- Program -}
--- Get the initial state of Abstract_Top
-getInitSt :: Abstract Abstract1 -> Abstract Abstract1
-getInitSt st = do
-  abs <- abstractTop
-  return abs
-
 evalProg :: CTranslationUnit AbsState -> Abstract (CTranslationUnit AbsState)
 evalProg (CTranslUnit extDecls (State a loc)) = do
-  abs <- getInitSt a
+  labs <- a
+  abs <- abstractTop
   nExtDecls <- evalEDLst abs extDecls
   let nSt = State (return abs) loc
   return (CTranslUnit nExtDecls nSt)
@@ -56,7 +47,7 @@ evalExtDecl abs de@(CFDefExt func@(CFunDef _ declr _ _ _))
     return (nAbs, CFDefExt nFunc)
   -- If not the main function, simply skip it
   | otherwise = return (abs, de)
-evalExtDecl abs _            = error "CAsmExt not implemented"
+evalExtDecl _ _            = error "CAsmExt not implemented"
 
 -- Helper Function to determine if the function is the main function
 isMainFunc :: CDeclarator a -> Bool
@@ -75,6 +66,7 @@ evalFunc abs (CFunDef a b@(CDeclr (Just (Ident f _ _)) _ _ _ _) c stmt st) = do
   (nAbs, nStmt) <- evalStmt abs f stmt
   nSt <- setAbs nAbs st
   return (nAbs, CFunDef a b c nStmt nSt)
+evalFunc _ _ = error "Function Case not implemented"
 
 -----
 
@@ -94,6 +86,7 @@ evalDecl abs f (CDecl a b st) = do
   nAbs <- foldl (\a b -> evalDeclHelper a f b) (return abs) b
   nSt <- setAbs nAbs st
   return (nAbs, CDecl a b nSt)
+evalDecl _ _ _  = error "Declaration case not implemented"
 
 -- Process every variable declaration separately
 evalDeclHelper :: Abstract Abstract1 -> String -> (Maybe (CDeclarator AbsState), Maybe (CInitializer AbsState), Maybe (CExpression AbsState)) -> Abstract Abstract1
@@ -103,7 +96,7 @@ evalDeclHelper a _ (_, Nothing, Nothing) = a
 -- A special case for String Assignment
 -- All the variable assignments are taken case in the (var, texpr) pair
 -- The standalone texpr returned should be empty
-evalDeclHelper a f (Just (CDeclr (Just id@(Ident v _ _)) _ _ _ _), (Just (CInitExpr expr@(CConst (CStrConst _ _)) st)), Nothing) = do
+evalDeclHelper a f (Just (CDeclr (Just id) _ _ _ _), (Just (CInitExpr expr@(CConst (CStrConst _ _)) st)), Nothing) = do
   abs1 <- a
   let assgExpr = CAssign CAssignOp (CVar id st) expr st
   (_, pair) <- evalExpr abs1 f assgExpr
@@ -140,7 +133,7 @@ evalCBI _ _ _ = error "CBI nested function type not implemented"
 
 -- Evaluating Compound Block Item List
 evalCBIs :: Abstract1 -> String -> [CCompoundBlockItem AbsState] -> Abstract (Abstract1, [CCompoundBlockItem AbsState])
-evalCBIs abs f [] = return (abs, [])
+evalCBIs abs _ [] = return (abs, [])
 evalCBIs abs f (cbi:cbis) = do
   (nextAbs, nCbi)   <- evalCBI abs f cbi
   (finalAbs, fCbis) <- evalCBIs nextAbs f cbis
@@ -265,11 +258,11 @@ evalStmt a f (CIf cons tstmt (Just fstmt) st) = do
 --   Case 1: the loop will be executed is handled in EvalLoop and
 --   subsequently EvalNarrow
 --   Case 2: the loop will not be executed is handled in evalStmt
-evalStmt abs f whileStmt@(CWhile cond stmt dw st) = do
+evalStmt abs f whileStmt@(CWhile cond stmt dw _) = do
   (a, _) <- case dw of
     True  -> evalStmt abs f stmt
     False -> return (abs, stmt)
-  (lnAbs, nWStmt@(CWhile _ nStmt _ nSt)) <- evalLoop a f whileStmt 0
+  (lnAbs, (CWhile _ nStmt _ nSt)) <- evalLoop a f whileStmt 0
   lfAbs <- evalNarrow lnAbs f cond stmt Nothing
   lAbs <- evalCons lfAbs f cond True
   -- Now deal with the case where the loop will not be executed
@@ -281,12 +274,12 @@ evalStmt abs f whileStmt@(CWhile cond stmt dw st) = do
 -- We want to deal with init in the for loop
 -- If there is no condition, no need to narrow it
 -- The loop must execute, so we don't need to worry about Case 2 either
-evalStmt abs f forStmt@(CFor init Nothing step stmt st) = do
+evalStmt abs f forStmt@(CFor init Nothing _ _ _) = do
   a <- evalInit abs f init
   evalLoop a f forStmt 0
-evalStmt abs f forStmt@(CFor init (Just cond) step stmt st) = do
+evalStmt abs f forStmt@(CFor init (Just cond) step stmt _) = do
   a <- evalInit abs f init
-  (lnAbs, nFStmt@(CFor _ _ _ nStmt nSt)) <- evalLoop a f forStmt 0
+  (lnAbs, (CFor _ _ _ nStmt nSt)) <- evalLoop a f forStmt 0
   lfAbs <- evalNarrow lnAbs f cond stmt step
   lAbs <- evalCons lfAbs f cond True
   -- Now deal with the case where the loop will not be executed
@@ -297,11 +290,11 @@ evalStmt abs f forStmt@(CFor init (Just cond) step stmt st) = do
   return (finalAbs, (CFor init (Just cond) step nStmt fSt))
 
 -- Others
-evalStmt a f stmt = error "Statement Case not implemented"
+evalStmt _ _ stmt = error ("Statement Case not implemented: " ++ (show stmt))
 
 -- Just a helper function for For Loop
 evalInit :: Abstract1 -> String -> (Either (Maybe (CExpression AbsState)) (CDeclaration AbsState)) -> Abstract Abstract1
-evalInit a f (Left Nothing) = return a
+evalInit a _ (Left Nothing) = return a
 evalInit a f (Left (Just expr)) = do
   (_, pair) <- evalExpr a f expr
   iAbs <- foldl absAssgHelper (return a) pair
@@ -325,8 +318,9 @@ type ExprSt = (Texpr1, [(VarName, Texpr1)])
 evalExpr :: Abstract1 -> String -> CExpression AbsState -> Abstract ExprSt
 
 -- String Assignment: int a[10] = "hello"
-evalExpr a f (CAssign CAssignOp (CVar (Ident v _ _) _) (CConst (CStrConst (CString s _) _)) _) = do
-  vLst <- evalList (map ord s)
+-- We need to convert "hello" into "hello\O" first
+evalExpr _ f (CAssign CAssignOp (CVar (Ident v _ _) _) (CConst (CStrConst (CString s _) _)) _) = do
+  vLst <- evalList (map ord (s ++ "\0"))
   var <- findScope v f
   let assgLst = evalStringAssg var ((length vLst) - 1) vLst
   dummyTexpr <- texprMakeConstant 1
@@ -348,12 +342,12 @@ evalExpr a f (CAssign aop (CVar (Ident v _ _) _) rhs _) = do
   ntexpr <- evalBOpExpr (convertAOp aop) ltexpr rtexpr
   return (ntexpr, rpair ++ [(var, ntexpr)])
 
-evalExpr a f (CVar (Ident v _ _) _) = do
+evalExpr _ f (CVar (Ident v _ _) _) = do
   var    <- findScope v f
   ntexpr <- texprMakeLeafVar var
   return (ntexpr, [])
 
-evalExpr a f (CConst (CIntConst n _)) = do
+evalExpr _ _ (CConst (CIntConst n _)) = do
   ntexpr <- texprMakeConstant (fromInteger (getCInteger n))
   return (ntexpr, [])
 
@@ -366,7 +360,7 @@ evalExpr a f (CBinary bop expr1 expr2 _)
     ntexpr <- evalBOpExpr bop ltexpr rtexpr
     return (ntexpr, lpair ++ rpair)
 
-evalExpr a f e@(CUnary uop expr _) = do
+evalExpr a f (CUnary uop expr _) = do
   st@(rtexpr, rpair) <- evalExpr a f expr
   ntexpr <- evalUOpExpr uop rtexpr
   case uop of
@@ -411,6 +405,7 @@ evalIndex a f (CIndex l r _) = do
   n <- abstractTexprEval a rtexpr
   let rst = "#" ++ (show n)
   return (lst ++ rst)
+evalIndex _ _ _ = error "Invalid Index Operation"
 
 evalStringAssg :: String -> Int -> [Texpr1] -> [(VarName, Texpr1)]
 evalStringAssg v 0 [t] = [(v ++ "#0", t)]
@@ -430,6 +425,8 @@ incDecHelper (CVar (Ident v _ _) _) f uop ntexpr (rtexpr, rpair) = do
     CPreDecOp  -> return (ntexpr, npair) -- --a
     CPostIncOp -> return (rtexpr, npair) -- a++
     CPostDecOp -> return (rtexpr, npair) -- a--
+    _          -> error "Unsupported UOP Operation"
+incDecHelper _ _ _ _ _ = error "Invalid IncDec Operation"
 
 -- Evaluate Constraints, evaluate side effects, meet constraint with abstract1
 -- Bool is to determine if we want !(constraint)
@@ -450,14 +447,16 @@ evalCons a f e@(CBinary bop expr1 expr2 _) neg
     case bop of
       CLndOp -> abstractMeet lAbs rAbs
       CLorOp -> abstractJoin lAbs rAbs
+      _      -> error "Unsupported BOP Operation"
   | isBOpLogic bop = do
     lAbs <- evalCons a f expr1 True
     rAbs <- evalCons a f expr2 True
     case bop of
       CLndOp -> abstractJoin lAbs rAbs
       CLorOp -> abstractMeet lAbs rAbs
+      _      -> error "Unsupported BOP Operation"
   | otherwise     = error ("Int to Bool Conversion not supported: " ++ show e)
 evalCons a f e@(CUnary uop expr _) neg
   | uop == CNegOp = evalCons a f expr (not neg)
   | otherwise     = error ("Int to Bool Conversion not supported: " ++ show e)
-evalCons a f e _  = error ("Int to Bool Conversion not supported: " ++ show e)
+evalCons _ _ e _  = error ("Int to Bool Conversion not supported: " ++ show e)

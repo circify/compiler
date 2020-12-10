@@ -149,7 +149,7 @@ abstractTexprSolve :: Abstract1 -> Texpr1 -> Abstract Var
 abstractTexprSolve (Abs1 _ True) t = return Bottom
 abstractTexprSolve (Abs1 vm _) (Var v) = do
   case M.lookup v vm of
-    Nothing  -> error "Variable does not exist"
+    Nothing  -> error ("Variable does not exist: " ++ v ++ " in " ++ (show vm))
     Just var -> return var
 abstractTexprSolve _ (Cst c) = do
   return (Const c)
