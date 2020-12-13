@@ -1,7 +1,6 @@
 module ConsProp.Simplify where
 
 import Language.C.Syntax.AST
-import Language.C.System.GCC
 import ConsProp.Apron.AbstractMonad
 import ConsProp.Apron.Abstract1
 import ConsProp.Init
@@ -36,8 +35,8 @@ rbEDLst (ed:eds) = do
   return ([newEd] ++ newEDs)
 
 rbExtDecl :: CExternalDeclaration AbsState -> Abstract (CExternalDeclaration AbsState)
-rbExtDecl ed@(CDeclExt decl) = return ed
-rbExtDecl (CFDefExt func)    = do
+rbExtDecl ed@(CDeclExt _) = return ed
+rbExtDecl (CFDefExt func) = do
   nFunc <- rbFunc func
   return (CFDefExt nFunc)
 rbExtDecl _ = error "CAsmExt not implemented"
@@ -63,12 +62,12 @@ rbStmt s@(CExpr _ st) = do
 rbStmt s@(CReturn _ st) = do
   bot <- isBotState st
   return (bot, s)
-rbStmt s@(CIf cons tstmt Nothing st) = do
+rbStmt (CIf cons tstmt Nothing st) = do
   -- If tstmt will not be evaluated, then the entire if statement is pointless
   (tBot, ntstmt) <- rbStmt tstmt
   return (tBot, CIf cons ntstmt Nothing st)
 rbStmt s@(CIf cons tstmt (Just fstmt) st) = do
-  (tBot, tstmt1) <- rbStmt tstmt
+  (tBot, ntstmt) <- rbStmt tstmt
   (fBot, nfstmt) <- rbStmt fstmt
   -- For the if-else statment:
   -- if T then A else B
@@ -76,12 +75,13 @@ rbStmt s@(CIf cons tstmt (Just fstmt) st) = do
   -- if !T then B
   let negCons = CUnary CNegOp cons st
   case (tBot, fBot) of
-    (False, False) -> return (False, s)
+    (False, False) -> return (False, CIf cons ntstmt (Just nfstmt) st)
     -- No else
-    (False, True)  -> return (False, CIf cons tstmt Nothing st)
+    (False, True)  -> return (False, CIf cons ntstmt Nothing st)
     -- No if
-    (True, False)  -> return (False, CIf negCons fstmt Nothing st)
+    (True, False)  -> return (False, CIf negCons nfstmt Nothing st)
     -- No if and no else
+    -- In this case, the statement doesn't matter
     (True, True)   -> return (True, s)
 rbStmt s = error ("Statement cannot be simplified: " ++ (show s))
 
@@ -98,5 +98,5 @@ rbCBI :: CCompoundBlockItem AbsState -> Abstract (Bool, CCompoundBlockItem AbsSt
 rbCBI (CBlockStmt stmt) = do
   (bot, nStmt) <- rbStmt stmt
   return (bot, CBlockStmt nStmt)
-rbCBI cbi@(CBlockDecl decl) = return (False, cbi)
+rbCBI cbi@(CBlockDecl _) = return (False, cbi)
 rbCBI _ = error "CBI nested function type not implemented"
