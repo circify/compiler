@@ -1,5 +1,4 @@
 module ConsProp.Init where
-import           Language.C.Data.Ident
 import           Language.C.Data.Node
 import           Language.C.Syntax.AST
 import           ConsProp.Parser

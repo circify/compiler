@@ -50,9 +50,14 @@ oaExtDecl s (CFDefExt func) = oaFunc s func
 oaExtDecl _ _ = error "CAsmExt not implemented"
 
 oaFunc :: [String] -> CFunctionDef a -> [String]
-oaFunc s (CFunDef _ (CDeclr (Just (Ident f _ _)) _ _ _ _) decls stmt _) =
-  oaStmt ns f stmt
-  where ns = foldl (\a b -> oaDecl a f b) s decls
+oaFunc s (CFunDef _ (CDeclr (Just (Ident f _ _)) (funDeclr:_) _ _ _) decls stmt _) =
+  oaStmt fs f stmt
+  where ns = case funDeclr of
+               CFunDeclr (Right (funDecls, False)) _ _ -> foldDecl s funDecls
+               _ -> s
+        fs = foldDecl ns decls
+        foldDecl m n = foldl (\a b -> oaDecl a f b) m n
+
 oaFunc _ _ = error "Unsupported Function"
 
 oaDecl :: [String] -> String -> CDeclaration a -> [String]
