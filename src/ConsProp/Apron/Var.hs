@@ -66,6 +66,8 @@ absSub (Const a) (Const b) = Const (a - b)
 absMul :: Var -> Var -> Var
 absMul Bottom _            = Bottom
 absMul _ Bottom            = Bottom
+absMul (Const 0) _         = Const 0
+absMul _ (Const 0)         = Const 0
 absMul Top _               = Top
 absMul _ Top               = Top
 absMul (Const a) (Const b) = Const (a * b)
@@ -73,6 +75,8 @@ absMul (Const a) (Const b) = Const (a * b)
 absDiv :: Var -> Var -> Var
 absDiv Bottom _            = Bottom
 absDiv _ Bottom            = Bottom
+absDiv _ (Const 0)         = error "Divided by 0"
+absDiv (Const 0) _         = Const 0
 absDiv Top _               = Top
 absDiv _ Top               = Top
 absDiv (Const a) (Const b) = Const (a `div` b)
@@ -80,6 +84,8 @@ absDiv (Const a) (Const b) = Const (a `div` b)
 absMod :: Var -> Var -> Var
 absMod Bottom _            = Bottom
 absMod _ Bottom            = Bottom
+absMod _ (Const 0)         = error "Divided by 0"
+absMod (Const 0) _         = Const 0
 absMod Top _               = Top
 absMod _ Top               = Top
 absMod (Const a) (Const b) = Const (a `mod` b)
