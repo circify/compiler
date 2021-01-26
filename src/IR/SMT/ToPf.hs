@@ -11,6 +11,7 @@ module IR.SMT.ToPf
 where
 
 import           IR.SMT.TySmt
+import           IR.SMT.Util
 import           Control.Monad.State.Strict
 import           Control.Monad.Reader
 import           Control.Monad                  ( join )
@@ -693,14 +694,10 @@ bvToPf env term = do
             d <- getInt l
             m <- getInt r
             isZero <- binEq m lcZero
-            let dv = fromP <$> snd d
-                mv = fromP <$> snd m
-                smtDiv :: KnownNat n => Integer -> Integer -> Integer
-                smtDiv y x = if x == 0 then (2 :: Integer) ^ w - 1 else div y x
-                smtRem :: KnownNat n => Integer -> Integer -> Integer
-                smtRem y x = if x == 0 then y else rem y x
-            q  <- nextVar "div_q" $ toP <$> liftA2 smtDiv dv mv
-            r' <- nextVar "div_r" $ toP <$> liftA2 smtRem dv mv
+            let dv = Bv.bitVec w . fromP <$> snd d
+                mv = Bv.bitVec w . fromP <$> snd m
+            q  <- nextVar "div_q" $ toP . Bv.nat <$> liftA2 smtDiv dv mv
+            r' <- nextVar "div_r" $ toP . Bv.nat <$> liftA2 smtRem dv mv
             prod <- lcMul "div_qr" m q
             divEqHolds <- binEq prod (lcSub d r')
             enforceCheck (lcNot divEqHolds, lcNot isZero, lcZero)
