@@ -396,6 +396,19 @@ class (Show t, Show v) => Embeddable t v c | v -> c, v -> t where
   -- it was assigned to.
   -- These are distinguished to allow for casting.
   assign :: c -> t -> String -> v -> Mem (v, v)
+  -- | In some sense the "witness computation" analogue of `assign`.
+  -- Given a:
+  --   * variable name (String) and a
+  --   * language term (v)
+  -- , this function should (a) concretely evaluate `v` (b) set the values of
+  -- the collection of `variable name` prefixed variables which correspond to
+  -- `v` to those concrete values.
+  --
+  -- How exactly this is done depends a bit on how terms in your language work,
+  -- but likely your implementation is just a recursive use of
+  -- `Assert.evalAndSetValue`.
+  --
+  -- See the Zokrates and C implementations for examples.
   setValues :: c -> String -> v -> Assert ()
   -- | Given a (symbolic) term which may contain uses of variables,
   -- returns a new term which is equivalent in value and variable-free.
