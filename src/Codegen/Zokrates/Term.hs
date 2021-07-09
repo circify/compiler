@@ -100,7 +100,8 @@ wrapBin name fI fF fB a b = case (a, b, fI, fF, fB) of
 
 wrapBinPred
   :: forall n
-   . String
+  .  KnownNat n
+  => String
   -> Maybe (S.TermDynBv -> S.TermDynBv -> S.TermBool)
   -> Maybe (S.TermPf n -> S.TermPf n -> S.TermBool)
   -> Maybe (S.TermBool -> S.TermBool -> S.TermBool)
@@ -112,6 +113,10 @@ wrapBinPred name fI fF fB a b = case (a, b, fI, fF, fB) of
     Right $ Bool $ f a' b'
   (Field a', Field b', _, Just f, _) -> Right $ Bool $ f a' b'
   (Bool a', Bool b', _, _, Just f) -> Right $ Bool $ f a' b'
+  --- HACK
+  (Array _ a, Array _ b, _, _, _) -> do
+    bools <- (mapM (uncurry zEq) $ zip a b) >>= mapM zBool
+    Right $ Bool $ S.BoolNaryExpr S.And bools
   _ -> Left $ unwords
     ["Cannot perform operation", show name, "on", show a, "and", show b]
 
@@ -144,7 +149,12 @@ zDiv = wrapBin
   (Just $ S.mkDynBvBinExpr S.BvUdiv)
   (Just $ \a b -> S.PfNaryExpr S.PfMul [a, S.PfUnExpr S.PfRecip b])
   Nothing
-zPow = wrapBin "**" Nothing (Just undefined) Nothing
+
+zPow a b = do
+  base <- zConstInt a
+  case (b, base) of
+    (Field f, 2) -> Right (Field (S.PfUnExpr S.PfTwoPow f))
+    _ -> Left "bad power"
 zBitAnd = wrapBin "&" (Just $ bin $ S.mkDynBvNaryExpr S.BvAnd) Nothing Nothing
 zBitOr = wrapBin "|" (Just $ bin $ S.mkDynBvNaryExpr S.BvOr) Nothing Nothing
 zBitXor = wrapBin "^" (Just $ bin $ S.mkDynBvNaryExpr S.BvXor) Nothing Nothing
@@ -155,7 +165,7 @@ zNe = wrapBinPred "!=" (Just ne) (Just ne) (Just ne)
 zGe = wrapBinPred ">=" (Just $ S.mkDynBvBinPred S.BvUge) Nothing Nothing
 zGt = wrapBinPred ">" (Just $ S.mkDynBvBinPred S.BvUgt) Nothing Nothing
 zLe = wrapBinPred "<=" (Just $ S.mkDynBvBinPred S.BvUle) Nothing Nothing
-zLt = wrapBinPred "<" (Just $ S.mkDynBvBinPred S.BvUlt) Nothing Nothing
+zLt = wrapBinPred "<" (Just $ S.mkDynBvBinPred S.BvUlt) (Just $ S.PfBinPred S.PfLt) Nothing
 
 wrapShift
   :: KnownNat n

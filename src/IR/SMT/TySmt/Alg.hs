@@ -121,6 +121,7 @@ mapTerm f t = case f t of
 
     PfNaryExpr o as       -> PfNaryExpr o (map (mapTerm f) as)
     PfUnExpr   o l        -> PfUnExpr o (mapTerm f l)
+    PfBinPred o l r       -> PfBinPred o (mapTerm f l) (mapTerm f r)
     IntToPf tt            -> IntToPf (mapTerm f tt)
 
     Select a k            -> Select (mapTerm f a) (mapTerm f k)
@@ -206,6 +207,7 @@ mapTermM f t = do
 
       PfNaryExpr o as       -> liftM (PfNaryExpr o) (mapM (rec) as)
       PfUnExpr   o l        -> liftM (PfUnExpr o) (rec l)
+      PfBinPred o l r      -> liftM2 (PfBinPred o) (rec l) (rec r)
       IntToPf tt            -> liftM IntToPf (rec tt)
 
       Select a k            -> liftM2 Select (rec a) (rec k)
@@ -303,6 +305,8 @@ reduceTerm mapF i foldF t = case mapF t of
 
     PfNaryExpr _ as -> foldr foldF i (map (reduceTerm mapF i foldF) as)
     PfUnExpr   _ l  -> reduceTerm mapF i foldF l
+    PfBinPred _ l r ->
+      foldF (reduceTerm mapF i foldF l) (reduceTerm mapF i foldF r)
     IntToPf tt      -> reduceTerm mapF i foldF tt
 
     Select a k -> foldF (reduceTerm mapF i foldF a) (reduceTerm mapF i foldF k)
@@ -386,6 +390,9 @@ pfUnFn op m = case op of
   PfNeg   -> (m -)
   PfRecip -> flip invMod m
 
+pfBinPredFn :: PfBinOp -> Integer -> Integer -> Bool
+pfBinPredFn op = case op of
+  PfLt -> (<)
 
 pfNaryFn :: PfNaryOp -> Integer -> [Integer] -> Integer
 pfNaryFn op m = case op of
@@ -605,6 +612,8 @@ eval e t = case t of
   PfUnExpr   o t'  -> ValPf $ pfUnFn o (modulus t') (valAsPf $ eval e t')
   PfNaryExpr o as  -> ValPf $ pfNaryFn o m (map (valAsPf . eval e) as)
     where m = modulus (PfNaryExpr o as)
+  PfBinPred o l r ->
+    ValBool $ pfBinPredFn o (valAsPf $ eval e l) (valAsPf $ eval e r)
   IntToPf t' -> ValPf $ valAsInt $ eval e t'
 
   Select a k -> Maybe.fromMaybe

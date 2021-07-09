@@ -109,6 +109,12 @@ constantFold = mapTerm visit
             (DynBvLit a'', DynBvLit b'') -> Just $ BoolLit (a'' == b'')
             (PfLit    a'', PfLit b''   ) -> Just $ BoolLit (a'' == b'')
             _                            -> Just $ Eq a' b'
+    PfBinPred PfLt a b ->
+      let a' = constantFold a
+          b' = constantFold b
+      in  case (a', b') of
+            (PfLit    a'', PfLit b''   ) -> Just $ BoolLit (a'' < b'')
+            _                            -> Just $ Eq a' b'
     PfToDynBv w p ->
       let p' = constantFold p
       in  Just $ case p' of
@@ -268,6 +274,12 @@ constantFold = mapTerm visit
           in  case p' of
                 PfLit i -> PfLit (fromP @(Prime n) $ negate $ toP @n i)
                 _       -> PfUnExpr PfNeg p'
+    PfUnExpr PfTwoPow p ->
+      Just
+        $ let p' = constantFold p
+          in  case p' of
+                PfLit i -> PfLit (2 ^ i)
+                _       -> PfUnExpr PfTwoPow p'
     PfUnExpr PfRecip p ->
       Just
         $ let p' = constantFold p

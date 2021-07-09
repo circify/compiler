@@ -37,18 +37,26 @@ asEqOrConst protected (a, b, (m, c)) = if a == lcZero || b == lcZero
     _ -> Neither
   else Neither
 
+-- Examines this quadratic constraint.
+-- If it is linear, examines the vars.
+-- If any are private, solves for them, prefering private variables.
 asLinearSub
   :: GaloisField k => IntSet.IntSet -> QEQ Int k -> Maybe (Int, LC Int k)
 asLinearSub protected (a, b, (m, c)) = if a == lcZero || b == lcZero
   then
     let here     = IntSet.fromDistinctAscList $ Map.keys m
         disjoint = here IntSet.\\ protected
-    in  case IntSet.toList disjoint of
-          [] -> Nothing
-          k : _ ->
+        elim     = case IntSet.toList disjoint of
+          [] -> case IntSet.toList here of
+            []    -> Nothing
+            k : _ -> Just k
+          k : _ -> Just k
+    in  case elim of
+          Just k ->
             let v  = m Map.! k
                 m' = Map.delete k m
             in  Just (k, lcScale (negate $ recip v) (m', c))
+          Nothing -> Nothing
   else Nothing
 
 constantLc :: LC s n -> Maybe n
