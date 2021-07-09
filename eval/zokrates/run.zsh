@@ -4,6 +4,8 @@ ZOKRATES=$(which zokrates)
 CIRCIFY=$(which compiler-exe)
 SCRIPT_PATH="${0:A:h}"
 
+cd $SCRIPT_PATH
+
 
 # First argument: benchmark name
 # Second argument: circom path
@@ -37,7 +39,7 @@ function count() {
     circify)
         touch C
         cfile=$(readlink -f "C")
-        (cd ../../.. && C_inputs_in_range=False $CIRCIFY -C $cfile zokrates-emit-r1cs main $1)
+        (cd ../../.. && pwd && C_inputs_in_range=False $CIRCIFY -C $cfile --emit-r1cs zokrates main $1)
         n=$(head -n 1 C | awk '{print $3}')
         ;;
     *)

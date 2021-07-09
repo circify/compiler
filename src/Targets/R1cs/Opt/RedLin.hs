@@ -106,16 +106,17 @@ run r1cs = do
       logIf "r1cs::opt::lin::sub" $ show $ map show (numSigs r1cs IntMap.! v)
       -- Get constraints that use `v`
       vUses <- gets (IntSet.toList . (IntMap.! v) . view uses)
-      -- Set constraint to zero
-      updateC id' (qeqZero, IntSet.empty)
+      -- Set constraint to zero, if the variable is public.
+      when (not (IntSet.member v (publicInputs r1cs))) $ updateC id' (qeqZero, IntSet.empty)
       -- For constraints that use `v`
       forM_ vUses $ \useId -> do
-        -- Do substitution
-        useC <- getC useId
-        let useC' = attachSigs $ normalize $ subLcInQeq v t $ fst useC
-        updateC useId useC'
-        -- Enqueue if result looks promising
-        when (shouldVisit useC') $ enqueue useId
+        when (useId /= id') $ do
+          -- Do substitution
+          useC <- getC useId
+          let useC' = attachSigs $ normalize $ subLcInQeq v t $ fst useC
+          updateC useId useC'
+          -- Enqueue if result looks promising
+          when (shouldVisit useC') $ enqueue useId
 
 -- TODO: be careful to never reconstruct the variable sets.
 qSigs (a, b, c) = IntSet.union (lSigs a) (IntSet.union (lSigs b) (lSigs c))

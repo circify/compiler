@@ -1,5 +1,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -48,6 +49,7 @@ data ZState = ZState
   { _fileStack :: [FilePath] -- ^ Stack of files we're in
   , _funcs     :: Map.Map (FilePath, String) A.SFunc
   , _importMap :: Map.Map (FilePath, String) (FilePath, String)
+  , _consts    :: Map.Map String Int
   }
 $(makeLenses ''ZState)
 
@@ -56,7 +58,7 @@ newtype Z n a = Z (StateT ZState (Circify T.Type (Term n) (Maybe InMap)) a)
 
 emptyZState :: ZState
 emptyZState =
-  ZState { _fileStack = [], _funcs = Map.empty, _importMap = Map.empty }
+  ZState { _fileStack = [], _funcs = Map.empty, _importMap = Map.empty, _consts = Map.empty }
 
 currentPath :: Z n FilePath
 currentPath =
@@ -149,7 +151,15 @@ genElemExpr e = do
   where ok = fromEitherSpan (ann e)
 
 genConstInt :: KnownNat n => A.SExpr -> Z n Int
-genConstInt e = fromEitherSpan (ann e) . zConstInt <$> genExpr e
+genConstInt e = do
+  e' <- genExpr e
+  case (zConstInt e', ast e) of
+    (Left err, A.Ident n) -> do
+      storedConst <- gets ((Map.!? (ast n)) . view consts)
+      case storedConst of
+        Just i -> return i
+        Nothing -> errSpan (ann e) err
+    (err, _) -> return $ fromEitherSpan (ann e) err
 
 genBuiltinCall
   :: KnownNat n => String -> [Term n] -> Z n (Either String (Term n))
@@ -224,6 +234,10 @@ genStmt s = case ast s of
   A.Declare ty v e -> do
     e'  <- Base <$> genExpr e
     ty' <- genType ty
+    -- Const int hack
+    case e' of
+      Base (Field (S.IntToPf (S.IntLit n))) -> modify $ over consts $ Map.insert (ast v) (fromIntegral n)
+      _ -> return ()
     liftCircify $ declareInitVar (ast v) ty' e'
   A.DataIf c t f -> do
     c' <- ok . zBool <$> genExpr c
@@ -240,10 +254,10 @@ genLVal e = case ast e of
   A.Idx    a i -> liftM2 Idx (genLVal a) (genExpr i)
   t            -> errSpan (ann e) $ "Cannot generate LValue from " ++ show t
 
-setLVal :: KnownNat n => Span -> LVal n -> Term n -> Z n ()
+setLVal :: forall n. KnownNat n => Span -> LVal n -> Term n -> Z n ()
 setLVal s lval term = modLVal lval (const term)
  where
-  modLVal :: KnownNat n => LVal n -> (Term n -> Term n) -> Z n ()
+  modLVal :: LVal n -> (Term n -> Term n) -> Z n ()
   modLVal lval f = case lval of
     Var v ->
       liftCircify
