@@ -135,8 +135,8 @@ replaceLinearArrays arraySizes toLin = evalStateT pass SMap.empty
     modify $ SMap.insert t l
 
   visitors = (defaultMemReplacePass :: MemReplacePass Lin)
-    { visitConstArray = \v sort v' ->
-                          let c = ConstArray sort v
+    { visitConstArray = \l v sort v' ->
+                          let c = ConstArray l sort v
                           in  when (replace c) $ store c $ repeat v'
     , visitStore      = \a i v a' i' v' -> when (replace (Store a i v)) $ do
                           logIf "array::lin::store" $ "Store: " ++ show (Store a i v)

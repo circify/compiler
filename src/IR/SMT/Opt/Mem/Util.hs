@@ -101,7 +101,7 @@ data MemReplacePass m = MemReplacePass
     -- preprocessing analysis.
 
     -- No previous sort, since it is unchanged
-    visitConstArray :: TBv -> Sort -> TBv -> m ()
+    visitConstArray :: Int -> TBv -> Sort -> TBv -> m ()
   , visitEq         :: TMem -> TMem -> TMem -> TMem -> m (Maybe TermBool)
   , visitIte :: TermBool -> TMem -> TMem -> TermBool -> TMem -> TMem -> m ()
   , visitStore      :: TMem -> TBv -> TBv -> TMem -> TBv -> TBv -> m ()
@@ -112,7 +112,7 @@ data MemReplacePass m = MemReplacePass
 
 defaultMemReplacePass :: Monad m => MemReplacePass m
 defaultMemReplacePass = MemReplacePass
-  { visitConstArray = \_ _ _ -> return ()
+  { visitConstArray = \_ _ _ _ -> return ()
   , visitEq         = \_ _ _ _ -> return Nothing
   , visitIte        = \_ _ _ _ _ _ -> return ()
   , visitVar        = \_ _ -> return ()
@@ -131,11 +131,11 @@ runMemReplacePass pass = mapTermM visit
   visit :: forall s . SortClass s => Term s -> m (Maybe (Term s))
   visit t = case eqT @(Term s) @TMem of
     Just Refl -> case t of
-      ConstArray sort value -> do
+      ConstArray i sort value -> do
         value' <- rec value
         logIf "mem::replace::pass" $ "visitConstArray: " ++ show t
-        visitConstArray pass value sort value'
-        return $ Just $ ConstArray sort value'
+        visitConstArray pass i value sort value'
+        return $ Just $ ConstArray i sort value'
       Store array idx value -> do
         array' <- rec array
         idx'   <- rec idx
@@ -180,3 +180,4 @@ runMemReplacePass pass = mapTermM visit
    where
     rec :: SortClass s2 => Term s2 -> m (Term s2)
     rec = mapTermM visit
+

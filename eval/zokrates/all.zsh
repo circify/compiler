@@ -93,7 +93,7 @@ benches=(
     test/Code/Zokrates/stdlib/utils/pack/u32/pack256.zok
     test/Code/Zokrates/stdlib/utils/pack/u32/unpack128.zok
     #test/Code/Zokrates/stdlib/hashes/mimc7/mimc7R90.zok
-    #test/Code/Zokrates/stdlib/hashes/mimcSponge/mimcFeistel.zok
+    test/Code/Zokrates/stdlib/hashes/mimcSponge/mimcFeistel.zok
     #test/Code/Zokrates/stdlib/hashes/mimcSponge/mimcSponge.zok
     #test/Code/Zokrates/stdlib/hashes/sha256/1024bitPadded.zok
     #test/Code/Zokrates/stdlib/hashes/sha256/1024bit.zok

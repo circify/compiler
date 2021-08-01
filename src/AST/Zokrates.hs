@@ -17,6 +17,10 @@ data Type s = Type ![AnInteger s] !(AnPrim s)
             | UStruct !(AnString s)
             deriving Show
 
+data RetType s = Single !(AnType s)
+               | Multi ![AnType s]
+               deriving Show
+
 data Op = Plus | Minus | Times | Div | Pow | Shl | Shr | BitAnd | BitOr | BitXor | And | Or | Eq | Neq | Gt | Ge | Lt | Le
             deriving Show
 
@@ -48,7 +52,7 @@ data Stmt s = For !(AnType s) !(AnString s) !(AnBounds s) !(AnBlock s)
             | Declare !(AnType s) !(AnString s) !(AnExpr s)
             | DataIf !(AnExpr s) !(AnBlock s) !(AnBlock s)
             | Assign !(AnExpr s) !(AnExpr s)
-            | Return !(AnExpr s)
+            | Return ![AnExpr s]
             deriving Show
 
 data Block s = Block ![AnStmt s]
@@ -56,7 +60,7 @@ data Block s = Block ![AnStmt s]
 
 data Func s = Func !(AnString s)
                    ![(Bool, AnType s, AnString s)] -- ^ (private, type, ident)
-                   !(AnType s)
+                   !(AnRetType s)
                    !(AnBlock s)
   deriving Show
 
@@ -73,11 +77,15 @@ instance Functor Stmt where
     Assert t      -> Assert (mapAnns f t)
     Declare t n r -> Declare (mapAnns f t) (f <$> n) (mapAnns f r)
     Assign n r    -> Assign (mapAnns f n) (mapAnns f r)
-    Return r      -> Return (mapAnns f r)
+    Return r      -> Return (mapAnns f <$> r)
 
 instance Functor Type where
   fmap f (Type ds prim) = Type ((f <$>) <$> ds) (fmap f prim)
   fmap f (UStruct n   ) = UStruct (f <$> n)
+
+instance Functor RetType where
+  fmap f (Single t) = Single (mapAnns f t)
+  fmap f (Multi ts) = Multi (mapAnns f <$> ts)
 
 instance Functor ElemExpr where
   fmap f e = case e of
@@ -130,6 +138,7 @@ type AnString s = Annotated String s
 type AnInt s = Annotated Int s
 type AnInteger s = Annotated Integer s
 type AnType s = Annotated (Type s) s
+type AnRetType s = Annotated (RetType s) s
 type AnPrim s = Annotated Prim s
 type AnOp s = Annotated Op s
 type AnUnOp s = Annotated UnOp s
@@ -146,6 +155,7 @@ type PString = AnString PosnPair
 type PInt = AnInt PosnPair
 type PInteger = AnInteger PosnPair
 type PType = AnType PosnPair
+type PRetType = AnRetType PosnPair
 type PPrim = AnPrim PosnPair
 type POp = AnOp PosnPair
 type PUnOp = AnUnOp PosnPair
@@ -164,6 +174,7 @@ type SInteger = AnInteger Span
 type SPrim = AnPrim Span
 type SFunc = Func Span
 type SType = AnType Span
+type SRetType = AnRetType Span
 type SOp = AnOp Span
 type SUnOp = AnUnOp Span
 type SBounds = AnBounds Span

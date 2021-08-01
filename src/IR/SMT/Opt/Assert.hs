@@ -296,4 +296,7 @@ logAssertions tag context = logIfM tag $ do
   liftIO $ putStrLn $ context ++ ":"
   liftIO $ putStrLn $ show (length as) ++ " assertions"
   forM_ as $ \a -> liftIO $ putStrLn $ "  " ++ show a
+  pubins <- gets (Set.toList . view public)
+  liftIO $ putStrLn $ show (length as) ++ " public inputs"
+  forM_ pubins $ \a -> liftIO $ putStrLn $ "  " ++ show a
   return ""

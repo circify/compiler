@@ -165,12 +165,12 @@ genBuiltinCall
   :: KnownNat n => String -> [Term n] -> Z n (Either String (Term n))
 genBuiltinCall name actArgs = case name of
   "to_bits"   -> oneArgBuiltin zU32toBits
-  "from_bits" -> oneArgBuiltin zU32fromBits
+  "from_bits" -> oneArgBuiltin (return . zU32fromBits)
   "unpack"    -> oneArgBuiltin zFieldtoBits
   _           -> return $ Left $ "Unknown builtin fun: " ++ name
  where
   oneArgBuiltin f = case actArgs of
-    [a] -> return $ f a
+    [a] -> Assert.liftAssert $ f a
     _ ->
       return $ Left $ "Wrong argument count to " ++ name ++ ": " ++ show actArgs
 
@@ -191,7 +191,7 @@ genExpr e = case ast e of
       then ok <$> genBuiltinCall (ast name) args'
       else inFile p $ do
         A.Func _ fArgs retTy body <- getFunc (ann name) p n
-        retTy'                    <- genType retTy
+        retTy'                    <- genRetType retTy
         liftCircify $ pushFunction (ast name) (Just retTy')
         forM_ (zip args' fArgs) $ \(aArg, (_, ty, argName)) -> do
           ty' <- genType ty
@@ -199,13 +199,17 @@ genExpr e = case ast e of
         genBlock body
         mRet <- liftCircify popFunction
         return $ fromMaybe (errSpan (ann e) "Missing return") mRet
-  A.Array elems -> ok . zArray . concat <$> mapM genElemExpr elems
-  A.Repeat elem cnt ->
-    ok . zArray <$> liftM2 replicate (genConstInt cnt) (genExpr elem)
+  A.Array elems -> do
+    elems' <- mapM genElemExpr elems
+    ok <$> Assert.liftAssert (zArray $ concat elems')
+  A.Repeat elem cnt -> do
+    reps <- liftM2 replicate (genConstInt cnt) (genExpr elem)
+    ok <$> Assert.liftAssert (zArray reps)
   A.Member s f -> ok . zFieldGet (ast f) <$> genExpr s
   A.Idx    a i -> ok <$> liftM2 zArrayGet (genExpr i) (genExpr a)
-  A.Slice a bnds ->
-    ok <$> liftM2 (uncurry . zSlice) (genExpr a) (genBounds bnds)
+  A.Slice a bnds -> do
+    sliceRes <- liftM2 (uncurry . zSlice) (genExpr a) (genBounds bnds)
+    ok <$> Assert.liftAssert sliceRes
   A.Struct name fs -> Struct (ast name) . Map.fromList <$> forM
     fs
     (\(n, f) -> (ast n, ) <$> genExpr f)
@@ -244,7 +248,7 @@ genStmt s = case ast s of
     scoped $ guarded c' $ genBlock t
     scoped $ guarded (S.Not c') $ genBlock f
   A.Assign v e -> join $ liftM2 (setLVal $ ann s) (genLVal v) (genExpr e)
-  A.Return e   -> genExpr e >>= liftCircify . doReturn
+  A.Return e   -> (naryReturnTerm <$> mapM genExpr e) >>= liftCircify . doReturn
   where ok = fromEitherSpan (ann s)
 
 genLVal :: KnownNat n => A.SExpr -> Z n (LVal n)
@@ -255,18 +259,23 @@ genLVal e = case ast e of
   t            -> errSpan (ann e) $ "Cannot generate LValue from " ++ show t
 
 setLVal :: forall n. KnownNat n => Span -> LVal n -> Term n -> Z n ()
-setLVal s lval term = modLVal lval (const term)
+setLVal s lval term = modLVal lval (return . const term)
  where
-  modLVal :: LVal n -> (Term n -> Term n) -> Z n ()
+  modLVal :: LVal n -> (Term n -> Z n (Term n)) -> Z n ()
   modLVal lval f = case lval of
-    Var v ->
-      liftCircify
-        $   (f . ssaValAsTerm "var set" <$> getTerm v)
-        >>= (void . ssaAssign v . Base)
+    Var v -> do
+      t <- liftCircify $ getTerm v
+      ft <- f (ssaValAsTerm "var set" t)
+      void $ liftCircify $ ssaAssign v (Base ft)
     Member lval' field ->
-      modLVal lval' $ \t -> ok $ zFieldSet field (f $ ok $ zFieldGet field t) t
-    Idx lval' idx ->
-      modLVal lval' $ \t -> ok $ zArraySet idx (f $ ok $ zArrayGet idx t) t
+      modLVal lval' $ \t -> do
+        new <- f $ ok $ zFieldGet field t
+        return $ ok $ zFieldSet field new t
+    Idx lval' idx -> do
+      modLVal lval' $ \t -> do
+        new <- f $ ok $ zArrayGet idx t
+        new_array <- Assert.liftAssert $ zArraySet idx new t
+        return $ ok new_array
   ok = fromEitherSpan s
 
 data LVal n = Var SsaLVal
@@ -286,6 +295,11 @@ genType ty = case ast ty of
   A.UStruct n ->
     fromMaybe (errSpan (ann ty) "Unknown struct") <$> getStruct (ast n)
 
+genRetType :: A.SRetType -> Z n T.Type
+genRetType ty = case ast ty of
+  A.Single t -> genType t
+  A.Multi ts -> T.naryReturnType <$> (mapM genType ts)
+
 genBlock :: KnownNat n => A.SBlock -> Z n ()
 genBlock b = case ast b of
   A.Block b' -> mapM_ genStmt b'
@@ -302,7 +316,7 @@ genItem i = case ast i of
 genEntryFunc :: KnownNat n => A.SFunc -> Z n ()
 genEntryFunc (A.Func name args retTy body) = do
   logIf "entry" $ "Entry function: " ++ ast name
-  retTy' <- genType retTy
+  retTy' <- genRetType retTy
   liftCircify $ pushFunction (ast name) (Just retTy')
   forM_ args $ \(isPrivate, ty, argName) -> do
     ty' <- genType ty
@@ -314,10 +328,14 @@ genEntryFunc (A.Func name args retTy body) = do
       Assert.inputize (ast argName) smtVar
   genBlock body
   mRet <- liftCircify popFunction
-  forM_ mRet $ \rv ->
-    forM_ (Set.toList $ zTermVars "return" rv)
-      $ Assert.liftAssert
-      . Assert.publicize
+  forM_ mRet $ \rv -> do
+    logIf "entry" $ "Pub ret: " ++ show rv
+    Assert.liftAssert $ zTermPublicize "return" rv
+    --liftCircify $ declareInitVar "return" retTy' (Base rv)
+    --retVar <- ssaValAsTerm "return" <$> (liftCircify $ getTerm $ SLVar "return")
+    --forM_ (Set.toList $ zTermVars "return" retVar) $ \v -> do
+    --    Assert.liftAssert $ Assert.publicize v
+    --    logIf "entry" $ "Pub ret subvar: " ++ v
 
 genFiles :: KnownNat n => A.SFiles -> Z n ()
 genFiles fs =

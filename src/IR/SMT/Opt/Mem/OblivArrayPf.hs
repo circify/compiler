@@ -1,8 +1,10 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE GADTs #-}
 {-|
-Module      : OblivArray
+Module      : OblivArrayPf
 Description : Elimination of array terms which are accessed only at constant indices.
 
 = Overview
@@ -61,7 +63,7 @@ which access their tape in a data-indepedant way.
 
 -}
 
-module IR.SMT.Opt.Mem.OblivArray
+module IR.SMT.Opt.Mem.OblivArrayPf
   ( elimOblivArrays
   )
 where
@@ -71,10 +73,12 @@ import qualified Data.BitVector                as Bv
 import           Data.Maybe                     ( fromMaybe
                                                 , listToMaybe
                                                 )
+import qualified Data.Set                      as Set
+import           GHC.TypeNats                   ( KnownNat )
 import           IR.SMT.TySmt
 import qualified IR.SMT.Opt.Assert             as OA
 import           IR.SMT.Opt.Assert              ( Assert )
-import           IR.SMT.Opt.Mem.Util
+import           IR.SMT.Opt.Mem.GVisit
 import qualified Util.ShowMap                  as SMap
 import           Util.ShowMap                   ( ShowMap )
 import           Util.Control                   ( whenM )
@@ -84,18 +88,19 @@ import qualified Util.Progress                 as P
 import           Util.Progress                  ( Progress )
 import           Util.Show
 
-type ArraySet = ShowMap TMem ()
+type ArraySet n v = ShowMap (TArr n v) ()
 
 -- | Given a list of assertions, build a set of array terms which are *not*
 -- oblivious.
-findNonObliviousArrays :: [TermBool] -> Log ArraySet
+findNonObliviousArrays
+  :: forall n v. (KnownNat n, SortClass v) => [TermBool] -> Log (ArraySet n v)
 findNonObliviousArrays ts = P.runToFixPoint pass SMap.empty
  where
   -- |
   --
   -- Mark this array non-oblivious, and if it wasn't already so marked set the
   -- progress flag.
-  markNotOblivious :: TMem -> Progress ArraySet ()
+  markNotOblivious :: (TArr n v) -> Progress (ArraySet n v) ()
   markNotOblivious a = do
     alreadyMarked <- gets (SMap.member a . fst)
     unless alreadyMarked $ do
@@ -103,22 +108,22 @@ findNonObliviousArrays ts = P.runToFixPoint pass SMap.empty
       P.modify $ SMap.insert a ()
       P.setProgress
 
-  isBvLiteral :: TermDynBv -> Bool
-  isBvLiteral t = case t of
-    DynBvLit{} -> True
-    _          -> False
+  isPfLiteral :: TermPf n -> Bool
+  isPfLiteral t = case t of
+    IntToPf (IntLit _) -> True
+    _                  -> False
 
   -- | Assert that the non-obliviousness of a implies that of b.
-  implicate :: TMem -> TMem -> Progress ArraySet ()
+  implicate :: (TArr n v) -> (TArr n v) -> Progress (ArraySet n v) ()
   implicate a b = whenM (gets (SMap.member a . fst)) $ markNotOblivious b
 
   -- | Assert equality of obliviousness
   biImplicate a b = implicate a b >> implicate b a
 
-  onePass = defaultMemReplacePass
+  onePass = defaultArrReplacePass
     { visitSelect = \_ _ a i ->
-      unless (isBvLiteral i) (markNotOblivious a) >> return Nothing
-    , visitStore  = \a i v _ _ _ -> if isBvLiteral i
+      unless (isPfLiteral i) (markNotOblivious a) >> return Nothing
+    , visitStore  = \a i v _ _ _ -> if isPfLiteral i
                       then biImplicate a (Store a i v)
                       else markNotOblivious a >> markNotOblivious (Store a i v)
     , visitEq     = \a b _ _ -> biImplicate a b >> return Nothing
@@ -128,16 +133,16 @@ findNonObliviousArrays ts = P.runToFixPoint pass SMap.empty
                       biImplicate t f
     }
 
-  pass :: Progress ArraySet ()
+  pass :: Progress (ArraySet n v) ()
   pass = do
     logIf "array::elim::mark" "Start mark pass"
-    void $ mapM (runMemReplacePass onePass) ts
+    void $ mapM (runArrReplacePass onePass) ts
 
 
-type TermListMap = ShowMap TMem [TermDynBv]
+type TermListMap n v = ShowMap (TArr n v) [Term v]
 
-newtype Obliv a = Obliv (StateT TermListMap Assert a)
- deriving (MonadLog, MonadCfg, Functor, Applicative, Monad, MonadState TermListMap, OA.MonadAssert)
+newtype Obliv n v a = Obliv (StateT (TermListMap n v) Assert a)
+ deriving (MonadLog, MonadCfg, Functor, Applicative, Monad, MonadState (TermListMap n v), OA.MonadAssert)
 
 modList :: Int -> a -> [a] -> [a]
 modList _ _ []      = error "oob modList"
@@ -145,22 +150,28 @@ modList 0 v (_ : t) = v : t
 modList i v (h : t) = h : modList (i - 1) v t
 
 
-replaceObliviousArrays :: ArraySizes -> ArraySet -> Assert ()
-replaceObliviousArrays arraySizes nonOblivious = evalStateT pass SMap.empty
+replaceObliviousArrays
+  :: forall n v
+  .  (KnownNat n, SortClass v)
+  => (Set.Set String)
+  -> (ArraySizes n v)
+  -> (ArraySet n v)
+  -> Assert ()
+replaceObliviousArrays noElim arraySizes nonOblivious = evalStateT pass SMap.empty
  where
-  asConstInt :: TermDynBv -> Maybe Int
+  asConstInt :: TermPf n -> Maybe Int
   asConstInt t = case t of
-    DynBvLit bv -> Just $ fromInteger $ Bv.nat bv
-    _           -> Nothing
+    IntToPf (IntLit i) -> Just (fromIntegral i)
+    _                  -> Nothing
 
-  isOblivious :: TMem -> Bool
+  isOblivious :: (TArr n v) -> Bool
   isOblivious t = not $ SMap.member t nonOblivious
 
-  size :: TMem -> Int
+  size :: (TArr n v) -> Int
   size t =
     fromMaybe (error $ "No size for " ++ show t) $ SMap.lookup t arraySizes
 
-  getTerms :: TMem -> Obliv [TermDynBv]
+  getTerms :: (TArr n v) -> Obliv n v [Term v]
   getTerms array = gets
     (fromMaybe (error $ "No value list for " ++ show array) . SMap.lookup array)
 
@@ -178,14 +189,14 @@ replaceObliviousArrays arraySizes nonOblivious = evalStateT pass SMap.empty
     SortArray (SortBv i) _ -> i
     _ -> error $ "Sort " ++ show s ++ " is not an array(Bv,_) sort"
 
-  store :: TMem -> [TermDynBv] -> Obliv ()
+  store :: (TArr n v) -> [Term v] -> Obliv n v ()
   store t l = do
     -- We truncate the list, because ConstArrays have an infinite list
     logIf "array::elim::replace" $ "Replace: " ++ show t ++ " -> " ++ show
       (take 10 l)
     modify $ SMap.insert t l
 
-  visitors = (defaultMemReplacePass :: MemReplacePass Obliv)
+  visitors = (defaultArrReplacePass :: ArrReplacePass (Obliv n v) n v)
     { visitConstArray = \l v sort v' ->
                           let c = ConstArray l sort v
                           in  when (isOblivious c) $ store c $ repeat v'
@@ -203,10 +214,11 @@ replaceObliviousArrays arraySizes nonOblivious = evalStateT pass SMap.empty
                             >>= store (Ite c' t' f')
     , visitVar        = \name sort -> do
       let var = Var name sort
-      when (isOblivious var) $ do
+      when (isOblivious var && Set.member name noElim) $ do
         let varName i = name ++ "_" ++ show i
         let w = idxWidth sort
-        ts :: [TermDynBv] <- forM [0 .. (size var - 1)] $ \i -> do
+        logIf "array::elim::var" $ "Variable: " ++ name ++ " size " ++ show (size var)
+        ts :: [Term v] <- forM [0 .. (size var - 1)] $ \i -> do
           let s = mkSelect (Var name sort) $ DynBvLit $ Bv.bitVec w i
           OA.newVar (varName i) (valueSort sort) s
         store var ts
@@ -215,21 +227,37 @@ replaceObliviousArrays arraySizes nonOblivious = evalStateT pass SMap.empty
                             Just . atIndex ci <$> getTerms a'
                           _ -> return Nothing
     , visitEq         = \a _ a' b' -> if isOblivious a
-                          then Just . BoolNaryExpr And <$> liftM2 (zipWith mkEq)
-                                                                  (getTerms a')
-                                                                  (getTerms b')
+                          then
+                            case (a', b') of
+                              (Var name _, right) ->
+                                if not (Set.member name noElim)
+                                  then do
+                                    l' <- getTerms right
+                                    store a' l'
+                                    return $ Just $ BoolLit True
+                                  else
+                                    Just . BoolNaryExpr And <$> liftM2 (zipWith mkEq)
+                                                                            (getTerms a')
+                                                                            (getTerms b')
+                              _ -> 
+                                    Just . BoolNaryExpr And <$> liftM2 (zipWith mkEq)
+                                                                            (getTerms a')
+                                                                            (getTerms b')
                           else return Nothing
     }
 
-  Obliv pass = OA.modifyAssertionsWith $ runMemReplacePass visitors
+  Obliv pass = OA.modifyAssertionsWith $ runArrReplacePass visitors
 
 
-elimOblivArrays :: Assert ()
+elimOblivArrays :: forall n v.(KnownNat n, SortClass v) => Assert ()
 elimOblivArrays = do
   -- TODO: push Asssert deeper?
-  sizes        <- gets (OA._sizes)
+  --sizes        <- gets (OA._sizes)
+  noElim <- gets OA._public
   as           <- gets OA.listAssertions
-  nonOblivious <- liftLog $ findNonObliviousArrays as
-  logIf "array::elim::sizes" $ "Initial sizes: " ++ pShow sizes
-  sizes' <- liftLog $ propSizes sizes as
-  replaceObliviousArrays sizes' nonOblivious
+  nonOblivious <- liftLog $ findNonObliviousArrays @n @v as
+  logIf "array::elim::sizes" $ "start sizes"
+  sizes' <- liftLog $ computeSizes as
+  logIf "array::elim::sizes" $ "end sizes"
+  logIf "array::elim::sizes" $ "sizes: " ++ pShow sizes'
+  replaceObliviousArrays noElim sizes' nonOblivious

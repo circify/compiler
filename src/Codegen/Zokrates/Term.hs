@@ -46,10 +46,12 @@ module Codegen.Zokrates.Term
   , zFieldSet
   -- Infra
   , zTermVars
+  , zTermPublicize
   -- Built-ins
   , zU32fromBits
   , zU32toBits
   , zFieldtoBits
+  , naryReturnTerm
   )
 where
 
@@ -61,13 +63,14 @@ import           Codegen.LangVal                ( InMap
                                                 , setInputFromMap
                                                 )
 import qualified Data.BitVector                as Bv
-import           Data.Maybe                     ( fromMaybe )
+import           Data.Maybe                     ( fromMaybe, isJust )
 import qualified Data.Map.Strict               as Map
 import           Data.List                      ( group )
 import           Data.Proxy                     ( Proxy(..) )
 import qualified Data.Set                      as Set
 import qualified IR.SMT.TySmt                  as S
 import qualified IR.SMT.TySmt.Alg              as SAlg
+--import qualified IR.SMT.TySmt.DefaultMap       as DMap
 import qualified IR.SMT.Assert                 as Assert
 import           GHC.TypeLits                   ( KnownNat
                                                 , natVal
@@ -78,6 +81,9 @@ data Term n = BitInt Int S.TermDynBv
             | Field  (S.TermPf n)
             | Bool   S.TermBool
             | Array Int [Term n]
+            | FieldArray Int (S.TermArray (S.PfSort n) (S.PfSort n))
+            | BoolArray Int (S.TermArray (S.PfSort n) S.BoolSort)
+            | BitIntArray Int Int (S.TermArray (S.PfSort n) S.DynBvSort)
             | Struct String (Map.Map String (Term n))
             deriving (Show)
 
@@ -100,7 +106,7 @@ wrapBin name fI fF fB a b = case (a, b, fI, fF, fB) of
 
 wrapBinPred
   :: forall n
-  .  KnownNat n
+   . KnownNat n
   => String
   -> Maybe (S.TermDynBv -> S.TermDynBv -> S.TermBool)
   -> Maybe (S.TermPf n -> S.TermPf n -> S.TermBool)
@@ -111,10 +117,10 @@ wrapBinPred
 wrapBinPred name fI fF fB a b = case (a, b, fI, fF, fB) of
   (BitInt w0 a', BitInt w1 b', Just f, _, _) | w0 == w1 ->
     Right $ Bool $ f a' b'
-  (Field a', Field b', _, Just f, _) -> Right $ Bool $ f a' b'
-  (Bool a', Bool b', _, _, Just f) -> Right $ Bool $ f a' b'
+  (Field a' , Field b' , _, Just f, _     ) -> Right $ Bool $ f a' b'
+  (Bool  a' , Bool b'  , _, _     , Just f) -> Right $ Bool $ f a' b'
   --- HACK
-  (Array _ a, Array _ b, _, _, _) -> do
+  (Array _ a, Array _ b, _, _     , _     ) -> do
     bools <- (mapM (uncurry zEq) $ zip a b) >>= mapM zBool
     Right $ Bool $ S.BoolNaryExpr S.And bools
   _ -> Left $ unwords
@@ -123,9 +129,6 @@ wrapBinPred name fI fF fB a b = case (a, b, fI, fF, fB) of
 zAdd, zSub, zMul, zDiv, zShl, zShr, zPow, zBitAnd, zBitOr, zBitXor, zGe, zGt, zLt, zLe, zNe, zEq, zAnd, zOr
   :: KnownNat n => Term n -> Term n -> Either String (Term n)
 
-
-ne :: S.SortClass s => S.Term s -> S.Term s -> S.TermBool
-ne x y = S.Not $ S.mkEq x y
 
 -- Binarize an nary fn
 bin :: ([a] -> t) -> a -> a -> t
@@ -154,18 +157,41 @@ zPow a b = do
   base <- zConstInt a
   case (b, base) of
     (Field f, 2) -> Right (Field (S.PfUnExpr S.PfTwoPow f))
-    _ -> Left "bad power"
+    _            -> Left "bad power"
 zBitAnd = wrapBin "&" (Just $ bin $ S.mkDynBvNaryExpr S.BvAnd) Nothing Nothing
 zBitOr = wrapBin "|" (Just $ bin $ S.mkDynBvNaryExpr S.BvOr) Nothing Nothing
 zBitXor = wrapBin "^" (Just $ bin $ S.mkDynBvNaryExpr S.BvXor) Nothing Nothing
 zAnd = wrapBin "&&" Nothing Nothing (Just $ bin (S.BoolNaryExpr S.And))
 zOr = wrapBin "||" Nothing Nothing (Just $ bin (S.BoolNaryExpr S.Or))
-zEq = wrapBinPred "==" (Just S.mkEq) (Just S.mkEq) (Just S.mkEq)
-zNe = wrapBinPred "!=" (Just ne) (Just ne) (Just ne)
+--zEq = wrapBinPred "==" (Just S.mkEq) (Just S.mkEq) (Just S.mkEq)
+--zNe = wrapBinPred "!=" (Just ne) (Just ne) (Just ne)
+--
+--ne :: S.SortClass s => S.Term s -> S.Term s -> S.TermBool
+--ne x y = S.Not $ S.mkEq x y
 zGe = wrapBinPred ">=" (Just $ S.mkDynBvBinPred S.BvUge) Nothing Nothing
 zGt = wrapBinPred ">" (Just $ S.mkDynBvBinPred S.BvUgt) Nothing Nothing
 zLe = wrapBinPred "<=" (Just $ S.mkDynBvBinPred S.BvUle) Nothing Nothing
-zLt = wrapBinPred "<" (Just $ S.mkDynBvBinPred S.BvUlt) (Just $ S.PfBinPred S.PfLt) Nothing
+zLt = wrapBinPred "<"
+                  (Just $ S.mkDynBvBinPred S.BvUlt)
+                  (Just $ S.PfBinPred S.PfLt)
+                  Nothing
+
+
+
+zNe a b = zEq a b >>= zNot
+zEq a b = case (a, b) of
+  (BitInt w0 a', BitInt w1 b') | w0 == w1 ->
+    Right $ Bool $ S.mkEq a' b'
+  (Field a' , Field b' ) -> Right $ Bool $ S.mkEq a' b'
+  (Bool  a' , Bool b'  ) -> Right $ Bool $ S.mkEq a' b'
+  --- HACK
+  (Array _ a, Array _ b) -> do
+    bools <- (mapM (uncurry zEq) $ zip a b) >>= mapM zBool
+    Right $ Bool $ S.BoolNaryExpr S.And bools
+  (BoolArray _ xs, BoolArray _ ys) -> Right $ Bool $ S.mkEq xs ys
+  (FieldArray _ xs, FieldArray _ ys) -> Right $ Bool $ S.mkEq xs ys
+  (BitIntArray _ _ xs, BitIntArray _ _ ys) -> Right $ Bool $ S.mkEq xs ys
+  _ -> Left $ unwords ["Cannot perform operation", "==", "on", show a, "and", show b]
 
 wrapShift
   :: KnownNat n
@@ -208,10 +234,16 @@ zNot = wrapUn "!" (Just $ S.mkDynBvUnExpr S.BvNot) Nothing (Just S.Not)
 type Field n = (String, Term n)
 zIte :: KnownNat n => S.TermBool -> Term n -> Term n -> Either String (Term n)
 zIte c a b = case (a, b) of
-  (Bool  x, Bool y )                      -> Right $ Bool $ S.mkIte c x y
-  (Field x, Field y)                      -> Right $ Field $ S.mkIte c x y
-  (BitInt w0 x, BitInt w1 y) | w0 == w1   -> Right $ BitInt w0 $ S.mkIte c x y
-  (Array w0 x, Array w1 y) | w0 == w1     -> Array w0 <$> zipWithM (zIte c) x y
+  (Bool  x, Bool y )                    -> Right $ Bool $ S.mkIte c x y
+  (Field x, Field y)                    -> Right $ Field $ S.mkIte c x y
+  (BitInt w0 x, BitInt w1 y) | w0 == w1 -> Right $ BitInt w0 $ S.mkIte c x y
+  (Array w0 x, Array w1 y) | w0 == w1   -> Array w0 <$> zipWithM (zIte c) x y
+  (FieldArray w0 x, FieldArray w1 y) | w0 == w1 ->
+    Right $ FieldArray w0 $ S.mkIte c x y
+  (BoolArray w0 x, BoolArray w1 y) | w0 == w1 ->
+    Right $ BoolArray w0 $ S.mkIte c x y
+  (BitIntArray w0 l0 x, BitIntArray w1 l1 y) | l0 == l1 && w0 == w1 ->
+    Right $ BitIntArray w0 l0 $ S.mkIte c x y
   (Struct n0 xs, Struct n1 ys) | n0 == n1 -> do
     ps <- zipWithM zipField (Map.toAscList xs) (Map.toAscList ys)
     return $ Struct n0 $ Map.fromList ps
@@ -239,25 +271,56 @@ zCond c t f = do
   zIte c' t f
 
 zSlice
-  :: KnownNat n => Term n -> Maybe Int -> Maybe Int -> Either String (Term n)
+  :: KnownNat n
+  => Term n
+  -> Maybe Int
+  -> Maybe Int
+  -> Assert.Assert (Either String (Term n))
 zSlice t a b = case t of
   Array d items ->
     let a' = fromMaybe 0 a
         w  = fromMaybe d b - a'
-    in  Right $ Array w $ take w $ drop a' items
-  _ -> Left $ unwords ["Cannot slice", show t]
+    in  return $ Right $ Array w $ take w $ drop a' items
+  FieldArray d _items -> do
+    let a' = fromMaybe 0 a
+        e  = fromMaybe d b - 1
+        ts = mapM (\i -> zArrayGet (Field $ S.IntToPf $ S.IntLit $ toInteger i) t) [a' .. e]
+    either (return . Left) zArray ts
+  BitIntArray _ d _items -> do
+    let a' = fromMaybe 0 a
+        e  = fromMaybe d b - 1
+        ts = mapM (\i -> zArrayGet (Field $ S.IntToPf $ S.IntLit $ toInteger i) t) [a' .. e]
+    either (return . Left) zArray ts
+  BoolArray d _items -> do
+    let a' = fromMaybe 0 a
+        e  = fromMaybe d b - 1
+        ts = mapM (\i -> zArrayGet (Field $ S.IntToPf $ S.IntLit $ toInteger i) t) [a' .. e]
+    either (return . Left) zArray ts
+  _ -> return $ Left $ unwords ["Cannot slice", show t]
 
 zSpread :: KnownNat n => Term n -> Either String [Term n]
 zSpread t = case t of
-  Array _ items -> Right items
-  _             -> Left $ unwords ["Cannot spread", show t]
+  Array      _ items  -> Right items
+  FieldArray d _items -> mapM
+    (\i -> zArrayGet (Field $ S.IntToPf $ S.IntLit $ toInteger i) t)
+    [0 .. d - 1]
+  BoolArray d _items -> mapM
+    (\i -> zArrayGet (Field $ S.IntToPf $ S.IntLit $ toInteger i) t)
+    [0 .. d - 1]
+  BitIntArray _ d _items -> mapM
+    (\i -> zArrayGet (Field $ S.IntToPf $ S.IntLit $ toInteger i) t)
+    [0 .. d - 1]
+  _ -> Left $ unwords ["Cannot spread", show t]
 
 zType :: KnownNat n => Term n -> T.Type
 zType t = case t of
-  BitInt i _  -> T.Uint i
-  Bool  _     -> T.Bool
-  Field _     -> T.Field
-  Struct n fs -> T.Struct n $ Map.map zType fs
+  BitInt i _        -> T.Uint i
+  Bool  _           -> T.Bool
+  Field _           -> T.Field
+  Struct     n fs   -> T.Struct n $ Map.map zType fs
+  FieldArray d _    -> T.Array d T.Field
+  BoolArray  d _    -> T.Array d T.Bool
+  BitIntArray w d _ -> T.Array d (T.Uint w)
   Array d xs ->
     let tys = map zType xs
     in  case length (group tys) of
@@ -283,20 +346,75 @@ zArrayGet i a = case (i, a) of
           (head xs)
       $ zip [1 ..]
       $ tail xs
+  (Field i', FieldArray d xs) | d > 0 -> Right $ Field $ S.mkSelect xs i'
+  (Field i', BitIntArray w d xs) | d > 0 -> Right $ BitInt w $ S.mkSelect xs i'
+  (Field i', BoolArray d xs) | d > 0 -> Right $ Bool $ S.mkSelect xs i'
   _ -> Left $ unwords ["Cannot get index", show i, "from array", show a]
 
-zArraySet :: KnownNat n => Term n -> Term n -> Term n -> Either String (Term n)
-zArraySet i v a = case (i, a) of
+zArraySet
+  :: forall n
+   . KnownNat n
+  => Term n
+  -> Term n
+  -> Term n
+  -> Assert.Assert (Either String (Term n))
+zArraySet i v a = case (i, a, v) of
   -- TODO bounds check index?? Less clear here.
-  (Field i', Array d xs) | d > 0 ->
-    Array d
-      <$> zipWithM (\j -> zIte (S.mkEq i' (S.IntToPf $ S.IntLit j)) v) [0 ..] xs
-  _ -> Left $ unwords ["Cannot get index", show i, "from array", show a]
+  (Field i', Array d xs, _) | d > 0 -> return
+    (   Array d
+    <$> zipWithM (\j -> zIte (S.mkEq i' (S.IntToPf $ S.IntLit j)) v) [0 ..] xs
+    )
+  (Field i', FieldArray d xs, Field v') | d > 0 -> do
+    let store = S.mkStore xs i' v'
+    v <- Assert.freshVar "array_set"
+                         (S.SortArray (S.SortPf modulus) (S.SortPf modulus))
+    Assert.assign v store
+    return $ Right $ FieldArray d v
+  (Field i', BoolArray d xs, Bool v') | d > 0 -> do
+    let store = S.mkStore xs i' v'
+    v <- Assert.freshVar "array_set" (S.SortArray (S.SortPf modulus) S.SortBool)
+    Assert.assign v store
+    return $ Right $ BoolArray d v
+  (Field i', BitIntArray w d xs, BitInt w' v') | w == w' && d > 0 -> do
+    let store = S.mkStore xs i' v'
+    v <- Assert.freshVar "array_set"
+                         (S.SortArray (S.SortPf modulus) (S.SortBv w))
+    Assert.assign v store
+    return $ Right $ BitIntArray w d v
+  _ ->
+    return $ Left $ unwords ["Cannot set index", show i, "from array", show a]
+  where modulus = natVal (Proxy @n)
 
-zArray :: KnownNat n => [Term n] -> Either String (Term n)
+zArray
+  :: forall n
+   . KnownNat n
+  => [Term n]
+  -> Assert.Assert (Either String (Term n))
 zArray ts = if length (group $ map zType ts) < 2
-  then Right $ Array (length ts) ts
-  else Left $ unwords ["Cannot build array from", show ts]
+  then case zType (head ts) of
+    T.Field -> do
+      let base = FieldArray l $ S.ConstArray l sortPf (S.IntToPf (S.IntLit 0))
+      foldM (\acc (i, term) -> andThen (zArraySet (flit i) term) acc)
+            (Right base)
+            (zip [0 ..] ts)
+    T.Bool -> do
+      let base = BoolArray l $ S.ConstArray l sortPf (S.BoolLit False)
+      foldM (\acc (i, term) -> andThen (zArraySet (flit i) term) acc)
+            (Right base)
+            (zip [0 ..] ts)
+    T.Uint w -> do
+      let base =
+            BitIntArray w l $ S.ConstArray l sortPf (S.DynBvLit $ Bv.zeros w)
+      foldM (\acc (i, term) -> andThen (zArraySet (flit i) term) acc)
+            (Right base)
+            (zip [0 ..] ts)
+    _ -> return $ Right $ Array l ts
+  else return $ Left $ unwords ["Cannot build array from", show ts]
+ where
+  l       = length ts
+  sortPf  = S.SortPf (natVal (Proxy @n))
+  andThen = either (return . Left)
+  flit    = Field . S.IntToPf . S.IntLit
 
 --   The first name is required, and is an SMT name that should be a prefix of all generated SMT variables
 --   The second name is optional, and is a user-visible name.
@@ -318,9 +436,19 @@ zDeclare inputs ty name mUserName = case ty of
                        (BitInt w)
   T.Field -> declBase S.ValPf (S.ValPf 0) (S.SortPf $ natVal (Proxy @n)) Field
   T.Bool  -> declBase (S.ValBool . (/= 0)) (S.ValBool False) S.SortBool Bool
+--  T.Array s T.Field ->
+--    let idxSort = S.SortPf $ natVal (Proxy @n)
+--        arrSort = S.SortArray idxSort idxSort
+--        defaultValue = S.ValArray (DMap.emptyWithDefault (S.ValPf 0))
+--        rec i = zDeclare inputs inner (aName i name) (aName i <$> mUserName)
+--        Array s <$> forM [0 .. (s - 1)] rec
+--    in  declBase undefined defaultValue arrSort (FieldArray s)
   T.Array s inner ->
     let rec i = zDeclare inputs inner (aName i name) (aName i <$> mUserName)
-    in  Array s <$> forM [0 .. (s - 1)] rec
+    in  do
+          terms <- forM [0 .. (s - 1)] rec
+          logIf "entry" $ "array terms: " ++ show terms
+          either error id <$> Assert.liftAssert (zArray terms)
   T.Struct n fs ->
     let rec (f, t) =
             (f, ) <$> zDeclare inputs t (sName f name) (sName f <$> mUserName)
@@ -336,6 +464,7 @@ zDeclare inputs ty name mUserName = case ty of
   declBase parse default_ sort toTerm = Assert.liftAssert $ do
     logIf "decl" $ "declBase: " ++ name ++ " " ++ show mUserName
     t <- Assert.newVar name sort
+    when (isJust mUserName) $ Assert.publicize name
     setInputFromMap inputs parse default_ name mUserName
     return $ toTerm t
 
@@ -349,6 +478,15 @@ zAlias name term = case term of
   Struct n fs -> Struct n . Map.fromList <$> forM
     (Map.toList fs)
     (\(f, t) -> (f, ) <$> zAlias (sName f name) t)
+  FieldArray w xs ->
+    let mod = natVal (Proxy @n)
+    in  base (S.SortArray (S.SortPf mod) (S.SortPf mod)) xs (FieldArray w)
+  BoolArray w xs ->
+    let mod = natVal (Proxy @n)
+    in  base (S.SortArray (S.SortPf mod) S.SortBool) xs (BoolArray w)
+  BitIntArray w l xs ->
+    let mod = natVal (Proxy @n)
+    in  base (S.SortArray (S.SortPf mod) (S.SortBv w)) xs (BitIntArray w l)
   Array n xs -> Array n <$> zipWithM (\i -> zAlias (aName i name)) [0 ..] xs
  where
   base
@@ -378,10 +516,13 @@ zSetValues :: KnownNat n => String -> Term n -> Assert.Assert ()
 zSetValues name t = do
   logIf "values" $ "Setting " ++ show name ++ " to " ++ show t
   case t of
-    Bool b     -> Assert.evalAndSetValue name b
-    BitInt _ i -> Assert.evalAndSetValue name i
-    Field f    -> Assert.evalAndSetValue name f
+    Bool b            -> Assert.evalAndSetValue name b
+    BitInt _ i        -> Assert.evalAndSetValue name i
+    Field f           -> Assert.evalAndSetValue name f
     Array _ xs -> zipWithM_ (\i x -> zSetValues (aName i name) x) [0 ..] xs
+    FieldArray _ _    -> error "nyi: zSetValues for FieldArray"
+    BitIntArray _ _ _ -> error "nyi: zSetValues for BitIntArray _"
+    BoolArray _ _     -> error "nyi: zSetValues for BoolArray"
     Struct _ fs ->
       forM_ (Map.toList fs) $ \(f, t) -> zSetValues (sName f name) t
 
@@ -396,7 +537,10 @@ zEvaluate t = do
       fmap (Struct ty . Map.fromDistinctAscList) . sequence <$> forM
         (Map.toAscList fs)
         (\(f, t) -> fmap (f, ) <$> zEvaluate t)
-    Array n fs -> fmap (Array n) . sequence <$> forM fs zEvaluate
+    FieldArray w b    -> fmap (FieldArray w) <$> Assert.evalToTerm b
+    BitIntArray w l b -> fmap (BitIntArray w l) <$> Assert.evalToTerm b
+    BoolArray w b     -> fmap (BoolArray w) <$> Assert.evalToTerm b
+    Array     n fs    -> fmap (Array n) . sequence <$> forM fs zEvaluate
 
 zTermVars :: KnownNat n => String -> Term n -> Set.Set String
 zTermVars name t = case t of
@@ -405,14 +549,49 @@ zTermVars name t = case t of
   Field f    -> SAlg.vars f
   Struct _ l -> Set.unions
     $ Map.mapWithKey (\fName fTerm -> zTermVars (sName fName name) fTerm) l
-  Array _elemTy items -> Set.unions
+  FieldArray _ f          -> SAlg.vars f
+  BitIntArray _ _ f       -> SAlg.vars f
+  BoolArray _       f     -> SAlg.vars f
+  Array     _elemTy items -> Set.unions
     $ zipWith (\i fTerm -> zTermVars (aName i name) fTerm) [0 ..] items
 
-zU32toBits :: KnownNat n => Term n -> Either String (Term n)
+zTermPublicize :: forall n . KnownNat n => String -> Term n -> Assert.Assert ()
+zTermPublicize name t = case t of
+  Bool b         -> base name S.SortBool b
+  BitInt w i     -> base name (S.SortBv w) i
+  Field f        -> base name (S.SortPf $ natVal (Proxy @n)) f
+  FieldArray l f -> do
+    let terms = map
+          (\i -> S.Select f (S.IntToPf $ S.IntLit $ fromIntegral i))
+          ([0 .. (l - 1)])
+    forM_ (zip terms [0 ..])
+      $ \(t, i) -> base (aName i name) (S.SortPf $ natVal (Proxy @n)) t
+  BitIntArray w l f -> do
+    let terms = map
+          (\i -> S.Select f (S.IntToPf $ S.IntLit $ fromIntegral i))
+          ([0 .. (l - 1)])
+    forM_ (zip terms [0 ..]) $ \(t, i) -> base (aName i name) (S.SortBv w) t
+  BoolArray l f -> do
+    let terms = map
+          (\i -> S.Select f (S.IntToPf $ S.IntLit $ fromIntegral i))
+          ([0 .. (l - 1)])
+    forM_ (zip terms [0 ..]) $ \(t, i) -> base (aName i name) S.SortBool t
+  Struct _ l ->
+    forM_ (Map.toList l) $ \(k, v) -> zTermPublicize (sName k name) v
+  Array _elemTy items ->
+    forM_ (zip [0 ..] items) $ \(k, v) -> zTermPublicize (aName k name) v
+ where
+  base :: S.SortClass s => String -> S.Sort -> S.Term s -> Assert.Assert ()
+  base name sort term = do
+    logIf "return" $ "Publicizing ret part: " ++ show name ++ " = " ++ show term
+    v <- Assert.newVar name sort
+    Assert.publicize name
+    Assert.assign v term
+
+zU32toBits :: KnownNat n => Term n -> Assert.Assert (Either String (Term n))
 zU32toBits u32 = case u32 of
-  BitInt 32 bv ->
-    Right $ Array 32 $ map (Bool . flip S.mkDynBvExtractBit bv) [0 .. 31]
-  _ -> Left $ "Cannot call (u32) to_bits on " ++ show u32
+  BitInt 32 bv -> zArray $ map (Bool . flip S.mkDynBvExtractBit bv) [0 .. 31]
+  _            -> return $ Left $ "Cannot call (u32) to_bits on " ++ show u32
 
 zU32fromBits :: KnownNat n => Term n -> Either String (Term n)
 zU32fromBits array = case array of
@@ -421,14 +600,17 @@ zU32fromBits array = case array of
       Bool b -> Right b
       t      -> Left $ "Non-bit " ++ show t
     return $ BitInt 32 $ foldl1 S.mkDynBvConcat $ map S.BoolToDynBv bits'
+  BoolArray 32 arr -> do
+    bits' <- forM [0..31] $ \i -> Right $ S.mkSelect arr (S.IntToPf $ S.IntLit i)
+    return $ BitInt 32 $ foldl1 S.mkDynBvConcat $ map S.BoolToDynBv bits'
   _ -> Left $ "Cannot call (u32) from_bits on " ++ show array
 
-zFieldtoBits :: KnownNat n => Term n -> Either String (Term n)
+zFieldtoBits :: KnownNat n => Term n -> Assert.Assert (Either String (Term n))
 zFieldtoBits t = case t of
   Field f ->
     let bv = S.PfToDynBv 254 f
-    in  Right $ Array 254 $ map (Bool . flip S.mkDynBvExtractBit bv) [0 .. 253]
-  _ -> Left $ "Cannot call (field) unpack on " ++ show t
+    in  zArray $ map (Bool . flip S.mkDynBvExtractBit bv) [0 .. 253]
+  _ -> return $ Left $ "Cannot call (field) unpack on " ++ show t
 
 instance KnownNat n => Embeddable T.Type (Term n) (Maybe InMap) where
   declare   = zDeclare
@@ -436,3 +618,9 @@ instance KnownNat n => Embeddable T.Type (Term n) (Maybe InMap) where
   assign    = const zAssign
   setValues = const zSetValues
   evaluate  = const zEvaluate
+
+naryReturnTerm :: KnownNat n => [Term n] -> Term n
+naryReturnTerm ts =
+  if length ts > 1
+    then Struct T.naryReturnTypeName $ Map.fromList $ zip (show <$> [(0 :: Int) ..]) ts
+    else head ts

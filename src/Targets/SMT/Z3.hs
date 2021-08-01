@@ -239,11 +239,12 @@ toZ3 t = case t of
 
   PfUnExpr{}     -> nyi "Prime fields"
   PfNaryExpr{}   -> nyi "Prime fields"
+  PfBinPred{}    -> nyi "Prime fields"
   IntToPf{}      -> nyi "Prime fields"
 
   Select a k     -> tyBinZ3Bin Z.mkSelect a k
   Store a k v    -> tyTernZ3Tern Z.mkStore a k v
-  ConstArray s v -> do
+  ConstArray _ s v -> do
     s' <- sortToZ3 s
     v' <- toZ3 v
     Z.mkConstArray s' v'
