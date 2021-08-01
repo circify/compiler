@@ -481,7 +481,7 @@ data Term s where
     Select   ::(SortClass k, SortClass v) => !(TermArray k v) -> !(Term k) -> Term v
     Store    ::(SortClass k, SortClass v) => !(TermArray k v) -> !(Term k) -> !(Term v) -> Term (ArraySort k v)
     -- domain, value
-    ConstArray ::(SortClass k, SortClass v) => !Sort -> !(Term v) -> TermArray k v
+    ConstArray ::(SortClass k, SortClass v) => !Int -> !Sort -> !(Term v) -> TermArray k v
 
 
 deriving instance Show (Term s)
@@ -706,7 +706,7 @@ sort t = case sorted @s of
       SortArray _ s' -> s'
       _              -> throw $ SortError "Invalid array sort"
     Store _ k v     -> SortArray (sort k) (sort v)
-    ConstArray ks v -> SortArray ks (sort v)
+    ConstArray _ ks v -> SortArray ks (sort v)
 
     _ ->
       throw
@@ -844,7 +844,7 @@ instance SortClass sort => Hashable (Term sort) where
       IntToPf i -> s # t 49 # i
       Select a i -> s # t 50 # a # i
       Store a i v -> s # t 51 # a # i # v
-      ConstArray ks v -> s # t 52 # ks # v
+      ConstArray l ks v -> s # t 52 # l # ks # v
       DynBvExtractBit i b -> s # t 53 # i # b
       PfToDynBv w b -> s # t 54 # w # b
       BoolToDynBv b -> s # t 55 # b
@@ -1000,7 +1000,7 @@ instance Eq (Term s) where
     (  ((a1_abY2 == b1_abY5))
     && (((a2_abY3 == b2_abY6)) && ((a3_abY4 == b3_abY7)))
     )
-  (==) (ConstArray s1 t1) (ConstArray s2 t2) = (s1 == s2) && (t1 == t2)
+  (==) (ConstArray l1 s1 t1) (ConstArray l2 s2 t2) = (l1 == l2) && ((s1 == s2) && (t1 == t2))
   (==) (PfBinPred a1_abWW a2_abWX a3_abWY) (PfBinPred b1_abWZ b2_abX0 b3_abX1)
     = (  ((a1_abWW == b1_abWZ))
       && (((a2_abWX `dynEq` b2_abX0)) && ((a3_abWY `dynEq` b3_abX1)))

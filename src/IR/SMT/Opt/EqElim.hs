@@ -122,7 +122,7 @@ eqElimGen fns ts =
       logIf "smt::opt::cfee::debug" $ "Check " ++ show i ++ " : " ++ show a
       forM_ (asSub fns a) $ \(var, val) -> do
         vUses <- gets (fromMaybe IntSet.empty . HMap.lookup var . view uses)
-        logIf "smt::opt::cfee::debug" $ "Sub in " ++ show vUses
+        logIf "smt::opt::cfee::debug" $ "Sub "++ show var ++" in " ++ show vUses
         modify $ over terms $ IntMap.delete i
         forM_ (IntSet.toList vUses) $ \useI -> when (useI /= i) $ do
           mT <- gets (IntMap.lookup useI . view terms)
@@ -174,6 +174,7 @@ eqElim = do
 
 eqElimFn :: Set.Set String -> Set.Set String -> [TermBool] -> Log [TermBool]
 eqElimFn noElim usedOnce ts = do
+  logIf "smt::opt::ee" $ "no elim: " ++ show noElim
   allowBlowup <- liftCfg $ asks (_allowSubBlowup . _smtOptCfg)
   cFold       <- liftCfg $ asks (_cFoldInSub . _smtOptCfg)
   let preCheck' = if cFold then constantFold else id

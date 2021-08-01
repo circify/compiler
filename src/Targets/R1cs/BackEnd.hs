@@ -19,7 +19,8 @@ import           GHC.TypeNats                   ( KnownNat )
 
 instance KnownNat n => BackEnd (R1CS String n) where
   target a = do
-    newSmt <- SmtOpt.opt a
+    --newSmt' <- SmtOpt.opt a
+    newSmt <- SmtOpt.optPf @n a
     r      <- ToPf.toPf @n (OptAssert._vals newSmt)
                       (OptAssert._public newSmt)
                       (OptAssert._sizes newSmt)

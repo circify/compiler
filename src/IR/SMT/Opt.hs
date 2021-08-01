@@ -1,8 +1,11 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE Rank2Types #-}
 module IR.SMT.Opt
   ( opt
+  , optPf
   , OptMetadata(..)
   , newOptMetadata
   )
@@ -10,6 +13,7 @@ where
 
 import           IR.SMT.TySmt
 import           IR.SMT.Opt.Mem.OblivArray      ( elimOblivArrays )
+import qualified IR.SMT.Opt.Mem.OblivArrayPf   as OblivPf
 import           IR.SMT.Opt.Mem.NonObliv        ( memPass )
 import           IR.SMT.Opt.ConstFoldEqElim     ( constantFold
                                                 , constFoldEqElim
@@ -21,6 +25,7 @@ import qualified IR.SMT.Assert                 as A
 
 import           Control.Monad.State.Strict     ( forM_
                                                 , liftM2
+                                                , when
                                                 )
 import           Control.Monad.Reader           ( asks )
 import qualified Data.Map.Strict               as Map
@@ -34,6 +39,7 @@ import           Util.Cfg                       ( MonadCfg(..)
 import           Util.Control                   ( whenM )
 import           Util.Log
 import           Util.ShowMap                   ( ShowMap )
+import           GHC.TypeNats                   ( KnownNat )
 
 type ArraySizes = ShowMap (Term (ArraySort DynBvSort DynBvSort)) Int
 
@@ -121,3 +127,50 @@ opt a = do
                   Right () -> return ()
                 logIf "smt::opt" "Checked"
   OA.execAssert optimize a'
+
+optPf :: forall n . KnownNat n => A.AssertState -> Log OA.AssertState
+optPf a = do
+  let a' = OA.fromAssertState a
+  optsToRun <- liftCfg $ asks (_smtOpts . _smtOptCfg)
+  let optimize = do
+        OA.logAssertions "smt::opt" "initial"
+        forM_ optsToRun $ \oname -> do
+          logIf "smt::opt" ("Pass: " ++ show oname)
+          -- do Pf-specific optimizations
+          when (oname == name arrayElimOpt) $ do
+            OblivPf.elimOblivArrays @n @(PfSort n)
+            OblivPf.elimOblivArrays @n @BoolSort
+            OblivPf.elimOblivArrays @n @DynBvSort
+            OA.logAssertions "smt::opt" ("Post " ++ show oname)
+            whenM
+                (liftM2 (&&)
+                        OA.isStoringValues
+                        (liftCfg $ asks (_checkOpts . _smtOptCfg))
+                )
+              $ do
+                  logIf "smt::opt" "Checking system"
+                  r <- OA.check
+                  case r of
+                    Left  m  -> error m
+                    Right () -> return ()
+                  logIf "smt::opt" "Checked"
+          -- do general optimizations
+          let o =
+                fromMaybe (error $ "No optimization named: " ++ oname)
+                  $ Map.lookup oname opts
+          fn o
+          OA.logAssertions "smt::opt" ("Post " ++ show oname)
+          whenM
+              (liftM2 (&&)
+                      OA.isStoringValues
+                      (liftCfg $ asks (_checkOpts . _smtOptCfg))
+              )
+            $ do
+                logIf "smt::opt" "Checking system"
+                r <- OA.check
+                case r of
+                  Left  m  -> error m
+                  Right () -> return ()
+                logIf "smt::opt" "Checked"
+  OA.execAssert optimize a'
+

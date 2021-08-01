@@ -126,7 +126,7 @@ mapTerm f t = case f t of
 
     Select a k            -> Select (mapTerm f a) (mapTerm f k)
     Store a k v           -> Store (mapTerm f a) (mapTerm f k) (mapTerm f v)
-    ConstArray s i        -> ConstArray s (mapTerm f i)
+    ConstArray l s i      -> ConstArray l s (mapTerm f i)
   Just s -> s
 
 -- |
@@ -212,7 +212,7 @@ mapTermM f t = do
 
       Select a k            -> liftM2 Select (rec a) (rec k)
       Store a k v           -> liftM3 Store (rec a) (rec k) (rec v)
-      ConstArray s i        -> liftM (ConstArray s) (rec i)
+      ConstArray l s i      -> liftM (ConstArray l s) (rec i)
     Just s -> return $ s
  where
   rec :: SortClass s' => Term s' -> m (Term s')
@@ -313,7 +313,7 @@ reduceTerm mapF i foldF t = case mapF t of
     Store a k v     -> foldF
       (foldF (reduceTerm mapF i foldF a) (reduceTerm mapF i foldF k))
       (reduceTerm mapF i foldF v)
-    ConstArray _s v -> reduceTerm mapF i foldF v
+    ConstArray _l _s v -> reduceTerm mapF i foldF v
   Just s -> s
 
 depth :: SortClass s => Term s -> Int
@@ -389,6 +389,7 @@ pfUnFn :: PfUnOp -> Integer -> Integer -> Integer
 pfUnFn op m = case op of
   PfNeg   -> (m -)
   PfRecip -> flip invMod m
+  PfTwoPow -> \i -> (2^i) `rem` m
 
 pfBinPredFn :: PfBinOp -> Integer -> Integer -> Bool
 pfBinPredFn op = case op of
@@ -625,7 +626,7 @@ eval e t = case t of
   Store a k v ->
     ValArray $ DMap.insert (eval e k) (eval e v) (valAsArray $ eval e a)
   -- Not quite right
-  ConstArray _ v -> newArray t $ Just $ eval e v
+  ConstArray _ _ v -> newArray t $ Just $ eval e v
 
 newArray
   :: forall k v

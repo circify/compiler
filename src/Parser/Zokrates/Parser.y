@@ -196,6 +196,10 @@ type :: {PType}
      :  prim cdimensions { pos (A.Type $2 $1) (aStart $1) (foldr max (aEnd $1) (map aEnd $2)) }
      |  ident      { pos (A.UStruct $1) (aStart $1) (aEnd $1) }
 
+ret_type :: {PRetType}
+         :  type                                    { pos (Single $1) (aStart $1) (aEnd $1) }
+         |  '(' lssi0(type, ',', nl) ')'            { pos (Multi $2) (tStart $1) (tEnd $3) }
+
 -- The different ops are split out to enable precedence handling
 expr :: {PExpr}
      : ident                                        { pos (A.Ident $1) (aStart $1) (aEnd $1) }
@@ -246,7 +250,6 @@ stmt :: {PStmt}
      | type ident '=' expr nl                         { pos (A.Declare $1 $2 $4) (aStart $1) (aEnd $4) }
      | dif expr dthen nl block delse nl block dfi nl  { pos (A.DataIf $2 $5 $8) (tStart $1) (tEnd $9) }
      | expr '=' expr nl                               { pos (A.Assign $1 $3) (aStart $1) (aEnd $3) }
-     --| return expr %prec LOW                          { pos (A.Return $2) (tStart $1) (aEnd $2) }
 
 is_private :: {Bool}
            : private                           { True }
@@ -257,10 +260,10 @@ cblock :: {PBlock}
        | { pos (Block []) nullPosn nullPosn }
 
 block :: {PBlock}
-      : cblock return expr { let Block l = ast $1 in pos
-               (Block (l ++ [pos (A.Return $3) (tStart $2) (aEnd $3)]))
+      : cblock return lss1(expr, ',') { let Block l = ast $1 in pos
+               (Block (l ++ [pos (A.Return $3) (tStart $2) (aEnd $ last $3)]))
                (aStart $1)
-               (aEnd $3) }
+               (aEnd $ last $3) }
       | cblock { $1 }
 
 input :: {(Bool, PType, PString)}
@@ -272,7 +275,7 @@ mem :: {(PType, PString)}
       : type ident   { ($1, $2) }
 
 item :: {PItem}
-     : def ident '(' arg_list ')' '->' type ':' l1(nl) block
+     : def ident '(' arg_list ')' '->' ret_type ':' l1(nl) block
          { pos (A.FuncItem (A.Func $2 $4 $7 $10)) (tStart $1) (aEnd $10) }
      | import strlit as ident                { pos (A.Import $2 Nothing (Just $4)) (tStart $1) (aEnd $4) }
      | import strlit                         { pos (A.Import $2 Nothing Nothing) (tStart $1) (aEnd $2) }

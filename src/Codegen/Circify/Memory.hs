@@ -206,6 +206,7 @@ stackAlloc array' size' idxWidth' valWidth' = do
     v <- Assert.newVar @MemSort name (arraySort a)
     Assert.assign v array'
     Assert.evalAndSetValue @MemSort name $ Ty.ConstArray
+      size'
       (Ty.SortBv idxWidth')
       (Ty.DynBvLit $ Bv.bitVec valWidth' (0 :: Integer))
   modify $ \s -> s { stackAllocations = Map.insert i a $ stackAllocations s }
@@ -226,7 +227,7 @@ stackNewAlloc
   -> Int -- ^ value bits
   -> Mem StackAllocId -- ^ id of allocation
 stackNewAlloc size' idxWidth' valWidth' = do
-  let a = Ty.ConstArray (Ty.SortBv idxWidth') (bvNum False valWidth' 0)
+  let a = Ty.ConstArray size' (Ty.SortBv idxWidth') (bvNum False valWidth' 0)
   id <- stackAlloc a size' idxWidth' valWidth'
   v  <- stackGetAllocVar id
   liftAssert $ setSize v size'

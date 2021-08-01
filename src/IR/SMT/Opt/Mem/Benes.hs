@@ -126,7 +126,7 @@ extractRoots = do
     rts = do -- List monad
       (idx, a) <- IMap.toAscList as
       case a of
-        Eq (Var n s) c@(ConstArray _ defaultValue) ->
+        Eq (Var n s) c@(ConstArray _ _ defaultValue) ->
           case cast (c, defaultValue) of
             Just (c', d) ->
               let size =
