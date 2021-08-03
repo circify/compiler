@@ -39,7 +39,12 @@ function count() {
     circify)
         touch C
         cfile=$(readlink -f "C")
-        (cd ../../.. && pwd && C_inputs_in_range=False $CIRCIFY -C $cfile --emit-r1cs zokrates main $pfile)
+        if [[ ( "$pfile" =~ .*sha256.* ) || ( "$pfile" =~ .*verify.* ) ]]
+        then
+            (cd ../../.. && pwd && C_inputs_in_range=False C_array_thresh=4000 $CIRCIFY -C $cfile --emit-r1cs zokrates main $pfile)
+        else
+            (cd ../../.. && pwd && C_inputs_in_range=False $CIRCIFY -C $cfile --emit-r1cs zokrates main $pfile)
+        fi
         n=$(head -n 1 C | awk '{print $3}')
         ;;
     *)
@@ -62,21 +67,24 @@ benches=(
     test/Code/Zokrates/stdlib/ecc/edwardsOrderCheck.zok
     test/Code/Zokrates/stdlib/ecc/edwardsScalarMult.zok
     test/Code/Zokrates/stdlib/ecc/proofOfOwnership.zok
-    test/Code/Zokrates/stdlib/hashes/mimc7/constants.zok
     test/Code/Zokrates/stdlib/hashes/mimc7/mimc7R10.zok
     test/Code/Zokrates/stdlib/hashes/mimc7/mimc7R20.zok
     test/Code/Zokrates/stdlib/hashes/mimc7/mimc7R50.zok
-    test/Code/Zokrates/stdlib/hashes/mimcSponge/IVconstants.zok
+    test/Code/Zokrates/stdlib/hashes/mimc7/mimc7R90.zok
+    test/Code/Zokrates/stdlib/hashes/mimcSponge/mimcFeistel.zok
+    test/Code/Zokrates/stdlib/hashes/mimcSponge/mimcSponge.zok
     test/Code/Zokrates/stdlib/hashes/pedersen/512bit.zok
-    #test/Code/Zokrates/stdlib/hashes/sha256/256bitPadded.zok
-    #test/Code/Zokrates/stdlib/hashes/sha256/512bitPacked.zok
-    #test/Code/Zokrates/stdlib/hashes/sha256/512bitPadded.zok
-    #test/Code/Zokrates/stdlib/hashes/sha256/512bit.zok
-    test/Code/Zokrates/stdlib/hashes/sha256/IVconstants.zok
-    #test/Code/Zokrates/stdlib/hashes/sha256/shaRound.zok
+    test/Code/Zokrates/stdlib/hashes/sha256/1024bitPadded.zok
+    test/Code/Zokrates/stdlib/hashes/sha256/1024bit.zok
+    test/Code/Zokrates/stdlib/hashes/sha256/1536bit.zok
+    test/Code/Zokrates/stdlib/hashes/sha256/256bitPadded.zok
+    test/Code/Zokrates/stdlib/hashes/sha256/512bitPacked.zok
+    test/Code/Zokrates/stdlib/hashes/sha256/512bitPadded.zok
+    test/Code/Zokrates/stdlib/hashes/sha256/512bit.zok
+    test/Code/Zokrates/stdlib/hashes/sha256/shaRound.zok
     test/Code/Zokrates/stdlib/hashes/utils/256bitsDirectionHelper.zok
-    #test/Code/Zokrates/stdlib/signatures/verifyEddsa.zok
-    #test/Code/Zokrates/stdlib/utils/casts/1024to256array.zok
+    test/Code/Zokrates/stdlib/signatures/verifyEddsa.zok
+    test/Code/Zokrates/stdlib/utils/casts/1024to256array.zok
     test/Code/Zokrates/stdlib/utils/casts/bool_128_to_u32_4.zok
     test/Code/Zokrates/stdlib/utils/casts/bool_256_to_u32_8.zok
     test/Code/Zokrates/stdlib/utils/casts/u32_4_to_bool_128.zok
@@ -92,13 +100,10 @@ benches=(
     test/Code/Zokrates/stdlib/utils/pack/u32/pack128.zok
     test/Code/Zokrates/stdlib/utils/pack/u32/pack256.zok
     test/Code/Zokrates/stdlib/utils/pack/u32/unpack128.zok
-    #test/Code/Zokrates/stdlib/hashes/mimc7/mimc7R90.zok
-    test/Code/Zokrates/stdlib/hashes/mimcSponge/mimcFeistel.zok
-    #test/Code/Zokrates/stdlib/hashes/mimcSponge/mimcSponge.zok
-    #test/Code/Zokrates/stdlib/hashes/sha256/1024bitPadded.zok
-    #test/Code/Zokrates/stdlib/hashes/sha256/1024bit.zok
-    #test/Code/Zokrates/stdlib/hashes/sha256/1536bit.zok
 );
+typeset -A envvars
+envvars=(
+         )
 init_results
 for i in $(seq ${#benches})
     do

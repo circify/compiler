@@ -159,6 +159,11 @@ genConstInt e = do
       case storedConst of
         Just i -> return i
         Nothing -> errSpan (ann e) err
+    (Left err, A.Bin A.Minus Annotated {ast = (A.Ident n)} Annotated {ast = (A.LitExpr (Annotated { ast = A.IntLit i} ))}) -> do
+      storedConst <- gets ((Map.!? (ast n)) . view consts)
+      case storedConst of
+        Just i' -> return (i' - fromIntegral i)
+        Nothing -> errSpan (ann e) err
     (err, _) -> return $ fromEitherSpan (ann e) err
 
 genBuiltinCall
