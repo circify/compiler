@@ -56,6 +56,7 @@ module Codegen.Zokrates.Term
 where
 
 import           Control.Monad
+import           Control.Monad.Reader
 import qualified Codegen.Circify.Memory        as Mem
 import           Codegen.Circify                ( Embeddable(..) )
 import qualified Codegen.Zokrates.Type         as T
@@ -76,6 +77,7 @@ import           GHC.TypeLits                   ( KnownNat
                                                 , natVal
                                                 )
 import           Util.Log
+import qualified Util.Cfg                      as Cfg
 
 data Term n = BitInt Int S.TermDynBv
             | Field  (S.TermPf n)
@@ -391,24 +393,26 @@ zArray
   => [Term n]
   -> Assert.Assert (Either String (Term n))
 zArray ts = if length (group $ map zType ts) < 2
-  then case zType (head ts) of
-    T.Field -> do
-      let base = FieldArray l $ S.ConstArray l sortPf (S.IntToPf (S.IntLit 0))
-      foldM (\acc (i, term) -> andThen (zArraySet (flit i) term) acc)
-            (Right base)
-            (zip [0 ..] ts)
-    T.Bool -> do
-      let base = BoolArray l $ S.ConstArray l sortPf (S.BoolLit False)
-      foldM (\acc (i, term) -> andThen (zArraySet (flit i) term) acc)
-            (Right base)
-            (zip [0 ..] ts)
-    T.Uint w -> do
-      let base =
-            BitIntArray w l $ S.ConstArray l sortPf (S.DynBvLit $ Bv.zeros w)
-      foldM (\acc (i, term) -> andThen (zArraySet (flit i) term) acc)
-            (Right base)
-            (zip [0 ..] ts)
-    _ -> return $ Right $ Array l ts
+  then do
+    t <- Cfg.liftCfg $ asks (Cfg._arrayThresh . Cfg._zokCfg)
+    case (zType (head ts), length ts < t) of
+      (T.Field, False) -> do
+        let base = FieldArray l $ S.ConstArray l sortPf (S.IntToPf (S.IntLit 0))
+        foldM (\acc (i, term) -> andThen (zArraySet (flit i) term) acc)
+              (Right base)
+              (zip [0 ..] ts)
+      (T.Bool, False) -> do
+        let base = BoolArray l $ S.ConstArray l sortPf (S.BoolLit False)
+        foldM (\acc (i, term) -> andThen (zArraySet (flit i) term) acc)
+              (Right base)
+              (zip [0 ..] ts)
+      (T.Uint w, False) -> do
+        let base =
+              BitIntArray w l $ S.ConstArray l sortPf (S.DynBvLit $ Bv.zeros w)
+        foldM (\acc (i, term) -> andThen (zArraySet (flit i) term) acc)
+              (Right base)
+              (zip [0 ..] ts)
+      _ -> return $ Right $ Array l ts
   else return $ Left $ unwords ["Cannot build array from", show ts]
  where
   l       = length ts

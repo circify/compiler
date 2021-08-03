@@ -11,6 +11,7 @@ module Util.Cfg
   , ToPfCfg(..)
   , R1csCfg(..)
   , MonadCfg(..)
+  , ZokCfg(..)
   , CfgOption(..)
   , setFromEnv
   , setFromArgs
@@ -106,6 +107,15 @@ defaultCCfg = CCfg { _printfOutput  = True
 
 $(makeLenses ''CCfg)
 
+data ZokCfg = ZokCfg
+  { _arrayThresh  :: Int
+  }
+  deriving Show
+
+defaultZokCfg = ZokCfg { _arrayThresh  = 33 }
+
+$(makeLenses ''ZokCfg)
+
 data R1csCfg = R1csCfg
   { _optLevel      :: Int
   , _checkR1csOpts :: Bool
@@ -127,6 +137,7 @@ data CfgState = CfgState
   , _loopFlatten      :: Bool
   , _loopMaxIteration :: Int
   , _cCfg             :: CCfg
+  , _zokCfg           :: ZokCfg
   , _help             :: Bool
   }
   deriving Show
@@ -142,6 +153,7 @@ defaultCfgState = CfgState { _r1csCfg          = defaultR1csCfg
                            , _loopMaxIteration = 10000
                            , _help             = False
                            , _cCfg             = defaultCCfg
+                           , _zokCfg           = defaultZokCfg
                            }
 
 $(makeLenses ''CfgState)
@@ -308,6 +320,11 @@ options =
               "smt-bound-loops"
               "Use an SMT solver to only unroll loops as much as necessary."
               "The solver checks whether the post-condition path is feasible."
+              "False"
+  , CfgOption (zokCfg . arrayThresh . showReadLens)
+              "array-thresh"
+              "Size at which Zokrates generator switch to SMT arrays"
+              "Default: 33,"
               "False"
   , CfgOption (help . showReadLens)
               "help"
