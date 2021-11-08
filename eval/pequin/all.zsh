@@ -3,21 +3,22 @@
 set -ex
 CIRCIFY=$(which compiler-exe)
 SCRIPT_PATH="${0:A:h}"
+BENCH_PATH=${SCRIPT_PATH}/pequin_bench
 
 # 1 argument: benchmark name
 # 2 argument: compiler
 # 3 argument: number of constraints
 function save_result() {
-    echo $1,$2,$3 >> $SCRIPT_PATH/results-wip.csv
+    echo $1,$2,$3,$4 >> $SCRIPT_PATH/results-wip.csv
 }
 
 function init_results() {
     rm -rf $SCRIPT_PATH/results-wip.csv
-    echo benchmark,compiler,constraints > $SCRIPT_PATH/results-wip.csv
+    echo benchmark,compiler,constraints,wall_time > $SCRIPT_PATH/results-wip.csv
 }
 
 function commit_results() {
-    mv $SCRIPT_PATH/results-wip.csv $SCRIPT_PATH/results.csv
+    mv $SCRIPT_PATH/results-wip.csv $SCRIPT_PATH/all_results.csv
 }
 
 # 1 argument: c path
@@ -26,60 +27,44 @@ function commit_results() {
 function count() {
     d=$(mktemp -d -p . )
     cd $d
+    s=$(date +%s.%N)
+    e=$(date +%s.%N)
     case $2 in
     circify)
-        C_pequin_io=True C_no_overflow=True env $e $CIRCIFY c-emit-r1cs compute $1
-        n=$(head -n 1 C | awk '{print $3}')
+        s=$(date +%s.%N)
+        C_pequin_io=True C_no_overflow=True $CIRCIFY --emit-r1cs c compute $1
+        e=$(date +%s.%N)
         ;;
     *)
         echo "Unknown circom compiler: $2"
         exit 1
         ;;
     esac
+    n=$(head -n 1 C | awk '{print $3}')
     cd -
-    save_result $3 $2 $n
+    save_result $3 $2 $n $(($e - $s))
     rm -rf $d
 }
 typeset -A paths
 paths=(
-    mm5
-             ~/repos/llcl/compiler/test/Code/C/pequin/mm_flat.c
-    u32sqrt
-             ~/repos/llcl/compiler/test/Code/C/sqrt.c
-    u32log2-array
-             ~/repos/llcl/compiler/test/Code/C/pequin/log.c
-    u32log2
-             ~/repos/llcl/compiler/test/Code/C/pequin/log_norm.c
-    ptrs-8
-             ~/repos/llcl/compiler/test/Code/C/pequin/ptrchase_8_8.c
-    ptrs-256
-             ~/repos/llcl/compiler/test/Code/C/pequin/ptrchase_256_8.c
-         )
-typeset -A envvars
-envvars=(
-    mm5
-             ""
-    u32sqrt
-             ""
-    u32log2
-             ""
-    u32log2-array
-             ""
-    ptrs-8
-             ""
-    ptrs-256
-             ""
+            boyer_moore "$BENCH_PATH/boyer_occur_benes.c"
+            kmp_search "$BENCH_PATH/kmpsearch_flat.c"
+            mergesort "$BENCH_PATH/mergesort_benes.c"
+            mm "$BENCH_PATH/mm.c"
+            ptrchase "$BENCH_PATH/ptrchase_benes.c"
+            rle_decode "$BENCH_PATH/rle_decode_flat.c"
+            sparse_matvec "$BENCH_PATH/sparse_matvec_flat.c"
          )
 
 init_results
 for b in "${(@k)paths}"; do
     p="${paths[$b]}"
-    e="${envvars[$b]}"
+    echo $b $p
     for compiler in circify; do
-        count $p $compiler $b "$e"
+        count $p $compiler $b
     done
 done
 commit_results
-cat ./pequin_results.csv | tail -n +2 >> results.csv
-cat ./slow_results.csv | tail -n +2 >> results.csv
+cat ./pequin_all_results.csv | tail -n +2 >> all_results.csv
+#cat ./slow_results.csv | tail -n +2 >> all_results.csv
 

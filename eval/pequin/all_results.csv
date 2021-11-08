@@ -1,0 +1,17 @@
+benchmark,compiler,constraints,wall_time
+sparse_matvec,circify,2008,0.68843793869018555
+mm,circify,125,0.40819215774536133
+rle_decode,circify,2160,0.67950987815856934
+mergesort,circify,10400,3.6852407455444336
+kmp_search,circify,7876,1.7625861167907715
+ptrchase,circify,168,0.13760089874267578
+boyer_moore,circify,2199,0.8964991569519043
+mm,pequin,125,TODO
+ptrchase,pequin,1993,TODO
+boyer_moore,pequin,TODO,TODO
+kmp_search,pequin,TODO,TODO
+mergesort,pequin,TODO,TODO
+mm,pequin,TODO,TODO
+ptrchase,pequin,TODO,TODO
+rle_decode,pequin,TODO,TODO
+sparse_matvec,pequin,TODO,TODO

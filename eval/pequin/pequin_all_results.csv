@@ -1,0 +1,10 @@
+benchmark,compiler,constraints,wall_time
+mm,pequin,125,TODO
+ptrchase,pequin,1993,TODO
+boyer_moore,pequin,TODO,TODO
+kmp_search,pequin,TODO,TODO
+mergesort,pequin,TODO,TODO
+mm,pequin,TODO,TODO
+ptrchase,pequin,TODO,TODO
+rle_decode,pequin,TODO,TODO
+sparse_matvec,pequin,TODO,TODO
