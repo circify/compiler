@@ -658,11 +658,17 @@ bvToPf env term = do
         bvToPf env x
         x' <- getIntBits x
         saveIntBits bv $ map lcNot x'
-      DynBvSext _ deltaW i -> do
+      DynBvSext w deltaW i -> do
         bvToPf env i
-        i' <- getIntBits i
-        unless (length i' > 0) $ error $ "Sext of no bits " ++ show bv
-        saveIntBits bv $ i' ++ replicate deltaW (last i')
+        lazy <- lazyInt
+        if lazy
+          then do
+            i' <- getInt i
+            saveInt bv (i', w)
+          else do
+            i' <- getIntBits i
+            unless (length i' > 0) $ error $ "Sext of no bits " ++ show bv
+            saveIntBits bv $ i' ++ replicate deltaW (last i')
       DynBvUext w _ i -> do
         bvToPf env i
         i' <- getInt i
