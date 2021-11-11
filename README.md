@@ -61,6 +61,11 @@ For usage information:
 stack exec compiler-exe -- -h
 ```
 
+For example, to run function foo in file bar, use:
+```
+stack exec compiler-exe c foo bar.c -- --solve
+```
+
 # Configuration
 
 There is a configuration system in `src/Util/Cfg.hs`. You can add new
