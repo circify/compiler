@@ -19,6 +19,7 @@ module Codegen.C.AstUtil
   , defStruct
   , getStruct
   , getConstIterations
+  , asConstUpperBound
   )
 where
 import           Codegen.C.Type
@@ -251,6 +252,12 @@ getConstIterations stmt = case stmt of
     when (i0 /= i1 || i1 /= i2) $ mempty
     -- ceiling((end - start) / incr)
     return $ (identToVarName i0, ((end - start - 1) `div` incr) + 1)
+  -- HACK for pequin benchmarks
+  CWhile test _ False _ -> do
+    (i1, end  ) <- asConstUpperBound test
+    -- when (i0 /= i1 || i1 /= i2) $ mempty
+    -- ceiling((end - start) / incr)
+    return $ (identToVarName i1, end)
   _ -> Nothing
  where
   asConstInit :: Either (Maybe CExpr) CDecl -> Maybe (Ident, Integer)
@@ -259,12 +266,6 @@ getConstIterations stmt = case stmt of
       Just (ident, c)
     Right (CDecl _declSpec [(Just (CDeclr (Just ident) _ _ _ _), Just (CInitExpr (ConstIntExpr c) _), _)] _)
       -> Just (ident, c)
-    _ -> Nothing
-
-  asConstUpperBound :: CExpr -> Maybe (Ident, Integer)
-  asConstUpperBound expr = case expr of
-    CBinary CLeOp (CVar ident _) (ConstIntExpr c) _ -> Just (ident, c)
-    CBinary CLeqOp (CVar ident _) (ConstIntExpr c) _ -> Just (ident, c + 1)
     _ -> Nothing
 
   asIncrement :: CExpr -> Maybe (Ident, Integer)
@@ -279,6 +280,12 @@ getConstIterations stmt = case stmt of
     CUnary CPreIncOp  (CVar i0 _) _ -> Just (i0, 1)
     _                               -> Nothing
 
+asConstUpperBound :: CExpr -> Maybe (Ident, Integer)
+asConstUpperBound expr = case expr of
+  CBinary CLeOp (CVar ident _) (ConstIntExpr c) _ -> Just (ident, c)
+  CBinary CLeqOp (CVar ident _) (ConstIntExpr c) _ -> Just (ident, c + 1)
+  CBinary CLeOp (CVar ident _) (CBinary CSubOp (ConstIntExpr c) (ConstIntExpr c2) _) _ -> Just (ident, c-c2)
+  _ -> Nothing
 
 pattern ConstIntExpr :: Integer -> CExpression a
 pattern ConstIntExpr c <- CConst (CIntConst (CInteger c _ _) _)

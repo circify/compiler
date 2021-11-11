@@ -589,17 +589,32 @@ genStmt stmt = do
           replicateM_ b (liftCircify popGuard)
       exitBreak
     CWhile check body isDoWhile _ -> do
-      bound <- gets loopBound
-      let addGuard = genExpr check >>= liftCircify . pushGuard . ssaBool
-      enterBreak
-      replicateM_ bound $ do
-        unless isDoWhile addGuard
-        -- TODO: could skip more
-        unlessM skipPath $ genStmt body
-        when isDoWhile addGuard
-      -- TODO: assert end, skip dependent
-      replicateM_ bound (liftCircify popGuard)
-      exitBreak
+      case asConstUpperBound check of
+        Just (_, integerBound) -> do
+          let bound = fromIntegral integerBound
+          logIf "c::const::iter" $ "constant iterations (while): " ++ show bound
+          let addGuard = genExpr check >>= liftCircify . pushGuard . ssaBool
+          enterBreak
+          replicateM_ bound $ do
+            unless isDoWhile addGuard
+            -- TODO: could skip more
+            unlessM skipPath $ genStmt body
+            when isDoWhile addGuard
+          -- TODO: assert end, skip dependent
+          replicateM_ bound (liftCircify popGuard)
+          exitBreak
+        Nothing -> do
+          bound <- gets loopBound
+          let addGuard = genExpr check >>= liftCircify . pushGuard . ssaBool
+          enterBreak
+          replicateM_ bound $ do
+            unless isDoWhile addGuard
+            -- TODO: could skip more
+            unlessM skipPath $ genStmt body
+            when isDoWhile addGuard
+          -- TODO: assert end, skip dependent
+          replicateM_ bound (liftCircify popGuard)
+          exitBreak
     CReturn expr _ -> forM_ expr $ \e -> do
       toReturn <- genExpr e
       logIf "return" $ "Returning: " ++ show toReturn

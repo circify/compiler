@@ -1,10 +1,8 @@
 benchmark,compiler,constraints,wall_time
-mm,pequin,125,TODO
-ptrchase,pequin,1993,TODO
-boyer_moore,pequin,TODO,TODO
-kmp_search,pequin,TODO,TODO
-mergesort,pequin,TODO,TODO
-mm,pequin,TODO,TODO
-ptrchase,pequin,TODO,TODO
-rle_decode,pequin,TODO,TODO
-sparse_matvec,pequin,TODO,TODO
+sparse_matvec,pequin,23466,7.6279699802398682
+mm,pequin,27001,17.441912889480591
+kmp_search,pequin,163664,30.560702085494995
+mergesort,pequin,19781,5.4477379322052002
+rle_decode,pequin,9847,6.2269811630249023
+ptrchase,pequin,1993,1.4317009449005127
+boyer_moore,pequin,5612,2.0600368976593018
