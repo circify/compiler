@@ -965,12 +965,12 @@ enforceAsPf env b = do
   logIf "toPf" $ "enforce: " ++ show b
   doOpt    <- gets (optEq . cfg)
   wasAlias <- if doOpt then handleAlias env b else return False
-  logIf "toPf" $ "wasAlias: " ++ show wasAlias
+  logIf "toPf" $ "handled as an alias: " ++ show wasAlias
   unless wasAlias $ boolToPf env b >>= enforceTrue
   n' <- gets $ Seq.length . R1cs.constraints . r1cs
   r  <- gets $ r1csStats . r1cs
   logIf "toPf" $ "New constraints: " ++ show (n' - n)
-  logIf "toPf" $ "Net: " ++ r
+  logIf "toPf" $ "Net:" ++ r
 
 publicizeInputs :: Set.Set PfVar -> ToPf n ()
 publicizeInputs is = do
@@ -1007,6 +1007,7 @@ toPf
 toPf env inputs arraySizes' bs = do
   let ToPf a = do
         forM_ env $ \_ -> modify $ \s -> s { r1cs = r1csInitSigVals $ r1cs s }
+        forM_ env $ \e -> logIf "toPf" (show e)
         configureFromEnv
         publicizeInputs inputs
         forM_ bs (enforceAsPf env)

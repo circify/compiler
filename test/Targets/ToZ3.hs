@@ -189,7 +189,7 @@ tySmtToZ3Tests = benchTestGroup
   bv3 = Smt.DynBvLit . Bv.bitVec 3
   bv4 :: Integer -> Smt.TermDynBv
   bv4    = Smt.DynBvLit . Bv.bitVec 4
-  zArray = Smt.ConstArray @Smt.DynBvSort (Smt.SortBv 3) (bv3 0)
+  zArray = Smt.ConstArray @Smt.DynBvSort 8 (Smt.SortBv 3) (bv3 0)
   aVar   = Smt.mkVar "a" (Smt.SortArray (Smt.SortBv 3) (Smt.SortBv 3))
   genOverflowTest
     :: String -> Smt.BvBinPred -> Int -> Integer -> Integer -> Bool -> BenchTest

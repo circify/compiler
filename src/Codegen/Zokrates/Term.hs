@@ -591,6 +591,7 @@ zTermPublicize name t = case t of
     v <- Assert.newVar name sort
     Assert.publicize name
     Assert.assign v term
+    Assert.evalAndSetValue name term
 
 zU32toBits :: KnownNat n => Term n -> Assert.Assert (Either String (Term n))
 zU32toBits u32 = case u32 of
