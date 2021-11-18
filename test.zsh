@@ -65,3 +65,5 @@ stack run -- verify
 
 stack run -- zokrates main test/Code/Zokrates/sum.zok --setup
 stack run -- zokrates main test/Code/Zokrates/sum.zok --prove -i test/Code/Zokrates/inputs/sum.i
+
+C_c_sv=True stack run -- c mult test/Code/C/openssl_assume.c --check --solve
