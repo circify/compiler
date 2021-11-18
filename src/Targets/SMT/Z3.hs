@@ -358,14 +358,14 @@ evalZ3 term = Z.evalZ3 $ do
 
 -- For generating a numerical description of the model
 
-data Val = IVal Int
+data Val = IVal Integer
          | BVal Bool
          | DVal Double
          | NegZ
          | NaN
          deriving (Eq, Ord)
 
-i_ :: Int -> Val
+i_ :: Integer -> Val
 i_ = IVal
 
 b_ :: Bool -> Val
@@ -423,7 +423,7 @@ evalZ3Model term = do
                  -- Binary
                 'b' : n -> Just (var, IVal $ readBin n)
                  -- Hex
-                'x' : _ -> Just (var, IVal (read ('0' : maybeVal) :: Int))
+                'x' : _ -> Just (var, IVal (read ('0' : maybeVal) :: Integer))
                 -- Non-special floating point
                 'f' : 'p' : ' ' : rest ->
                   let
@@ -450,10 +450,10 @@ evalZ3Model term = do
   let seconds = (fromInteger (tDiffNanos end start) :: Double) / 1.0e9
   return Z3Result { time = seconds, sat = sat', model = m }
  where
-  readBin :: String -> Int
+  readBin :: String -> Integer
   readBin = foldr
     (\d a -> if d `elem` "01"
-      then digitToInt d + 2 * a
+      then toInteger (digitToInt d) + 2 * a
       else error $ "invalid binary character: " ++ [d]
     )
     0

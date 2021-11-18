@@ -61,6 +61,7 @@ cParseIntTypeLength l = case l of
   [CLongType{}, CIntType{} ] -> Just 64
   [CLongType{}, CLongType{}] -> Just 64
   [CLongType{}, CLongType{}, CIntType{}] -> Just 64
+  [CInt128Type{}] -> Just 128
   _                          -> Nothing
 
 cParseIntType :: [CTypeSpecifier a] -> Maybe Type
@@ -110,7 +111,7 @@ parseBaseTy ty = case ty of
   -- Not quite right, need list NodeInfo
   _                             -> do
     text <- liftIO $ nodeText $ head ty
-    return $ Left $ unlines ["Unexpected type:", text]
+    return $ Left $ unlines ["Unexpected type:", text, show $ ty]
 
 applyDerivations
   :: (Show a) => Type -> [CDerivedDeclarator a] -> Either String Type

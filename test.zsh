@@ -66,4 +66,18 @@ stack run -- verify
 stack run -- zokrates main test/Code/Zokrates/sum.zok --setup
 stack run -- zokrates main test/Code/Zokrates/sum.zok --prove -i test/Code/Zokrates/inputs/sum.i
 
-C_c_sv=True stack run -- c mult test/Code/C/openssl_assume.c --check --solve
+C_c_sv=True stack run -- c mult test/Code/C/openssl_bug.c --check --setup
+C_c_sv=True stack run -- c mult test/Code/C/openssl_bug.c --check --solve | tee out
+cat out | egrep '\w+ [[:digit:]]+' > out2
+mv out2 out
+C_c_sv=True stack run -- c mult test/Code/C/openssl_bug.c --check --prove -i out
+stack run -- verify
+rm out
+
+C_c_sv=True stack run -- c mult test/Code/C/openssl_bug.c --check --setup
+C_c_sv=True stack run -- c mult test/Code/C/openssl_assume.c --check --solve | tee out
+cat out | egrep '\w+ [[:digit:]]+' > out2
+mv out2 out
+C_c_sv=True stack run -- c mult test/Code/C/openssl_bug.c --check --prove -i out
+stack run -- verify
+rm out

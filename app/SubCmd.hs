@@ -21,6 +21,7 @@ import qualified Data.IntMap                   as IntMap
 import qualified Data.Map                      as Map
 import qualified Data.Maybe                    as Maybe
 import           Data.Proxy                     ( Proxy(..) )
+import           Data.Time.Clock.POSIX          ( getPOSIXTime )
 import qualified IR.SMT.Assert                 as Assert
 import           Options
 import qualified Parser.C                      as CParse
@@ -104,7 +105,10 @@ runBackend :: BackEnd -> Assert.AssertState -> Log ()
 runBackend b a = case b of
   Solve -> do
     liftIO $ hPutStr stderr "Running Z3...\n"
+    startTime <- liftIO getPOSIXTime
     satRes <- target a
+    endTime <- liftIO getPOSIXTime
+    liftIO $ liftIO $ putStrLn $ unwords ["Z3 Time:", show $ endTime - startTime]
     liftIO $ if Z3.sat satRes
       then do
         let inputs = Assert.inputs a

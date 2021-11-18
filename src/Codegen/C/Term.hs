@@ -132,6 +132,8 @@ ctermDataTy t = case t of
   CInt False 32 _  -> Type.U32
   CInt True  64 _  -> Type.S64
   CInt False 64 _  -> Type.U64
+  CInt True  128 _ -> Type.S128
+  CInt False 128 _ -> Type.U128
   CInt _     w  _  -> error $ unwords ["Invalid int width:", show w]
   CBool{}          -> Type.Bool
   CDouble{}        -> Type.Double

@@ -71,6 +71,7 @@ executables:
     - ghc-typelits-knownnat >= 0.7
     - optparse-applicative >= 0.14 && < 0.15
     - process >= 1.6
+    - time >= 1.8 && < 1.9
 
 tests:
   compiler-test:

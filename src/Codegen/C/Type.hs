@@ -8,6 +8,7 @@ data Type = U8 | S8
           | U16 | S16
           | U32 | S32
           | U64 | S64
+          | U128 | S128
           | Bool
           | Float
           | Double
@@ -35,6 +36,8 @@ makeIntTy numBits isSigned = case numBits of
   32            -> U32
   64 | isSigned -> S64
   64            -> U64
+  128 | isSigned -> S128
+  128            -> U128
   _             -> error $ "Unexpected width to makeType " ++ show numBits
 
 numBits :: Type -> Int
@@ -46,6 +49,8 @@ numBits U32                   = 32
 numBits S32                   = 32
 numBits U64                   = 64
 numBits S64                   = 64
+numBits U128                  = 128
+numBits S128                  = 128
 numBits Bool                  = 1
 numBits Double                = 64
 numBits Ptr64{}               = 64
@@ -60,6 +65,7 @@ isSignedInt S8  = True
 isSignedInt S16 = True
 isSignedInt S32 = True
 isSignedInt S64 = True
+isSignedInt S128= True
 isSignedInt _   = False
 
 isUnsignedInt :: Type -> Bool
@@ -67,6 +73,7 @@ isUnsignedInt U8  = True
 isUnsignedInt U16 = True
 isUnsignedInt U32 = True
 isUnsignedInt U64 = True
+isUnsignedInt U128= True
 isUnsignedInt _   = False
 
 isDouble :: Type -> Bool
