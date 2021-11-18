@@ -66,6 +66,7 @@ stack run -- verify
 stack run -- zokrates main test/Code/Zokrates/sum.zok --setup
 stack run -- zokrates main test/Code/Zokrates/sum.zok --prove -i test/Code/Zokrates/inputs/sum.i
 
+# 32-bit OpenSSL bug, found naively
 C_c_sv=True stack run -- c mult test/Code/C/openssl_bug.c --check --setup
 C_c_sv=True stack run -- c mult test/Code/C/openssl_bug.c --check --solve | tee out
 cat out | egrep '\w+ [[:digit:]]+' > out2
@@ -74,8 +75,27 @@ C_c_sv=True stack run -- c mult test/Code/C/openssl_bug.c --check --prove -i out
 stack run -- verify
 rm out
 
+# 32-bit OpenSSL bug, found with an assumption
 C_c_sv=True stack run -- c mult test/Code/C/openssl_bug.c --check --setup
 C_c_sv=True stack run -- c mult test/Code/C/openssl_assume.c --check --solve | tee out
+cat out | egrep '\w+ [[:digit:]]+' > out2
+mv out2 out
+C_c_sv=True stack run -- c mult test/Code/C/openssl_bug.c --check --prove -i out
+stack run -- verify
+rm out
+
+# 64-bit OpenSSL bug, found with an assumption
+C_c_sv=True stack run -- c mult test/Code/C/openssl_big_bug.c --check --setup
+C_c_sv=True stack run -- c mult test/Code/C/openssl_big_assume.c --check --solve | tee out
+cat out | egrep '\w+ [[:digit:]]+' > out2
+mv out2 out
+C_c_sv=True stack run -- c mult test/Code/C/openssl_big_bug.c --check --prove -i out
+stack run -- verify
+rm out
+
+# 32-bit OpenSSL bug, found with a weaker assumption
+C_c_sv=True stack run -- c mult test/Code/C/openssl_bug.c --check --setup
+C_c_sv=True stack run -- c mult test/Code/C/openssl_weak_assume.c --check --solve | tee out
 cat out | egrep '\w+ [[:digit:]]+' > out2
 mv out2 out
 C_c_sv=True stack run -- c mult test/Code/C/openssl_bug.c --check --prove -i out
