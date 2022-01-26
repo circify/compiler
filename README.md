@@ -1,3 +1,11 @@
+# THIS PROJECT HAS BEEN SUPERSEDED BY CIRC
+
+Note: This project has been superseded by
+[CirC](https://github.com/circify/circ), which is a Rust re-implementation of
+the compiler infrastructure.
+
+It is archived here for reference purposes.
+
 # Compiler to circuit representations
 
 Currently we have frontends for:
